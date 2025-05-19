@@ -17,16 +17,16 @@
             overflow: hidden;
         }
         #console { 
-            background: #111; 
-            border: 4px solid #ff8c00; 
-            padding: 10px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            gap: 10px; 
-            max-width: 800px; 
-            width: 100%; 
-            box-sizing: border-box;
+	background: #111;
+  	border: 4px solid #ff8c00;
+  	padding: 4px;
+  	display: flex;
+  	flex-direction: column;
+  	align-items: center;
+  	gap: 4px;
+  	max-width: 800px;
+  	width: 100%;
+  	box-sizing: border-box;
         }
         #whale-log { 
             width: 618px; 
@@ -112,7 +112,7 @@
         }
         #floor-indicator { 
             position: absolute; 
-            top: 10px; 
+            top: 11px; 
             left: 10px; 
             background: transparent; 
             color: #ff8c00; 
@@ -136,12 +136,16 @@
         }
         #up {
         grid-area: t;
+        z-index: 10;
         }
         #left { grid-area: l;
+        z-index: 10;
         }
-        #right { grid-area: r; 
+        #right { grid-area: r;
+        z-index: 10; 
         }
         #down { grid-area: b;
+        z-index: 10;
         }
         #actions { display: flex; gap: 5px; align-items: center; }
         button { 
@@ -209,13 +213,13 @@
             #console { padding: 5px; overflow: hidden;}
             canvas, #splash-screen, #game-container, #game-over { 
                 width: 100%; 
-                max-width: 480px; 
+                max-width: 270px; 
                 height: auto; 
                 aspect-ratio: 1/1; 
             }
             #whale-log { 
                 width: 100%; 
-                max-width: 480px; 
+                max-width: 270px; 
                 font-size: 12px; 
             }
             #whale-hash-ids { 
@@ -239,8 +243,8 @@
             }
             #floor-indicator { font-size: 10px; }
             button { 
-            width: 35px;
-            height: 35px;
+            width: 50px;
+            height: 50px;
             font-size: 12px;
             border-radius: 50%;
             margin-top: 0px;
@@ -287,9 +291,9 @@
         }
         #right {
 	grid-area: t;
-    	margin-top: 166px;
-    	margin-left: 242px;
-    	z-index: 30;
+   	margin-top: 166px;
+    	margin-right: -15px;
+    	margin-left: 243px;
     	border-radius: 0%;
         }
         #down {
