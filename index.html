@@ -98,18 +98,18 @@
             pointer-events: none; 
         }
         #inventory { 
-            position: absolute; 
-            top: 10px; 
-            right: -24px; 
-            background: transparent; 
-            color: #ff8c00;
-            border: none;  
-            padding: 8px; 
-            z-index: 10; 
-            font-family: 'VT323', monospace; 
-            font-size: 20px; 
-            line-height: 1.5; 
-            width: 160px; 
+	    position: absolute;
+  	    top: 10px;
+  	    right: -24px;
+  	    background: transparent;
+  	    color: #ff8c00;
+  	    border: none;
+  	    padding: 8px;
+  	    z-index: 10;
+  	    font-family: 'VT323', monospace;
+  	    font-size: 20px;
+  	    line-height: 1.5;
+  	    width: 160px;
         }
         #floor-indicator { 
             position: absolute; 
@@ -237,18 +237,18 @@
             #battle-log { 
                 width: 100%; 
                 max-width: 480px; 
-                font-size: 12px; 
+                font-size: 9px; 
             }
             #battle-log textarea { 
                 width: 100%; 
                 height: 50px; 
-                font-size: 12px; 
+                font-size: 9px; 
             }
             #inventory { 
-                width: 100px; 
-                font-size: 10px; 
-                line-height: 1.4;
-                margin-right: -10px; 
+	    width: 100px;
+    	    font-size: 12px;
+    	    line-height: 1.25;
+    	    margin-right: 2px;
             }
             #floor-indicator { font-size: 10px; }
             button { 
@@ -463,7 +463,7 @@
         function toggleMute() {
             musicMuted = !musicMuted;
             sounds.music.muted = musicMuted;
-            document.getElementById('mute').textContent = musicMuted ? '🛇' : '♪';
+            document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
         }
 
         function logWhaleHashId(txid) {
