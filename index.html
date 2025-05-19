@@ -136,16 +136,16 @@
         }
         #up {
         grid-area: t;
-        z-index: 10;
+        z-index: 40;
         }
         #left { grid-area: l;
-        z-index: 10;
+        z-index: 40;
         }
         #right { grid-area: r;
-        z-index: 10; 
+        z-index: 40; 
         }
         #down { grid-area: b;
-        z-index: 10;
+        z-index: 40;
         }
         #actions { display: flex; gap: 5px; align-items: center; }
         button { 
@@ -331,7 +331,7 @@
 <body>
     <div id="console">
         <div id="whale-log">
-            <div id="whale transactions">Whale Transactions:</div>
+            <div id="whale-hash-ids">Whale Transactions:</div>
         </div>
         <div id="game-container">
             <canvas id="game" width="320" height="320"></canvas>
@@ -380,7 +380,7 @@
         const W = 20, H = 20, S = 16;
         let map = [], p = {x: 2, y: 2, hp: 24, potions: 0, atk: 2}, enemies = [], rooms = [];
         let floor = 1, wave = 0, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
-        let whaleHashIds = ['Whale Hash IDs:'], battleLog = ['Battle Log:'];
+        let whaleHashIds = ['Whale Transactions:'], battleLog = ['Battle Log:'];
         let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
         let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
         let satoshiDrops = [];
@@ -932,7 +932,7 @@ function attack() {
             initialSpawnDoneThisFloor = false;
             nextApiCallTime = null;
             waveActive = false;
-            whaleHashIds = ['Whale Hash IDs:']; battleLog = ['Battle Log:'];
+            whaleHashIds = ['Whale Transactions:']; battleLog = ['Battle Log:'];
             satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
             kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
             satoshiDrops = []; retryDelay = 5000; swordDir = 'right';
