@@ -137,14 +137,18 @@
         #up {
         grid-area: t;
         }
-        #left { grid-area: l; }
-        #right { grid-area: r; }
-        #down { grid-area: b; }
+        #left { grid-area: l;
+        }
+        #right { grid-area: r; 
+        }
+        #down { grid-area: b;
+        }
         #actions { display: flex; gap: 5px; align-items: center; }
         button { 
+            background-color: transparent;
+            border: 1px solid #ff8c00;
+            color: #ff8c00;
             padding: 8px; 
-            background: #333; 
-            color: #fff; 
             border: 0px solid #000; 
             cursor: pointer; 
             font-size: 14px; 
@@ -160,7 +164,7 @@
         padding: 0px;
         border-radius: 25%;
         height: 20px;
-        width: 20px;
+        width: 30px;
         background: #fff;
         color: #000;
         margin-right: 50px;
@@ -173,6 +177,7 @@
         #attack, #potion {
         margin-right: 20px;
         background: #ff8c00;
+        color: #fff;
         height: 50px;
         width: 50px; 
         border-radius: 50%;
@@ -240,8 +245,11 @@
             border-radius: 50%;
             margin-top: 0px;
             }
+            button:hover {
+            background: #e07b00;
+            }
         #mute {
-        padding: 0px;
+        padding: 2px;
         border-radius: 25%;
         height: 20px;
         width: 20px;
@@ -265,7 +273,7 @@
         }
         #up {
 	grid-area: t;
-    	margin-top: 130px;
+    	margin-top: 120px;
     	margin-left: 197px;
     	z-index: 30;
    	border-radius: 0%;
@@ -286,7 +294,7 @@
         }
         #down {
 	grid-area: t;
-    	margin-top: 202px;
+    	margin-top: 212px;
    	 margin-left: 197px;
     	z-index: 30;
     	border-radius: 0%;
@@ -309,7 +317,7 @@
     	font-size: 16px;
     	border: none;
     	cursor: pointer;
-    	border-radius: 0%;
+    	border-radius: 5%;
    	z-index: 40;    
 	}
             #controller { padding: 5px; }
@@ -442,7 +450,7 @@
         function toggleMute() {
             musicMuted = !musicMuted;
             sounds.music.muted = musicMuted;
-            document.getElementById('mute').textContent = musicMuted ? '🔇' : '♪';
+            document.getElementById('mute').textContent = musicMuted ? '🛇' : '♪';
         }
 
         function logWhaleHashId(txid) {
@@ -469,69 +477,101 @@
                 `Dolphin: ${kills.Dolphin}<br>Shark: ${kills.Shark}<br>Whale: ${kills.Whale}`;
         }
 
-        function initMap() {
-            try {
-                map = Array(H).fill().map(() => Array(W).fill(1));
-                rooms = [];
-                satoshiDrops = [];
-                for (let i = 0; i < 5; i++) {
-                    let rw = 4 + Math.floor(Math.random() * 4), rh = 4 + Math.floor(Math.random() * 4);
-                    let rx = 1 + Math.floor(Math.random() * (W - rw - 2)), ry = 1 + Math.floor(Math.random() * (H - rh - 2));
-                    if (!rooms.some(r => rx < r.x + r.w && rx + rw > r.x && ry < r.y + r.h && ry + rh > r.y)) {
-                        rooms.push({x: rx, y: ry, w: rw, h: rh});
-                        for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
+function initMap() {
+    try {
+        map = Array(H).fill().map(() => Array(W).fill(1));
+        rooms = [];
+        satoshiDrops = [];
+        
+        // Generate at least 3 rooms, up to 5
+        let maxAttempts = 100; // Prevent infinite loops
+        while (rooms.length < 3 && maxAttempts > 0) {
+            let rw = 4 + Math.floor(Math.random() * 4); // Room width: 4-7
+            let rh = 4 + Math.floor(Math.random() * 4); // Room height: 4-7
+            let rx = 1 + Math.floor(Math.random() * (W - rw - 2));
+            let ry = 1 + Math.floor(Math.random() * (H - rh - 2));
+            
+            // Check for overlap with existing rooms
+            if (!rooms.some(r => rx < r.x + r.w && rx + rw > r.x && ry < r.y + r.h && ry + rh > r.y)) {
+                rooms.push({x: rx, y: ry, w: rw, h: rh});
+                for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
+            }
+            maxAttempts--;
+        }
+        
+        // Try to add up to 2 more rooms (optional, max 5 total)
+        maxAttempts = 50; // Limit attempts for additional rooms
+        while (rooms.length < 5 && maxAttempts > 0) {
+            let rw = 4 + Math.floor(Math.random() * 4);
+            let rh = 4 + Math.floor(Math.random() * 4);
+            let rx = 1 + Math.floor(Math.random() * (W - rw - 2));
+            let ry = 1 + Math.floor(Math.random() * (H - rh - 2));
+            
+            if (!rooms.some(r => rx < r.x + r.w && rx + rw > r.x && ry < r.y + r.h && ry + rh > r.y)) {
+                rooms.push({x: rx, y: ry, w: rw, h: rh});
+                for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
+            }
+            maxAttempts--;
+        }
+        
+        if (rooms.length < 3) {
+            console.warn('Failed to generate at least 3 rooms, retrying map generation');
+            return initMap(); // Recursively retry if we didn't get enough rooms
+        }
+        
+        // Connect rooms with corridors
+        for (let i = 1; i < rooms.length; i++) {
+            let r1 = rooms[i - 1], r2 = rooms[i];
+            let x1 = r1.x + Math.floor(r1.w / 2), y1 = r1.y + Math.floor(r1.h / 2);
+            let x2 = r2.x + Math.floor(r2.w / 2), y2 = r2.y + Math.floor(r2.h / 2);
+            for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) map[y1][x] = 0;
+            for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) map[y][x2] = 0;
+        }
+        
+        // Ensure map is valid
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
+        
+        // Place player
+        p.x = rooms[0].x + 1; p.y = rooms[0].y + 1;
+        if (!map[p.y]?.[p.x] || map[p.y][p.x] !== 0) {
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) { p.x = x; p.y = y; break; }
+        }
+        
+        // Place potions
+        let potionPositions = [];
+        let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, rooms.length));
+        let proximityRange = 5; // Initial proximity range
+        for (let r of selectedRooms) {
+            let x, y, attempts = 100;
+            while (attempts > 0 && potionPositions.length < 3) {
+                x = r.x + Math.floor(Math.random() * r.w);
+                y = r.y + Math.floor(Math.random() * r.h);
+                if (map[y][x] === 0 && (x !== p.x || y !== p.y) && !potionPositions.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange)) {
+                    map[y][x] = 2;
+                    potionPositions.push({x, y});
+                    if (potionPositions.length === 3) {
+                        break;
                     }
                 }
-                if (!rooms.length) throw new Error('No rooms generated');
-                for (let i = 1; i < rooms.length; i++) {
-                    let r1 = rooms[i - 1], r2 = rooms[i];
-                    let x1 = r1.x + Math.floor(r1.w / 2), y1 = r1.y + Math.floor(r1.h / 2);
-                    let x2 = r2.x + Math.floor(r2.w / 2), y2 = r2.y + Math.floor(r2.h / 2);
-                    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) map[y1][x] = 0;
-                    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) map[y][x2] = 0;
-                }
-                for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
-                p.x = rooms[0].x + 1; p.y = rooms[0].y + 1;
-                if (!map[p.y]?.[p.x] || map[p.y][p.x] !== 0) {
-                    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) { p.x = x; p.y = y; break; }
-                }
-                let potionPositions = [];
-                let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, 3);
-                let proximityRange = 5; // Initial proximity range
-
-                for (let r of selectedRooms) {
-                    let x, y, attempts = 100;
-                    while (attempts > 0 && potionPositions.length < 3) {
-                        x = r.x + Math.floor(Math.random() * r.w);
-                        y = r.y + Math.floor(Math.random() * r.h);
-                        if (map[y][x] === 0 && (x !== p.x || y !== p.y) && !potionPositions.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange)) {
-                            map[y][x] = 2;
-                            potionPositions.push({x, y});
-                            if (potionPositions.length === 3) {
-                                break;
-                            }
-                        }
-                        attempts--;
-                    }
-
-                    if (attempts === 0 && potionPositions.length < 3) {
-                        console.warn('Potion placement failed: room=', r, 'attempts=', 100);
-                        // Adjust the proximity range and try again
-                        proximityRange = Math.max(proximityRange - 1, 1);
-                        attempts = 100;
-                        continue;
-                    }
-                }
-
-                console.log('Potions placed:', potionPositions);
-                exit = null;
-                initialWaveSpawned = false;
-                needsRedraw = true;
-            } catch (e) {
-                console.error('initMap Error:', e, e.stack);
-                throw e;
+                attempts--;
+            }
+            if (attempts === 0 && potionPositions.length < 3) {
+                console.warn('Potion placement failed: room=', r, 'attempts=', 100);
+                proximityRange = Math.max(proximityRange - 1, 1);
+                attempts = 100;
+                continue;
             }
         }
+        
+        console.log('Rooms generated:', rooms.length, 'Potions placed:', potionPositions);
+        exit = null;
+        initialWaveSpawned = false;
+        needsRedraw = true;
+    } catch (e) {
+        console.error('initMap Error:', e, e.stack);
+        throw e;
+    }
+}
 
 let enemiesSpawnedThisFloor = 0;
 let nextApiCallTime = null;
@@ -555,6 +595,13 @@ async function fetchTxs() {
     }
 
     try {
+        // Skip non-Whale spawns if initial spawn is done
+        if (initialSpawnDoneThisFloor) {
+            console.log(`Initial spawn done for floor ${floor}, only checking for Whales`);
+        } else {
+            console.log(`Spawning non-Whales for floor ${floor}, ${enemiesSpawnedThisFloor}/10 spawned`);
+        }
+
         // Fetch recent transactions
         await new Promise(resolve => setTimeout(resolve, 25));
         const res = await axios.get('https://mempool.space/api/mempool/recent');
@@ -568,78 +615,13 @@ async function fetchTxs() {
         }
 
         let enemyCount = 0;
-        // Handle initial floor spawn (10 ordinary enemies)
-        if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor === 0 && enemies.length === 0) {
-            let initialEnemiesSpawned = 0;
-            for (const tx of res.data.slice(0, 10)) { // Process up to 10 transactions
-                if (initialEnemiesSpawned >= 10) break;
+        const processedTxids = new Set(); // Track processed transactions
 
-                let value = 0;
-                let address = 'Invalid address';
-                console.log(`Fetching tx details for ${tx.txid}`);
-                try {
-                    await new Promise(resolve => setTimeout(resolve, 25));
-                    const txRes = await axios.get(`https://mempool.space/api/tx/${tx.txid}`);
-                    if (txRes.data.vout && Array.isArray(txRes.data.vout)) {
-                        value = txRes.data.vout.reduce((sum, out) => sum + (Number.isFinite(out.value) ? out.value : 0), 0);
-                        address = txRes.data.vout?.map(v => v.scriptpubkey_address).filter(Boolean)[0] || 'Invalid address';
-                    } else {
-                        console.log(`Invalid tx data from api/tx/${tx.txid}:`, txRes.data);
-                        continue;
-                    }
-                } catch (e) {
-                    console.error(`Failed to fetch tx ${tx.txid}:`, e);
-                    continue;
-                }
-
-                if (value <= 0) {
-                    console.log(`Skipping tx ${tx.txid}: Zero/negative value`, value);
-                    continue;
-               }
-
-                const btc = value / 1e8;
-                const type = types.find(t => btc > t.min && btc <= t.max);
-                console.log(`Tx ${tx.txid}: BTC=${btc.toFixed(8)}, Type=${type ? type.name : 'None'}, Value=${value}`);
-
-                if (!type) {
-                    console.log(`No type for BTC: ${btc}, Tx: ${tx.txid}`);
-                    continue;
-                }
-
-                // Skip Whales for initial spawn
-                if (type.name === 'Whale') {
-                    console.log(`Skipping Whale for initial spawn: ${tx.txid}`);
-                    continue;
-                }
-
-                console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
-
-                const r = rooms[Math.floor(Math.random() * rooms.length)];
-                let x, y;
-                do {
-                    x = r.x + Math.floor(Math.random() * r.w);
-                    y = r.y + Math.floor(Math.random() * r.h);
-                } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
-
-                enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
-
-                const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
-                logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
-
-                initialEnemiesSpawned++;
-                enemiesSpawnedThisFloor++;
-                enemyCount++;
-            }
-            
-            if (initialEnemiesSpawned < 10) {
-            	console.warn(`Only spawned ${initialEnemiesSpawned} non-Whale enemies due to insufficient valid blockchain data`);
-            	}
-
-            initialSpawnDoneThisFloor = true;
-        }
-
-        // Handle Whale spawns (no enemy cap)
+        // Single loop for both initial spawn and Whale spawn
         for (const tx of res.data.slice(0, 10)) { // Process up to 10 transactions
+            if (processedTxids.has(tx.txid)) continue; // Skip already processed transactions
+            processedTxids.add(tx.txid);
+
             let value = 0;
             let address = 'Invalid address';
             console.log(`Fetching tx details for ${tx.txid}`);
@@ -672,13 +654,45 @@ async function fetchTxs() {
                 continue;
             }
 
-            // Only spawn Whales, ignore enemy cap
+            // Handle initial spawn (10 non-Whale enemies)
+            if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10) {
+                if (type.name === 'Whale') {
+                    console.log(`Skipping Whale for initial spawn: ${tx.txid}`);
+                    continue;
+                }
+
+                console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
+
+                const r = rooms[Math.floor(Math.random() * rooms.length)];
+                let x, y;
+                do {
+                    x = r.x + Math.floor(Math.random() * r.w);
+                    y = r.y + Math.floor(Math.random() * r.h);
+                } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
+
+                enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
+
+                const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
+                logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+
+                enemiesSpawnedThisFloor++;
+                enemyCount++;
+                
+                // Set flag immediately when 10 enemies are spawned
+                if (enemiesSpawnedThisFloor >= 10) {
+                    initialSpawnDoneThisFloor = true;
+                }
+                
+                continue; // Move to next transaction
+            }
+
+            // Handle Whale spawns (no enemy cap)
             if (type.name !== 'Whale') {
                 console.log(`Skipping non-Whale tx: ${tx.txid}, Type: ${type.name}`);
                 continue;
             }
 
-            console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
+            console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value=${value}`);
 
             const r = rooms[Math.floor(Math.random() * rooms.length)];
             let x, y;
@@ -696,6 +710,11 @@ async function fetchTxs() {
             logWhaleHashId(tx.txid);
             document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
             setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
+        }
+
+        // Warn if some enemies spawned but not enough
+        if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
+            console.warn(`Only spawned ${enemiesSpawnedThisFloor} non-Whale enemies due to insufficient valid blockchain data`);
         }
 
         if (enemies.length === 0 && initialSpawnDoneThisFloor) {
@@ -754,14 +773,21 @@ async function fetchTxs() {
                     }
                 }
 // Reset the enemiesSpawnedThisFloor counter when the player moves to the next floor
-if (exit && p.x === exit.x && p.y === exit.y && !waveActive) {
+if (exit && p.x === exit.x && p.y === exit.y) {
+// In your floor transition function (e.g., when entering stairs)
+    enemiesSpawnedThisFloor = 0;
+    initialSpawnDoneThisFloor = false;
+    enemies = [];
     floor++;
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     initMap();
-    enemiesSpawnedThisFloor = 0; // Reset the counter
-    initialSpawnDoneThisFloor = false;
+    initialWaveSpawned = false;
+    waveActive = false;
+    wave = 1;
+    console.log(`Moved to floor ${floor}, reset enemy spawns`);
     nextApiCallTime = null;
     fetchTxs();
+
 }
             }
             moveEnemies();
@@ -823,34 +849,65 @@ if (exit && p.x === exit.x && p.y === exit.y && !waveActive) {
             needsRedraw = true;
         }
 
-        function attack() {
-            if (gameOver || splashActive) return;
-            swordActive = true;
-            swordStart = Date.now();
-            sounds.attack.play().catch(e => console.error('Attack sound error:', e));
-            let hit = enemies.find(e => {
-                let sx = p.x, sy = p.y;
-                if (swordDir === 'up') sy--;
-                if (swordDir === 'down') sy++;
-                if (swordDir === 'left') sx--;
-                if (swordDir === 'right') sx++;
-                return e.x === sx && e.y === sy;
-            });
-            if (hit) {
-                hit.hp -= p.atk;
-                sounds.hit.play().catch(e => console.error('Hit sound error:', e));
-                if (hit.hp <= 0) {
-                    kills[hit.type.name]++;
-                    map[hit.y][hit.x] = 3;
-                    satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                    enemies = enemies.filter(e => e !== hit);
-                    updateSatsDisplay();
+function attack() {
+    if (gameOver || splashActive) return;
+    swordActive = true;
+    swordStart = Date.now();
+    sounds.attack.play().catch(e => console.error('Attack sound error:', e));
+    let hit = enemies.find(e => {
+        let sx = p.x, sy = p.y;
+        if (swordDir === 'up') sy--;
+        if (swordDir === 'down') sy++;
+        if (swordDir === 'left') sx--;
+        if (swordDir === 'right') sx++;
+        return e.x === sx && e.y === sy;
+    });
+    if (hit) {
+        hit.hp -= p.atk;
+        sounds.hit.play().catch(e => console.error('Hit sound error:', e));
+        if (hit.hp <= 0) {
+            kills[hit.type.name]++;
+            // Check if the tile is empty or find an adjacent empty tile
+            let dropPlaced = false;
+            if (map[hit.y][hit.x] === 0) {
+                // Place drop on the enemy's tile if it's empty
+                map[hit.y][hit.x] = 3;
+                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                dropPlaced = true;
+            } else {
+                // Try adjacent tiles (up, down, left, right)
+                const adjacent = [
+                    {x: hit.x, y: hit.y - 1}, // Up
+                    {x: hit.x, y: hit.y + 1}, // Down
+                    {x: hit.x - 1, y: hit.y}, // Left
+                    {x: hit.x + 1, y: hit.y}  // Right
+                ];
+                for (const pos of adjacent) {
+                    const nx = pos.x, ny = pos.y;
+                    if (
+                        nx >= 0 && nx < W && ny >= 0 && ny < H && // Within bounds
+                        map[ny][nx] === 0 && // Empty tile
+                        !enemies.some(e => e.x === nx && e.y === ny) // Not occupied by enemy
+                    ) {
+                        map[ny][nx] = 3;
+                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                        dropPlaced = true;
+                        console.log(`Placed satoshi drop at adjacent tile (${nx}, ${ny})`);
+                        break;
+                    }
                 }
             }
-            moveEnemies();
-            needsRedraw = true;
-            setTimeout(() => { swordActive = false; needsRedraw = true; }, 200);
+            if (!dropPlaced) {
+                console.log(`No empty adjacent tile found for satoshi drop at (${hit.x}, ${hit.y})`);
+            }
+            enemies = enemies.filter(e => e !== hit);
+            updateSatsDisplay();
         }
+    }
+    moveEnemies();
+    needsRedraw = true;
+    setTimeout(() => { swordActive = false; needsRedraw = true; }, 200);
+}
 
         function usePotion() {
             if (gameOver || splashActive || p.potions <= 0) return;
