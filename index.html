@@ -30,8 +30,9 @@
         }
         #whale-log { 
             width: 618px; 
-            max-height: 24px; 
-            overflow-y: auto; 
+            height: 24px; 
+            overflow-y: auto;
+            scroll-behavior: smooth; 
             background: #111; 
             color: #ff8c00; 
             padding: 12px; 
@@ -79,7 +80,7 @@
             border: none; 
             font-size: 14px;
             z-index: 10;
-            margin-top: -240px; 
+            margin-top: -240px;
         }
         #battle-log textarea { 
             background: transparent; 
@@ -137,15 +138,19 @@
         #up {
         grid-area: t;
         z-index: 40;
+        border-radius: 5%;
         }
         #left { grid-area: l;
         z-index: 40;
+        border-radius: 5%;
         }
         #right { grid-area: r;
         z-index: 40; 
+        border-radius: 5%;
         }
         #down { grid-area: b;
         z-index: 40;
+        border-radius: 5%;
         }
         #actions { display: flex; gap: 5px; align-items: center; }
         button { 
@@ -161,7 +166,7 @@
             box-sizing: border-box; 
         }
         button:hover {
-        background: #e07b00;
+        background: rgba(224, 123, 0, 0.5);
         }
         
         #mute {
@@ -190,21 +195,22 @@
             background: #e07b00;
         }
 	#download-stats {
-        position: absolute;
-    	bottom: 10px;
-    	left: 50%;
-    	transform: translateX(-50%);
-   	margin-top: 20;
-    	padding: 0px;
-    	width: 80px;
-    	background: #ff8c00;
-    	color: #111;
-    	font-family: 'VT323', monospace;
-    	font-size: 16px;
-    	border: none;
-    	cursor: pointer;
-    	border-radius: 5%;
-    	z-index: 40;
+	position: absolute;
+  	bottom: 275px;
+  	left: 50%;
+  	transform: translateX(-50%);
+  	margin-top: 20;
+  	padding: 0px;
+  	width: 120px;
+  	height: 30px;
+  	background: #ff8c00;
+  	color: #fff;
+  	font-family: 'VT323', monospace;
+  	font-size: 24px;
+  	border: none;
+  	cursor: pointer;
+  	border-radius: 5%;
+  	z-index: 40;
 	}
         @media only screen and (min-width: 320px) and (max-width: 1024px) {
             touch-action: manipulation;
@@ -213,14 +219,17 @@
             #console { padding: 5px; overflow: hidden;}
             canvas, #splash-screen, #game-container, #game-over { 
                 width: 100%; 
-                max-width: 270px; 
+                max-width: 1024px; 
                 height: auto; 
                 aspect-ratio: 1/1; 
             }
             #whale-log { 
-                width: 100%; 
+                width: 100%;
+                height: 24px; 
+                overflow-y: auto;
+                scroll-behavior: smooth;  
                 max-width: 270px; 
-                font-size: 12px; 
+                font-size: 9px; 
             }
             #whale-hash-ids { 
                 max-width: 460px; 
@@ -250,7 +259,7 @@
             margin-top: 0px;
             }
             button:hover {
-            background: #e07b00;
+            background: rgba(224, 123, 0, 0.5);
             }
         #mute {
         padding: 2px;
@@ -280,28 +289,28 @@
     	margin-top: 120px;
     	margin-left: 197px;
     	z-index: 30;
-   	border-radius: 0%;
+   	border-radius: 5%;
         }
         #left {
 	grid-area: t;
     	margin-top: 166px;
     	margin-left: 152px;
     	z-index: 30;
-    	border-radius: 0%;
+    	border-radius: 5%;
         }
         #right {
 	grid-area: t;
    	margin-top: 166px;
     	margin-right: -15px;
     	margin-left: 243px;
-    	border-radius: 0%;
+    	border-radius: 5%;
         }
         #down {
 	grid-area: t;
     	margin-top: 212px;
    	 margin-left: 197px;
     	z-index: 30;
-    	border-radius: 0%;
+    	border-radius: 5%;
         }
         #mute:hover, #mute:hover {
             background: #ccc;
