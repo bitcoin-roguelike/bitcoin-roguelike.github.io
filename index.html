@@ -212,6 +212,26 @@
   	border-radius: 5%;
   	z-index: 40;
 	}
+	#start-button {
+    	position: absolute;
+    	top: 75%;
+    	left: 50%;
+    	width: 120px;
+  	height: 50px;
+    	transform: translate(-50%, -50%);
+    	background: #00e8d8;
+    	color: #fff;
+    	border: none;
+    	padding: 0px 20px;
+    	font-family: 'VT323', monospace;
+    	font-size: 42px;
+    	cursor: pointer;
+    	border-radius: 5px;
+    	z-index: 40;
+	}
+	#start-button:hover {
+    	background: #00b7ef;
+	}
         @media only screen and (min-width: 320px) and (max-width: 1024px) {
             touch-action: manipulation;
             -webkit-user-select: none;
@@ -345,8 +365,9 @@
         <div id="game-container">
             <canvas id="game" width="320" height="320"></canvas>
             <div id="splash-screen">
-                <canvas id="splash-canvas" width="320" height="320"></canvas>
-            </div>
+    		<canvas id="splash-canvas" width="320" height="320"></canvas>
+    	    <button id="start-button">START</button>
+	    </div>
             <div id="game-over">
                 <canvas id="game-over-canvas" width="320" height="320"></canvas>
                 <button id="download-stats">screenshot</button>
@@ -424,46 +445,54 @@
         Object.values(assets).forEach(asset => { asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`); });
         types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
 
-        const sounds = {
-            attack: new Audio('attack.wav'), potion: new Audio('potion.wav'), hit: new Audio('hit.wav'),
-            pickup: new Audio('pickup.wav'), music: new Audio('music.ogg')
-        };
-        sounds.music.loop = true;
-        Object.values(sounds).forEach(s => { s.onerror = () => console.error(`Failed to load sound: ${s.src}`); });
+	const sounds = {
+    	    attack: new Audio('attack.wav'), 
+    	    potion: new Audio('potion.wav'), 
+    	    hit: new Audio('hit.wav'),
+    	    pickup: new Audio('pickup.wav'), 
+    	    music: new Audio('music.mp3')
+	};
+	sounds.music.loop = true;
+	Object.values(sounds).forEach(s => { s.onerror = () => console.error(`Failed to load sound: ${s.src}`); });
 
-        const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
-        const splashImg = new Image();
-        splashImg.src = 'splash.png';
-        splashImg.onload = () => {
-            splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-            fadeSplash();
-            console.log('Splash started: active=', splashActive, 'bg=#F7931A');
-        };
+const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
+const splashImg = new Image();
+splashImg.src = 'splash.png';
+splashImg.onload = () => {
+    splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    console.log('Splash started: active=', splashActive, 'bg=#F7931A');
+};
 
-        function fadeSplash() {
-            setTimeout(() => {
-                const imgData = splashCanvas.getImageData(0, 0, 320, 320);
-                const pixels = imgData.data;
-                const totalPixels = 320 * 320;
-                const fadePerFrame = totalPixels / 20;
-                let fadedPixels = 0;
-                const fadeInterval = setInterval(() => {
-                    for (let i = 0; i < fadePerFrame && fadedPixels < totalPixels; i++) {
-                        const px = Math.floor(Math.random() * totalPixels) * 4;
-                        pixels[px + 3] = 0;
-                        fadedPixels++;
-                    }
-                    splashCanvas.putImageData(imgData, 0, 0);
-                    if (fadedPixels >= totalPixels) {
-                        clearInterval(fadeInterval);
-                        splashActive = false;
-                        document.getElementById('splash-screen').remove();
-                        sounds.music.play();
-                        console.log('Splash ended: active=', splashActive);
-                    }
-                }, 100);
-            }, 3000);
-        }
+function fadeSplash() {
+    setTimeout(() => {
+        const imgData = splashCanvas.getImageData(0, 0, 320, 320);
+        const pixels = imgData.data;
+        const totalPixels = 320 * 320;
+        const fadePerFrame = totalPixels / 20;
+        let fadedPixels = 0;
+        const fadeInterval = setInterval(() => {
+            for (let i = 0; i < fadePerFrame && fadedPixels < totalPixels; i++) {
+                const px = Math.floor(Math.random() * totalPixels) * 4;
+                pixels[px + 3] = 0;
+                fadedPixels++;
+            }
+            splashCanvas.putImageData(imgData, 0, 0);
+            if (fadedPixels >= totalPixels) {
+                clearInterval(fadeInterval);
+                splashActive = false;
+                document.getElementById('splash-screen').remove();
+                console.log('Splash ended: active=', splashActive);
+            }
+        }, 75);
+    }, 25);
+}
+
+document.getElementById('start-button').addEventListener('click', () => {
+    if (splashActive && !musicMuted) {
+        sounds.music.play().catch(e => console.error('Music play failed:', e));
+    }
+    fadeSplash();
+});
 
         function toggleMute() {
             musicMuted = !musicMuted;
@@ -1043,32 +1072,30 @@ function draw() {
             needsRedraw = false;
         }
 
-        function gameLoop(timestamp) {
-            if (!map?.[0] || !p || !enemies || !rooms?.length) {
-                console.error('Invalid state');
-                initMap();
-                needsRedraw = true;
-            }
-            if (!gameOver && !splashActive && timestamp - lastUpdate >= 60000) {
-                fetchTxs();
-                lastUpdate = timestamp;
-            }
-            if (!gameOver && !splashActive) {
-                    sounds.music.play();
-            } else {
-                sounds.music.pause();
-                sounds.music.currentTime = 0;
-                document.getElementById('health').textContent = 0;
-                needsRedraw = true;
-            }            
-            if (needsRedraw && !splashActive) draw();
-            if (p.hp <= 0 && !gameOver) {
-                p.hp = 0;
-                logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                gameOver = true;
-            }
-            requestAnimationFrame(gameLoop);
-        }
+function gameLoop(timestamp) {
+    if (!map?.[0] || !p || !enemies || !rooms?.length) {
+        console.error('Invalid state');
+        initMap();
+        needsRedraw = true;
+    }
+    if (!gameOver && !splashActive && timestamp - lastUpdate >= 60000) {
+        fetchTxs();
+        lastUpdate = timestamp;
+    }
+    if (gameOver) {
+        sounds.music.pause();
+        sounds.music.currentTime = 0;
+        document.getElementById('health').textContent = 0;
+        needsRedraw = true;
+    }
+    if (needsRedraw && !splashActive) draw();
+    if (p.hp <= 0 && !gameOver) {
+        p.hp = 0;
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+    }
+    requestAnimationFrame(gameLoop);
+}
 
         document.addEventListener('keydown', e => {
             if (gameOver || splashActive) return;
