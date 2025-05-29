@@ -196,13 +196,13 @@
         }
 	#download-stats {
 	position: absolute;
-  	bottom: 275px;
+  	bottom: 265px;
   	left: 50%;
   	transform: translateX(-50%);
   	margin-top: 20;
   	padding: 0px;
   	width: 120px;
-  	height: 30px;
+  	height: 50px;
   	background: #ff8c00;
   	color: #fff;
   	font-family: 'VT323', monospace;
@@ -317,13 +317,13 @@
         }
         #download-stats {
 	position: absolute;
-    	bottom: 140px;
+    	bottom: 126px;
     	left: 50%;
     	transform: translateX(-50%);
     	margin-top: -10;
     	padding: 0px;
     	width: 80px;
-    	height: 20px;
+    	height: 40px;
     	background: #ff8c00;
     	color: #fff;
     	font-family: 'VT323', monospace;
@@ -407,15 +407,20 @@
             {name: 'Whale', min: 100, max: Infinity, img: new Image(), hp: 6, atk: 4, reward: 0, move: 2}
         ];
         const assets = {
-            floor: new Image(), wall: new Image(), potion: new Image(), player: new Image(), 
-            stairs: new Image(), bitcoin: new Image(), gameOver: new Image(), playAgain: new Image(),
+            floor: new Image(),
+            wall: new Image(),
+            potion: new Image(),
+            player: new Image(), 
+            stairs: new Image(),
+            bitcoin: new Image(),
+            gameOver: new Image(),
             sword: new Image()
         };
         types[0].img.src = 'shrimp.png'; types[1].img.src = 'crab.png'; types[2].img.src = 'squid.png';
         types[3].img.src = 'dolphin.png'; types[4].img.src = 'shark.png'; types[5].img.src = 'whale.png';
         assets.floor.src = 'floor.png'; assets.wall.src = 'wall.png'; assets.potion.src = 'potion.png';
         assets.player.src = 'player.png'; assets.stairs.src = 'stairs.png'; assets.bitcoin.src = 'bitcoin.png';
-        assets.gameOver.src = 'gameover.png'; assets.playAgain.src = 'playagain.png'; assets.sword.src = 'sword.png';
+        assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
         Object.values(assets).forEach(asset => { asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`); });
         types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
 
@@ -984,14 +989,13 @@ function draw() {
         const offsetY = (Math.sin(Date.now() / 500) * 10);
         // Draw images and text
         gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh - ph - 50) / 2, gw, gh);
-        //gameOverCanvas.drawImage(assets.playAgain, (320 - pw) / 2, (320 + gh - ph + 50) / 2 + offsetY, pw, ph); // disabled for now
         // Draw stats
         gameOverCanvas.fillStyle = '#ff8c00';
         gameOverCanvas.font = '18px "VT323"';
         gameOverCanvas.textAlign = 'center';
         gameOverCanvas.fillText(`Floor Reached: ${floor}`, 160, 220);
         const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-        gameOverCanvas.fillText(`Sats: ${totalSats < 1e8 ? totalSats : (totalSats / 1e8).toFixed(6) + ' BTC'}`, 160, 240);
+        gameOverCanvas.fillText(`Bag: ${totalSats < 1e8 ? totalSats : (totalSats / 1e8).toFixed(6) + ' BTC'}`, 160, 240);
 
         document.getElementById('game-over').style.display = 'block';
         document.getElementById('download-stats').style.display = 'block';
