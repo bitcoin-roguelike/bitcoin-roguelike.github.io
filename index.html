@@ -4,8 +4,9 @@
 <head>
     <title>btc-dungeon</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes"> <!-- Added for PWA support -->
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-    <style>
+<style>
         body { 
             margin: 0; 
             display: flex; 
@@ -15,18 +16,22 @@
             background: #222; 
             font-family: 'VT323', monospace;
             overflow: hidden;
+            touch-action: pan-x pan-y; /* Prevents pinch-to-zoom */
+            -webkit-user-select: none; /* Prevents selection */
+            -webkit-touch-callout: none; /* Disables iOS callouts */
         }
+        /* Existing styles remain unchanged */
         #console { 
-	background: #111;
-  	border: 4px solid #ff8c00;
-  	padding: 4px;
-  	display: flex;
-  	flex-direction: column;
-  	align-items: center;
-  	gap: 4px;
-  	max-width: 800px;
-  	width: 100%;
-  	box-sizing: border-box;
+            background: #111;
+            border: 4px solid #ff8c00;
+            padding: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            max-width: 800px;
+            width: 100%;
+            box-sizing: border-box;
         }
         #whale-log { 
             width: 618px; 
@@ -98,18 +103,18 @@
             pointer-events: none; 
         }
         #inventory { 
-	    position: absolute;
-  	    top: 10px;
-  	    right: -24px;
-  	    background: transparent;
-  	    color: #ff8c00;
-  	    border: none;
-  	    padding: 8px;
-  	    z-index: 10;
-  	    font-family: 'VT323', monospace;
-  	    font-size: 20px;
-  	    line-height: 1.5;
-  	    width: 160px;
+            position: absolute;
+            top: 10px;
+            right: -24px;
+            background: transparent;
+            color: #ff8c00;
+            border: none;
+            padding: 8px;
+            z-index: 10;
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            line-height: 1.5;
+            width: 160px;
         }
         #floor-indicator { 
             position: absolute; 
@@ -136,23 +141,30 @@
             gap: 5px; 
         }
         #up {
-        grid-area: t;
-        z-index: 40;
-        border-radius: 5%;
+            grid-area: t;
+            z-index: 40;
+            border-radius: 5%;
         }
-        #left { grid-area: l;
-        z-index: 40;
-        border-radius: 5%;
+        #left { 
+            grid-area: l;
+            z-index: 40;
+            border-radius: 5%;
         }
-        #right { grid-area: r;
-        z-index: 40; 
-        border-radius: 5%;
+        #right { 
+            grid-area: r;
+            z-index: 40; 
+            border-radius: 5%;
         }
-        #down { grid-area: b;
-        z-index: 40;
-        border-radius: 5%;
+        #down { 
+            grid-area: b;
+            z-index: 40;
+            border-radius: 5%;
         }
-        #actions { display: flex; gap: 5px; align-items: center; }
+        #actions { 
+            display: flex; 
+            gap: 5px; 
+            align-items: center; 
+        }
         button { 
             background-color: transparent;
             border: 1px solid #ff8c00;
@@ -166,76 +178,77 @@
             box-sizing: border-box; 
         }
         button:hover {
-        background: rgba(224, 123, 0, 0.5);
+            background: rgba(224, 123, 0, 0.5);
         }
-        
         #mute {
-        padding: 0px;
-        border-radius: 25%;
-        height: 20px;
-        width: 30px;
-        background: #fff;
-        color: #000;
-        margin-right: 50px;
-        z-index: 10;
+            padding: 0px;
+            border-radius: 25%;
+            height: 20px;
+            width: 30px;
+            background: #fff;
+            color: #000;
+            margin-right: 50px;
+            z-index: 10;
         }
         #mute:hover, #mute:hover {
             background: #ccc;
         }
-        
         #attack, #potion {
-        margin-right: 20px;
-        background: #ff8c00;
-        color: #fff;
-        height: 50px;
-        width: 50px; 
-        border-radius: 50%;
+            margin-right: 20px;
+            background: #ff8c00;
+            color: #fff;
+            height: 50px;
+            width: 50px; 
+            border-radius: 50%;
         }
-        #attack:hover, #attack:hover, #potion:hover {
+        #attack:hover, #potion:hover {
             background: #e07b00;
         }
-	#download-stats {
-	position: absolute;
-  	bottom: 265px;
-  	left: 50%;
-  	transform: translateX(-50%);
-  	margin-top: 20;
-  	padding: 0px;
-  	width: 120px;
-  	height: 50px;
-  	background: #ff8c00;
-  	color: #fff;
-  	font-family: 'VT323', monospace;
-  	font-size: 24px;
-  	border: none;
-  	cursor: pointer;
-  	border-radius: 5%;
-  	z-index: 40;
-	}
-	#start-button {
-    	position: absolute;
-    	top: 75%;
-    	left: 50%;
-    	width: 120px;
-  	height: 50px;
-    	transform: translate(-50%, -50%);
-    	background: #00e8d8;
-    	color: #fff;
-    	border: none;
-    	padding: 0px 20px;
-    	font-family: 'VT323', monospace;
-    	font-size: 42px;
-    	cursor: pointer;
-    	border-radius: 5px;
-    	z-index: 40;
-	}
-	#start-button:hover {
-    	background: #00b7ef;
-	}
+        #download-stats {
+            position: absolute;
+            bottom: 265px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 20;
+            padding: 0px;
+            width: 120px;
+            height: 50px;
+            background: #ff8c00;
+            color: #fff;
+            font-family: 'VT323', monospace;
+            font-size: 24px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5%;
+            z-index: 40;
+        }
+        #start-button {
+            position: absolute;
+            top: 75%;
+            left: 50%;
+            width: 120px;
+            height: 50px;
+            transform: translate(-50%, -50%);
+            background: #00e8d8;
+            color: #fff;
+            border: none;
+            padding: 0px 20px;
+            font-family: 'VT323', monospace;
+            font-size: 42px;
+            cursor: pointer;
+            border-radius: 5px;
+            z-index: 40;
+        }
+        #start-button:hover {
+            background: #00b7ef;
+        }
         @media only screen and (min-width: 320px) and (max-width: 1024px) {
-            touch-action: manipulation;
-            -webkit-user-select: none;
-            user-select: none;
+            body { /* Added to ensure no-zoom applies in mobile */
+            	overflow: hidden;
+                touch-action: pan-x pan-y;
+                -webkit-user-select: none;
+                user-select: none;
+            }
             #console { padding: 5px; overflow: hidden;}
             canvas, #splash-screen, #game-container, #game-over { 
                 width: 100%; 
@@ -265,94 +278,94 @@
                 font-size: 9px; 
             }
             #inventory { 
-	    width: 100px;
-    	    font-size: 12px;
-    	    line-height: 1.5;
-    	    margin-right: 2px;
+                width: 100px;
+                font-size: 12px;
+                line-height: 1.5;
+                margin-right: 2px;
             }
             #floor-indicator { font-size: 10px; }
             button { 
-            width: 50px;
-            height: 50px;
-            font-size: 12px;
-            border-radius: 50%;
-            margin-top: 0px;
+                width: 50px;
+                height: 50px;
+                font-size: 12px;
+                border-radius: 50%;
+                margin-top: 0px;
             }
             button:hover {
-            background: rgba(224, 123, 0, 0.5);
+                background: rgba(224, 123, 0, 0.5);
             }
-        #mute {
-        padding: 2px;
-        border-radius: 25%;
-        height: 20px;
-        width: 20px;
-        background: #fff;
-        color: #000;
-        margin-right: 30px;
-        margin-left: -290px;
-        margin-top: 120px;
-        z-index: 30;
-        }
-        #attack, #potion {
-        padding: 0px;
-        margin-right: 20px;
-        background: #ff8c00;
-        height: 30px;
-        width: 30px; 
-        border-radius: 50%;
-        margin-right: 15px;
-        margin-top: 120px;
-        z-index: 30;
-        }
-        #up {
-	grid-area: t;
-    	margin-top: 120px;
-    	margin-left: 197px;
-    	z-index: 30;
-   	border-radius: 5%;
-        }
-        #left {
-	grid-area: t;
-    	margin-top: 166px;
-    	margin-left: 152px;
-    	z-index: 30;
-    	border-radius: 5%;
-        }
-        #right {
-	grid-area: t;
-   	margin-top: 166px;
-    	margin-right: -15px;
-    	margin-left: 243px;
-    	border-radius: 5%;
-        }
-        #down {
-	grid-area: t;
-    	margin-top: 212px;
-   	 margin-left: 197px;
-    	z-index: 30;
-    	border-radius: 5%;
-        }
-        #mute:hover, #mute:hover {
-            background: #ccc;
-        }
-        #download-stats {
-	position: absolute;
-    	bottom: 136px;
-    	left: 50%;
-    	transform: translateX(-50%);
-    	margin-top: -10;
-    	padding: 0px;
-    	width: 80px;
-    	height: 40px;
-    	background: #ff8c00;
-    	color: #fff;
-    	font-family: 'VT323', monospace;
-    	font-size: 16px;
-    	border: none;
-    	cursor: pointer;
-    	border-radius: 5%;
-   	z-index: 40;    
-	}
+            #mute {
+                padding: 2px;
+                border-radius: 25%;
+                height: 20px;
+                width: 20px;
+                background: #fff;
+                color: #000;
+                margin-right: 30px;
+                margin-left: -290px;
+                margin-top: 120px;
+                z-index: 30;
+            }
+            #attack, #potion {
+                padding: 0px;
+                margin-right: 20px;
+                background: #ff8c00;
+                height: 30px;
+                width: 30px; 
+                border-radius: 50%;
+                margin-right: 15px;
+                margin-top: 120px;
+                z-index: 30;
+            }
+            #up {
+                grid-area: t;
+                margin-top: 120px;
+                margin-left: 197px;
+                z-index: 30;
+                border-radius: 5%;
+            }
+            #left {
+                grid-area: t;
+                margin-top: 166px;
+                margin-left: 152px;
+                z-index: 30;
+                border-radius: 5%;
+            }
+            #right {
+                grid-area: t;
+                margin-top: 166px;
+                margin-right: -15px;
+                margin-left: 243px;
+                border-radius: 5%;
+            }
+            #down {
+                grid-area: t;
+                margin-top: 212px;
+                margin-left: 197px;
+                z-index: 30;
+                border-radius: 5%;
+            }
+            #mute:hover, #mute:hover {
+                background: #ccc;
+            }
+            #download-stats {
+                position: absolute;
+                bottom: 136px;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-top: -10;
+                padding: 0px;
+                width: 80px;
+                height: 40px;
+                background: #ff8c00;
+                color: #fff;
+                font-family: 'VT323', monospace;
+                font-size: 16px;
+                border: none;
+                cursor: pointer;
+                border-radius: 5%;
+                z-index: 40;    
+            }
             #controller { padding: 5px; }
         }
     </style>
@@ -405,6 +418,15 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
+	document.addEventListener('gesturestart', function (e) {
+            e.preventDefault();
+        });
+        document.addEventListener('touchmove', function (e) {
+            if (e.scale !== 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
         const canvas = document.getElementById('game');
         const c = canvas.getContext('2d');
         const W = 20, H = 20, S = 16;
@@ -480,18 +502,31 @@ function fadeSplash() {
             if (fadedPixels >= totalPixels) {
                 clearInterval(fadeInterval);
                 splashActive = false;
-                document.getElementById('splash-screen').remove();
+                document.getElementById('splash-screen').style.display = 'none'; // Hide instead of remove
                 console.log('Splash ended: active=', splashActive);
             }
         }, 75);
     }, 25);
 }
 
+function resetSplashScreen() {
+    splashActive = true;
+    const splashScreen = document.getElementById('splash-screen');
+    splashScreen.style.display = 'block'; // Show splash screen
+    // Redraw splash image
+    splashCanvas.clearRect(0, 0, 320, 320);
+    splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    console.log('Splash screen reset: active=', splashActive);
+}
+
 document.getElementById('start-button').addEventListener('click', () => {
-    if (splashActive && !musicMuted) {
-        sounds.music.play().catch(e => console.error('Music play failed:', e));
+    if (splashActive) {
+        if (!musicMuted) {
+            sounds.music.currentTime = 0; // Ensure music starts from beginning
+            sounds.music.play().catch(e => console.error('Music play failed:', e));
+        }
+        fadeSplash();
     }
-    fadeSplash();
 });
 
         function toggleMute() {
@@ -966,30 +1001,42 @@ function attack() {
             needsRedraw = true;
         }
 
-        function restart() {
-            floor = 1; wave = 0; p.hp = 24; p.potions = 0; p.x = 2; p.y = 2;
-            enemies = [];
-            exit = null;
-            gameOver = false;
-            enemiesSpawnedThisFloor = 0;
-            initialSpawnDoneThisFloor = false;
-            nextApiCallTime = null;
-            waveActive = false;
-            whaleHashIds = ['Whale Transactions:']; battleLog = ['Battle Log:'];
-            satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-            kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-            satoshiDrops = []; retryDelay = 5000; swordDir = 'right';
-            document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
-            document.getElementById('battle-events').value = battleLog.join('\n');
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-            document.getElementById('game-over').style.display = 'none';
-            document.getElementById('download-stats').style.display = 'none';
-            updateSatsDisplay();
-            initMap();
-            fetchTxs();
-            if (!musicMuted) sounds.music.play().catch(e => console.error('Music play failed:', e));
-            needsRedraw = true;
-        }
+function restart() {
+    // Reset game state
+    floor = 1;
+    wave = 0;
+    p.hp = 24;
+    p.potions = 0;
+    p.x = 2;
+    p.y = 2;
+    enemies = [];
+    exit = null;
+    gameOver = false;
+    enemiesSpawnedThisFloor = 0;
+    initialSpawnDoneThisFloor = false;
+    nextApiCallTime = null;
+    waveActive = false;
+    whaleHashIds = ['Whale Transactions:'];
+    battleLog = ['Battle Log:'];
+    satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+    kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+    satoshiDrops = [];
+    retryDelay = 5000;
+    swordDir = 'right';
+    document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
+    document.getElementById('battle-events').value = battleLog.join('\n');
+    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+    document.getElementById('game-over').style.display = 'none';
+    document.getElementById('download-stats').style.display = 'none';
+    updateSatsDisplay();
+    initMap();
+    fetchTxs();
+    // Stop music and reset splash screen
+    sounds.music.pause();
+    sounds.music.currentTime = 0;
+    resetSplashScreen();
+    needsRedraw = true;
+}
 
 function downloadStats() {
     const gameOverCanvas = document.getElementById('game-over-canvas');
@@ -1107,14 +1154,11 @@ function gameLoop(timestamp) {
             if (e.key === 'd') usePotion();
         });
 
-        canvas.addEventListener('click', () => {
-            if (gameOver && !document.getElementById('download-stats').contains(event.target)) restart();
-        });
-        document.getElementById('game-over').addEventListener('click', (event) => {
-            if (gameOver && !document.getElementById('download-stats').contains(event.target)) {
-                restart();
-                }
-        });
+document.getElementById('game-over').addEventListener('click', (event) => {
+    if (gameOver && !document.getElementById('download-stats').contains(event.target)) {
+        restart();
+    }
+});
         document.getElementById('download-stats').addEventListener('click', downloadStats);
 
 
