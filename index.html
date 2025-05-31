@@ -293,8 +293,8 @@
         font-size: 10px;
     }
     button {
-        width: 50px;
-        height: 50px;
+        width: 55px;
+        height: 55px;
         font-size: 12px;
         border-radius: 50%;
         margin-top: 0px;
@@ -311,7 +311,7 @@
     #dpad {
         display: grid;
         grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 2px; /* Reduced from 5px to bring buttons closer */
+        gap: 0px; /* Reduced from 5px to bring buttons closer */
         margin-left: -10px;
     }
     #up {
@@ -319,14 +319,14 @@
         margin-top: 160px;
         margin-left: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #left {
         grid-area: l;
         margin-top: 0;
         margin-left: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #right {
         grid-area: r;
@@ -334,14 +334,14 @@
         margin-left: 0;
         margin-right: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #down {
         grid-area: b;
         margin-top: 0;
         margin-left: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #actions {
         display: flex;
@@ -357,7 +357,7 @@
         color: #000;
         margin-right: 20px;
         margin-left: -15px;
-        margin-top: 180px;
+        margin-top: 165px;
         z-index: 30;
     }
     #attack {
@@ -367,7 +367,7 @@
         height: 30px;
         width: 30px;
         border-radius: 50%;
-        margin-top: 180px;
+        margin-top: 165px;
         z-index: 30;
     }
     #potion {
@@ -377,7 +377,7 @@
         height: 30px;
         width: 30px;
         border-radius: 50%;
-        margin-top: 120px;
+        margin-top: 105px;
         z-index: 30;
     }
     #mute:hover {
@@ -385,7 +385,7 @@
     }
     #download-stats {
         position: absolute;
-        bottom: 42%;
+        bottom: 41%;
         left: 50%;
         transform: translateX(-50%);
         margin-top: -10px;
@@ -453,8 +453,8 @@
         font-size: 1.6rem;
     }
     button {
-        width: 60px;
-        height: 60px;
+        width: 65px;
+        height: 65px;
         font-size: 1.2rem;
         border-radius: 50%;
         margin-top: 0px;
@@ -471,7 +471,7 @@
     #dpad {
         display: grid;
         grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 2px; /* Reduced from 5px to bring buttons closer */
+        gap: 0px; /* Reduced from 5px to bring buttons closer */
         margin-left: 20px;
     }
     #up {
@@ -479,14 +479,14 @@
         margin-top: 160px;
         margin-left: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #left {
         grid-area: l;
         margin-top: 0;
         margin-left: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #right {
         grid-area: r;
@@ -494,14 +494,14 @@
         margin-left: 0;
         margin-right: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #down {
         grid-area: b;
         margin-top: 0;
         margin-left: 0;
         z-index: 30;
-        border-radius: 5%;
+        border-radius: 10%;
     }
     #actions {
         display: flex;
@@ -517,7 +517,7 @@
         color: #000;
         margin-right: 80px;
         margin-left: -15px;
-        margin-top: 180px;
+        margin-top: 165px;
         z-index: 30;
     }
     #attack {
@@ -527,7 +527,7 @@
         height: 40px;
         width: 40px;
         border-radius: 50%;
-        margin-top: 180px;
+        margin-top: 165px;
         z-index: 30;
     }
     #potion {
@@ -537,7 +537,7 @@
         height: 40px;
         width: 40px;
         border-radius: 50%;
-        margin-top: 120px;
+        margin-top: 105px;
         z-index: 30;
     }
     #mute:hover {
@@ -545,7 +545,7 @@
     }
     #download-stats {
         position: absolute;
-        bottom: 42%;
+        bottom: 41%;
         left: 50%;
         transform: translateX(-50%);
         margin-top: -10px;
@@ -1642,6 +1642,12 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         fetchTxs();
         updateSatsDisplay();
         requestAnimationFrame(gameLoop);
+        document.querySelectorAll('#dpad button').forEach(button => {
+    	    button.addEventListener('touchstart', (e) => {
+    	        e.preventDefault(); // Prevent scrolling
+    	        button.click(); // Trigger onclick
+    	    });
+	});
 
 // go to game-over screen at startup (DEBUG)
 //function initGameOver() {
@@ -1662,5 +1668,6 @@ document.getElementById('game-over').addEventListener('click', (event) => {
     </script>
 </body>
 </html>
+
 
 
