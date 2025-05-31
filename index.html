@@ -472,29 +472,76 @@
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
-    hit: new Audio('hit.wav'),
-    pickup: new Audio('pickup.wav'),
+    hit: [new Audio('hit.wav'), new Audio('hit.wav'), new Audio('hit.wav')],
+    pickup: [new Audio('pickup.wav'), new Audio('pickup.wav'), new Audio('pickup.wav')],
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav')
 };
 sounds.music.loop = true;
 Object.values(sounds).forEach(s => {
-    s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
+    if (Array.isArray(s)) {
+        s.forEach(instance => {
+            instance.onerror = () => console.error(`Failed to load sound: ${instance.src}`);
+        });
+    } else {
+        s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
+    }
 });
 
 function preloadSounds() {
-    Object.values(sounds).forEach(sound => {
-        if (sound !== sounds.music) { // Skip music
+    Object.entries(sounds).forEach(([key, sound]) => {
+        if (key === 'music') return; // Skip music preloading
+        if (Array.isArray(sound)) {
+            sound.forEach(instance => {
+                const originalVolume = instance.volume;
+                instance.volume = 0; // Mute for preloading
+                instance.play().then(() => {
+                    instance.pause();
+                    instance.currentTime = 0;
+                    instance.volume = originalVolume;
+                    console.log(`Preloaded sound: ${instance.src}`);
+                }).catch(e => console.error(`Preload sound error for ${instance.src}:`, e));
+            });
+        } else {
             const originalVolume = sound.volume;
             sound.volume = 0;
             sound.play().then(() => {
                 sound.pause();
                 sound.currentTime = 0;
                 sound.volume = originalVolume;
-            }).catch(e => console.error('Preload sound error:', e));
+                console.log(`Preloaded sound: ${sound.src}`);
+            }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
         }
     });
+}
+
+function playSoundWithFallback(soundArray) {
+    let index = 0;
+    function tryPlay() {
+        if (index >= soundArray.length) {
+            console.error('All sound instances failed to play:', soundArray[0].src);
+            return;
+        }
+        const sound = soundArray[index];
+        if (!sound.paused && sound.currentTime > 0) {
+            // Sound is busy, try next instance
+            index++;
+            tryPlay();
+            return;
+        }
+        sound.play().then(() => {
+            // Reset after playback
+            sound.onended = () => {
+                sound.currentTime = 0;
+            };
+        }).catch(e => {
+            console.error('Sound play failed, trying next instance:', e);
+            index++;
+            tryPlay(); // Try next instance on failure
+        });
+    }
+    tryPlay();
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -541,20 +588,28 @@ function resetSplashScreen() {
 
 document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
-        preloadSounds(); // Initialize all sounds for iOS
+        console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted);
+        preloadSounds(); // Initialize all sounds except music
         if (!musicMuted) {
-            sounds.music.currentTime = 0; // Ensure music starts from beginning
-            sounds.music.play().catch(e => console.error('Music play failed:', e));
+            sounds.music.pause(); // Ensure clean state
+            sounds.music.currentTime = 0;
+            sounds.music.play().then(() => {
+                console.log('Music started successfully');
+            }).catch(e => console.error('Music play failed on START:', e));
         }
         fadeSplash();
     }
 });
 
-        function toggleMute() {
-            musicMuted = !musicMuted;
-            sounds.music.muted = musicMuted;
-            document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
-        }
+function toggleMute() {
+    musicMuted = !musicMuted;
+    sounds.music.muted = musicMuted;
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
+    if (!musicMuted && !splashActive) {
+        sounds.music.currentTime = 0; // Start from beginning
+        sounds.music.play().catch(e => console.error('Music play failed on unmute:', e));
+    }
+}
 
         function logWhaleHashId(txid) {
             whaleHashIds.push(`Floor ${floor} - <a href="https://www.blockchain.com/explorer/transactions/btc/${txid}" target="_blank">${txid}</a>`);
@@ -917,7 +972,7 @@ function move(dir) {
         if (map[ny][nx] === 2) { 
             p.potions++; 
             map[ny][nx] = 0; 
-            sounds.pickup.play().catch(e => console.error('Pickup sound error:', e)); 
+            playSoundWithFallback(sounds.pickup);
         }
         if (map[ny][nx] === 3) {
             const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
@@ -925,7 +980,7 @@ function move(dir) {
                 satsEarned[drop.type] += drop.sats;
                 map[ny][nx] = 0;
                 satoshiDrops = satoshiDrops.filter(d => d !== drop);
-                sounds.pickup.play().catch(e => console.error('Pickup sound error:', e));
+                playSoundWithFallback(sounds.pickup);
                 updateSatsDisplay();
             }
         }
@@ -950,60 +1005,60 @@ function move(dir) {
     needsRedraw = true;
 }
 
-        function moveEnemies() {
-            if (gameOver || splashActive) return;
-            enemies.forEach(e => {
-                let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
-                if (dist <= 5) {
-                    let moves = e.type.move, steps = 0;
-                    while (steps < moves) {
-                        let nx = e.x, ny = e.y;
-                        if (e.type.name === 'Crab') {
-                            nx += dx > 0 ? 1 : -1;
-                        } else if (e.type.name === 'Shrimp' || e.type.name === 'Dolphin' || e.type.name === 'Shark') {
-                            if (Math.abs(dx) > Math.abs(dy)) nx += dx > 0 ? 1 : -1;
-                            else ny += dy > 0 ? 1 : -1;
-                        } else {
-                            if (Math.abs(dx) > Math.abs(dy)) nx += dx > 0 ? 1 : -1;
-                            else ny += dy > 0 ? 1 : -1;
-                        }
-                        if (
-                            nx >= 0 && nx < W && ny >= 0 && ny < H && 
-                            map[ny][nx] !== 1 && !(nx === p.x && ny === p.y) && 
-                            !enemies.some(en => en.x === nx && en.y === ny && en !== e)
-                        ) {
-                            e.x = nx; e.y = ny;
-                        } else break;
-                        steps++;
-                        dx = p.x - e.x; dy = p.y - e.y;
-                    }
-                    if (
-                        (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark') ?
-                        (Math.abs(e.x - p.x) === 1 && e.y === p.y) || (Math.abs(e.y - p.y) === 1 && e.x === p.x) :
-                        Math.abs(e.x - p.x) <= 1 && Math.abs(e.y - p.y) <= 1
-                    ) {
-                        p.hp -= e.type.atk;
-                        logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${e.type.atk} DMG`);
-                        sounds.hit.play().catch(e => console.error('Hit sound error:', e));
-                        if (p.hp <= 0) {
-                            p.hp = 0;
-                            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                            gameOver = true;
-                            console.log(`Game Over: p.hp=${p.hp}`);
-                        }
-                    }
+function moveEnemies() {
+    if (gameOver || splashActive) return;
+    enemies.forEach(e => {
+        let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
+        if (dist <= 5) {
+            let moves = e.type.move, steps = 0;
+            while (steps < moves) {
+                let nx = e.x, ny = e.y;
+                if (e.type.name === 'Crab') {
+                    nx += dx > 0 ? 1 : -1;
+                } else if (e.type.name === 'Shrimp' || e.type.name === 'Dolphin' || e.type.name === 'Shark') {
+                    if (Math.abs(dx) > Math.abs(dy)) nx += dx > 0 ? 1 : -1;
+                    else ny += dy > 0 ? 1 : -1;
+                } else {
+                    if (Math.abs(dx) > Math.abs(dy)) nx += dx > 0 ? 1 : -1;
+                    else ny += dy > 0 ? 1 : -1;
                 }
-            });
-            if (enemies.length === 0) waveActive = false;
-            if (enemies.length === 0 && !exit && initialWaveSpawned) {
-                let r = rooms[Math.floor(Math.random() * rooms.length)];
-                let x, y;
-                do { x = r.x + Math.floor(Math.random() * r.w); y = r.y + Math.floor(Math.random() * r.h); }
-                while (map[y][x] !== 0 || (x === p.x && y === p.y));
-                exit = {x, y};
+                if (
+                    nx >= 0 && nx < W && ny >= 0 && ny < H && 
+                    map[ny][nx] !== 1 && !(nx === p.x && ny === p.y) && 
+                    !enemies.some(en => en.x === nx && en.y === ny && en !== e)
+                ) {
+                    e.x = nx; e.y = ny;
+                } else break;
+                steps++;
+                dx = p.x - e.x; dy = p.y - e.y;
             }
-            needsRedraw = true;
+            if (
+                (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark') ?
+                (Math.abs(e.x - p.x) === 1 && e.y === p.y) || (Math.abs(e.y - p.y) === 1 && e.x === p.x) :
+                Math.abs(e.x - p.x) <= 1 && Math.abs(e.y - p.y) <= 1
+            ) {
+                p.hp -= e.type.atk;
+                logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${e.type.atk} DMG`);
+                playSoundWithFallback(sounds.hit);
+                if (p.hp <= 0) {
+                    p.hp = 0;
+                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                    gameOver = true;
+                    console.log(`Game Over: p.hp=${p.hp}`);
+                }
+            }
         }
+    });
+    if (enemies.length === 0) waveActive = false;
+    if (enemies.length === 0 && !exit && initialWaveSpawned) {
+        let r = rooms[Math.floor(Math.random() * rooms.length)];
+        let x, y;
+        do { x = r.x + Math.floor(Math.random() * r.w); y = r.y + Math.floor(Math.random() * r.h); }
+        while (map[y][x] !== 0 || (x === p.x && y === p.y));
+        exit = {x, y};
+    }
+    needsRedraw = true;
+}
 
 function attack() {
     if (gameOver || splashActive) return;
@@ -1020,18 +1075,15 @@ function attack() {
     });
     if (hit) {
         hit.hp -= p.atk;
-        sounds.hit.play().catch(e => console.error('Hit sound error:', e));
+        playSoundWithFallback(sounds.hit);
         if (hit.hp <= 0) {
             kills[hit.type.name]++;
-            // Check if the tile is empty or find an adjacent empty tile
             let dropPlaced = false;
             if (map[hit.y][hit.x] === 0) {
-                // Place drop on the enemy's tile if it's empty
                 map[hit.y][hit.x] = 3;
                 satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
                 dropPlaced = true;
             } else {
-                // Try adjacent tiles (up, down, left, right)
                 const adjacent = [
                     {x: hit.x, y: hit.y - 1}, // Up
                     {x: hit.x, y: hit.y + 1}, // Down
@@ -1237,15 +1289,19 @@ if (gameOver) {
 
 document.addEventListener('keydown', e => {
     if (splashActive && e.key === 'Enter') {
+        console.log('Enter key pressed on splash: splashActive=', splashActive, 'musicMuted=', musicMuted);
         const startButton = document.getElementById('start-button');
         startButton.style.background = '#00b7ef'; // Mimic :hover color
         setTimeout(() => {
             startButton.style.background = '#00e8d8'; // Revert to original color
         }, 200); // Short duration to simulate tap
-        preloadSounds(); // Initialize all sounds for iOS
+        preloadSounds(); // Initialize all sounds except music
         if (!musicMuted) {
-            sounds.music.currentTime = 0; // Ensure music starts from beginning
-            sounds.music.play().catch(e => console.error('Music play failed:', e));
+            sounds.music.pause(); // Ensure clean state
+            sounds.music.currentTime = 0;
+            sounds.music.play().then(() => {
+                console.log('Music started successfully on Enter');
+            }).catch(e => console.error('Music play failed on Enter:', e));
         }
         fadeSplash();
         return; // Prevent other key actions during splash
@@ -1295,3 +1351,4 @@ document.getElementById('game-over').addEventListener('click', (event) => {
     </script>
 </body>
 </html>
+
