@@ -518,27 +518,44 @@ function preloadSounds() {
 
 function playSoundWithFallback(soundArray) {
     let index = 0;
+    const locks = new Array(soundArray.length).fill(false); // Track instance locks
+
     function tryPlay() {
         if (index >= soundArray.length) {
-            console.error('All sound instances failed to play:', soundArray[0].src);
+            console.error('All sound instances failed or busy:', soundArray[0].src);
             return;
         }
         const sound = soundArray[index];
-        if (!sound.paused && sound.currentTime > 0) {
-            // Sound is busy, try next instance
+        if (locks[index] || (!sound.paused && sound.currentTime > 0)) {
+            // Sound is locked or playing, try next instance
+            console.log(`Sound instance ${index} busy for ${sound.src}, trying next`);
             index++;
             tryPlay();
             return;
         }
+        locks[index] = true; // Lock instance
+        console.log(`Playing sound instance ${index}: ${sound.src}`);
         sound.play().then(() => {
-            // Reset after playback
+            console.log(`Sound instance ${index} started: ${sound.src}`);
             sound.onended = () => {
                 sound.currentTime = 0;
+                locks[index] = false; // Unlock instance
+                console.log(`Sound instance ${index} ended: ${sound.src}`);
             };
+            // Fallback for interrupted sounds
+            setTimeout(() => {
+                if (!sound.paused && sound.currentTime > 0 && locks[index]) {
+                    console.warn(`Sound instance ${index} interrupted: ${sound.src}`);
+                    sound.pause();
+                    sound.currentTime = 0;
+                    locks[index] = false;
+                }
+            }, 1000); // Assume max 1s duration for hit/pickup
         }).catch(e => {
-            console.error('Sound play failed, trying next instance:', e);
+            console.error(`Sound instance ${index} play failed for ${sound.src}:`, e);
+            locks[index] = false; // Unlock on failure
             index++;
-            tryPlay(); // Try next instance on failure
+            tryPlay(); // Try next instance
         });
     }
     tryPlay();
