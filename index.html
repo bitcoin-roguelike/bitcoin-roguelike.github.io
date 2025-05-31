@@ -87,21 +87,23 @@
             z-index: 10;
             margin-top: -240px;
         }
-        #battle-log textarea { 
-            background: transparent; 
-            color: #ff8c00; 
-            border: none; 
-            font-family: 'VT323', monospace; 
-            font-size: 14px; 
-            resize: none; 
-            width: 100%; 
-            height: 200px; 
-            padding: 0; 
-            overflow-y: auto; 
-            scroll-behavior: smooth;
-            z-index: 10;            
-            pointer-events: none; 
-        }
+#battle-log textarea {
+    background: transparent;
+    color: #ff8c00;
+    border: none;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    resize: none;
+    width: 100%;
+    height: 200px;
+    padding: 0;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    z-index: 10;
+    pointer-events: none;
+    transition: transform 0.3s ease; /* Smooth sliding animation */
+    transform: translateX(-100%); /* Start hidden off-screen to the left */
+}
         #inventory { 
             position: absolute;
             top: 10px;
@@ -309,12 +311,12 @@
     #dpad {
         display: grid;
         grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 1px; /* Reduced from 5px to bring buttons closer */
+        gap: 2px; /* Reduced from 5px to bring buttons closer */
         margin-left: -10px;
     }
     #up {
         grid-area: t;
-        margin-top: 120px;
+        margin-top: 160px;
         margin-left: 0;
         z-index: 30;
         border-radius: 5%;
@@ -355,7 +357,7 @@
         color: #000;
         margin-right: 20px;
         margin-left: -15px;
-        margin-top: 120px;
+        margin-top: 180px;
         z-index: 30;
     }
     #attack {
@@ -365,7 +367,7 @@
         height: 30px;
         width: 30px;
         border-radius: 50%;
-        margin-top: 120px;
+        margin-top: 180px;
         z-index: 30;
     }
     #potion {
@@ -469,12 +471,12 @@
     #dpad {
         display: grid;
         grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 1px; /* Reduced from 5px to bring buttons closer */
+        gap: 2px; /* Reduced from 5px to bring buttons closer */
         margin-left: 20px;
     }
     #up {
         grid-area: t;
-        margin-top: 120px;
+        margin-top: 160px;
         margin-left: 0;
         z-index: 30;
         border-radius: 5%;
@@ -515,7 +517,7 @@
         color: #000;
         margin-right: 80px;
         margin-left: -15px;
-        margin-top: 120px;
+        margin-top: 180px;
         z-index: 30;
     }
     #attack {
@@ -525,7 +527,7 @@
         height: 40px;
         width: 40px;
         border-radius: 50%;
-        margin-top: 120px;
+        margin-top: 180px;
         z-index: 30;
     }
     #potion {
@@ -886,13 +888,55 @@ function toggleMute() {
             console.log('Whale Hash ID:', txid);
         }
 
-        function logBattleEvent(event) {
-            if (gameOver) return;
-            battleLog.push(event);
-            const textarea = document.getElementById('battle-events');
-            textarea.value = battleLog.join('\n');
-            textarea.scrollTop = textarea.scrollHeight;
+let battleLogTimeout = null; // Track timeout to prevent overlap
+
+function logBattleEvent(event) {
+    if (gameOver) return;
+    battleLog.push(event);
+    const textarea = document.getElementById('battle-events');
+    textarea.value = battleLog.join('\n');
+    textarea.scrollTop = textarea.scrollHeight;
+    // Clear any existing timeout to reset the 7-second timer
+    if (battleLogTimeout) {
+        clearTimeout(battleLogTimeout);
+    }
+    // Slide in the battle log
+    textarea.style.transform = 'translateX(0)';
+    // Schedule slide out after 7 seconds
+    battleLogTimeout = setTimeout(() => {
+        textarea.style.transform = 'translateX(-100%)';
+        battleLogTimeout = null; // Clear timeout reference
+    }, 3000);
+}
+
+function gameLoop(timestamp) {
+    if (!map?.[0] || !p || !enemies || !rooms?.length) {
+        console.error('Invalid state');
+        initMap();
+        needsRedraw = true;
+    }
+    if (!gameOver && !splashActive && timestamp - lastUpdate >= 60000) {
+        fetchTxs();
+        lastUpdate = timestamp;
+    }
+    if (gameOver) {
+        sounds.music.pause();
+        sounds.music.currentTime = 0;
+        if (!gameOverSoundPlayed) {
+            sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
+            gameOverSoundPlayed = true;
         }
+        document.getElementById('health').textContent = 0;
+        needsRedraw = true;
+    }
+    if (needsRedraw && !splashActive) draw();
+    if (p.hp <= 0 && !gameOver) {
+        p.hp = 0;
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+    }
+    requestAnimationFrame(gameLoop);
+}
 
         function updateSatsDisplay() {
             const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
@@ -1618,4 +1662,5 @@ document.getElementById('game-over').addEventListener('click', (event) => {
     </script>
 </body>
 </html>
+
 
