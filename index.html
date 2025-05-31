@@ -12,7 +12,7 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            min-height: 100vh; 
+            min-height: 0vh; 
             background: #222; 
             font-family: 'VT323', monospace;
             overflow: hidden;
@@ -616,6 +616,14 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
+    
+	/* 
+	IOS fix, stop users from zooming in and out the screen
+	*/
+	document.ondblclick = function (e) {
+    		e.preventDefault();
+	}
+    
 	document.addEventListener('gesturestart', function (e) {
             e.preventDefault();
         });
@@ -861,16 +869,23 @@ function resetSplashScreen() {
 
 document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
-        console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted);
-        preloadSounds(); // Initialize all sounds except music
+        console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted, 'wave=', wave);
+        preloadSounds();
         if (!musicMuted) {
-            sounds.music.pause(); // Ensure clean state
+            sounds.music.pause();
             sounds.music.currentTime = 0;
             sounds.music.play().then(() => {
                 console.log('Music started successfully');
             }).catch(e => console.error('Music play failed on START:', e));
         }
         fadeSplash();
+        setTimeout(() => {
+            if (!gameOver && !splashActive) {
+                fetchTxs();
+                lastUpdate = Date.now();
+                console.log('Initial fetchTxs triggered after splash, wave=', wave);
+            }
+        }, 2000);
     }
 });
 
@@ -921,9 +936,10 @@ function gameLoop(timestamp) {
         initMap();
         needsRedraw = true;
     }
-    if (!gameOver && !splashActive && timestamp - lastUpdate >= 60000) {
+    if (!gameOver && !splashActive && !exit && !waveActive && floor > 0 && timestamp - lastUpdate >= 20000) {
         fetchTxs();
         lastUpdate = timestamp;
+        console.log(`gameLoop triggered fetchTxs: floor=${floor}, wave=${wave}`);
     }
     if (gameOver) {
         sounds.music.pause();
@@ -933,6 +949,8 @@ function gameLoop(timestamp) {
             gameOverSoundPlayed = true;
         }
         document.getElementById('health').textContent = 0;
+        document.getElementById('wave').textContent = wave;
+        console.log(`Game Over: wave=${wave}, enemies=${enemies.length}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
         needsRedraw = true;
     }
     if (needsRedraw && !splashActive) draw();
@@ -940,7 +958,9 @@ function gameLoop(timestamp) {
         p.hp = 0;
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
         gameOver = true;
+        console.log(`Game Over: wave=${wave}, enemies=${enemies.length}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
     }
+    document.getElementById('wave').textContent = wave;
     requestAnimationFrame(gameLoop);
 }
 
@@ -1110,48 +1130,40 @@ let apiTimeoutId = null;
 const API_INTERVAL = 20000; // 20 seconds
 
 async function fetchTxs() {
-    if (gameOver) return;
-
+    if (gameOver || splashActive || floor === 0) {
+        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}`);
+        return;
+    }
     const now = Date.now();
     if (nextApiCallTime && now < nextApiCallTime) {
         console.log(`Skipping API call, next call in ${(nextApiCallTime - now) / 1000} seconds`);
         return;
     }
-
-    // Clear any existing timeout to prevent stacking
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
         apiTimeoutId = null;
     }
-
     try {
-        // Skip non-Whale spawns if initial spawn is done
+        console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
         if (initialSpawnDoneThisFloor) {
-            console.log(`Initial spawn done for floor ${floor}, only checking for Whales`);
+            console.log(`Initial spawn done for floor ${floor}, checking for Whales or new wave`);
         } else {
             console.log(`Spawning non-Whales for floor ${floor}, ${enemiesSpawnedThisFloor}/10 spawned`);
         }
-
-        // Fetch recent transactions
         await new Promise(resolve => setTimeout(resolve, 25));
         const res = await axios.get('https://mempool.space/api/mempool/recent');
         console.log('Mempool response:', res.data);
-
         if (!res.data || res.data.length === 0) {
             console.warn(`Empty mempool response, scheduling retry in ${API_INTERVAL / 1000}s`);
             nextApiCallTime = now + API_INTERVAL;
             apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
             return;
         }
-
         let enemyCount = 0;
-        const processedTxids = new Set(); // Track processed transactions
-
-        // Single loop for both initial spawn and Whale spawn
-        for (const tx of res.data.slice(0, 10)) { // Process up to 10 transactions
-            if (processedTxids.has(tx.txid)) continue; // Skip already processed transactions
+        const processedTxids = new Set();
+        for (const tx of res.data.slice(0, 10)) {
+            if (processedTxids.has(tx.txid)) continue;
             processedTxids.add(tx.txid);
-
             let value = 0;
             let address = 'Invalid address';
             console.log(`Fetching tx details for ${tx.txid}`);
@@ -1169,94 +1181,76 @@ async function fetchTxs() {
                 console.error(`Failed to fetch tx ${tx.txid}:`, e);
                 continue;
             }
-
             if (value <= 0) {
                 console.log(`Skipping tx ${tx.txid}: Zero/negative value`, value);
                 continue;
             }
-
             const btc = value / 1e8;
             const type = types.find(t => btc > t.min && btc <= t.max);
             console.log(`Tx ${tx.txid}: BTC=${btc.toFixed(8)}, Type=${type ? type.name : 'None'}, Value=${value}`);
-
             if (!type) {
                 console.log(`No type for BTC: ${btc}, Tx: ${tx.txid}`);
                 continue;
             }
-
-            // Handle initial spawn (10 non-Whale enemies)
+            if (exit) {
+                console.log(`Exit exists at (${exit.x}, ${exit.y}), skipping enemy spawn for tx ${tx.txid}`);
+                continue;
+            }
             if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10) {
                 if (type.name === 'Whale') {
                     console.log(`Skipping Whale for initial spawn: ${tx.txid}`);
                     continue;
                 }
-
                 console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
-
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
                 let x, y;
                 do {
                     x = r.x + Math.floor(Math.random() * r.w);
                     y = r.y + Math.floor(Math.random() * r.h);
                 } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
-
                 enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
-
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
-
                 enemiesSpawnedThisFloor++;
                 enemyCount++;
-                
-                // Set flag immediately when 10 enemies are spawned
                 if (enemiesSpawnedThisFloor >= 10) {
                     initialSpawnDoneThisFloor = true;
                 }
-                
-                continue; // Move to next transaction
+            } else if (type.name === 'Whale' && enemies.length === 0) {
+                console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value=${value}`);
+                const r = rooms[Math.floor(Math.random() * rooms.length)];
+                let x, y;
+                do {
+                    x = r.x + Math.floor(Math.random() * r.w);
+                    y = r.y + Math.floor(Math.random() * r.h);
+                } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
+                enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
+                const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
+                logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+                console.log(`Whale tx:`, tx, `Hash ID: ${tx.txid}`);
+                logWhaleHashId(tx.txid);
+                document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
+                setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
+                enemyCount++;
             }
-
-            // Handle Whale spawns (no enemy cap)
-            if (type.name !== 'Whale') {
-                console.log(`Skipping non-Whale tx: ${tx.txid}, Type: ${type.name}`);
-                continue;
-            }
-
-            console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value=${value}`);
-
-            const r = rooms[Math.floor(Math.random() * rooms.length)];
-            let x, y;
-            do {
-                x = r.x + Math.floor(Math.random() * r.w);
-                y = r.y + Math.floor(Math.random() * r.h);
-            } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
-
-            enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
-
-            const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
-            logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
-
-            console.log(`Whale tx:`, tx, `Hash ID: ${tx.txid}`);
-            logWhaleHashId(tx.txid);
-            document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
-            setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
         }
-
-        // Warn if some enemies spawned but not enough
         if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
             console.warn(`Only spawned ${enemiesSpawnedThisFloor} non-Whale enemies due to insufficient valid blockchain data`);
         }
-
-        if (enemies.length === 0 && initialSpawnDoneThisFloor) {
-            console.warn(`No valid Whale transactions spawned enemies, scheduling retry in ${API_INTERVAL / 1000}s`);
-        } else {
-            if (enemyCount > 0 || enemies.length > 0) { // New wave spawned
-                wave++; // Increment wave
+        if (enemyCount > 0 && enemies.length > 0 && !exit) {
+            if (!waveActive) {
+                wave++;
                 initialWaveSpawned = true;
-                waveActive = enemies.length > 0;
-                document.getElementById('wave').textContent = wave; // Update display
-                needsRedraw = true;
+                waveActive = true;
+                document.getElementById('wave').textContent = wave;
+                logBattleEvent(`Floor ${floor} - Wave ${wave} Started!`);
+                console.log(`New wave started: wave=${wave}, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
+            } else {
+                console.log(`Additional enemies added to wave ${wave}, enemies=${enemies.length}, waveActive=${waveActive}`);
             }
+            needsRedraw = true;
+        } else {
+            console.log(`No enemies spawned, wave=${wave}, scheduling retry in ${API_INTERVAL / 1000}s`);
         }
     } catch (e) {
         console.error('fetchTxs Error:', e, e.stack);
@@ -1280,12 +1274,9 @@ function move(dir) {
         needsRedraw = true;
         return;
     }
-
-    // Check if the target position is occupied by an enemy
     if (enemies.some(e => e.x === nx && e.y === ny)) {
         return;
     }
-
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx; p.y = ny;
         if (map[ny][nx] === 2) { 
@@ -1309,16 +1300,23 @@ function move(dir) {
             initialSpawnDoneThisFloor = false;
             enemies = [];
             floor++;
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-            initMap();
+            // Do not reset wave, let it continue incrementing
             initialWaveSpawned = false;
             waveActive = false;
-            wave = 1;
-            console.log(`Moved to floor ${floor}, reset enemy spawns`);
+            exit = null;
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+            document.getElementById('wave').textContent = wave;
+            console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
+            initMap();
             nextApiCallTime = null;
-            fetchTxs();
+            setTimeout(() => {
+                if (!gameOver && !splashActive && floor > 0) { // Skip enemy spawn on Floor 0
+                    fetchTxs();
+                    console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+                }
+            }, 1000);
         }
-        updateFogMap(p.x, p.y); // Update fog after moving
+        updateFogMap(p.x, p.y);
     }
     moveEnemies();
     needsRedraw = true;
@@ -1368,13 +1366,23 @@ function moveEnemies() {
             }
         }
     });
-    if (enemies.length === 0) waveActive = false;
-    if (enemies.length === 0 && !exit && initialWaveSpawned) {
+    // Spawn stairs before resetting wave state
+    if (enemies.length === 0 && !exit && waveActive) {
         let r = rooms[Math.floor(Math.random() * rooms.length)];
         let x, y;
         do { x = r.x + Math.floor(Math.random() * r.w); y = r.y + Math.floor(Math.random() * r.h); }
         while (map[y][x] !== 0 || (x === p.x && y === p.y));
         exit = {x, y};
+        console.log(`Stairs spawned at (${x}, ${y}) on floor ${floor}, wave=${wave}`);
+        needsRedraw = true;
+    }
+    // Handle wave completion
+    if (enemies.length === 0 && waveActive) {
+        waveActive = false;
+        logBattleEvent(`Floor ${floor} - Wave ${wave} Completed!`);
+        initialWaveSpawned = false;
+        console.log(`Wave ${wave} completed, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
+        needsRedraw = true;
     }
     needsRedraw = true;
 }
@@ -1447,13 +1455,14 @@ function attack() {
         }
 
 function restart() {
-    console.log('Restarting game'); // Debug
+    console.log('Restarting game');
     floor = 1;
     wave = 1;
     p.hp = 24;
     p.potions = 0;
     p.x = 2;
     p.y = 2;
+    p.atk = 2;
     enemies = [];
     map = [];
     rooms = [];
@@ -1473,8 +1482,8 @@ function restart() {
     retryDelay = 5000;
     swordDir = 'right';
     swordActive = false;
+    swordStart = 0;
     fogMap = [];
-    blockLogUntil = 0;
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = battleLog.join('\n');
@@ -1490,12 +1499,18 @@ function restart() {
 
     sounds.music.pause();
     sounds.music.currentTime = 0;
+
+    if (apiTimeoutId) {
+        clearTimeout(apiTimeoutId);
+        apiTimeoutId = null;
+    }
+
     resetSplashScreen();
     initMap();
+    updateSatsDisplay();
     needsRedraw = true;
-    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive); // Debug
+    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit);
 }
-
 function downloadStats() {
     const gameOverCanvas = document.getElementById('game-over-canvas');
     const link = document.createElement('a');
@@ -1658,7 +1673,6 @@ document.getElementById('game-over').addEventListener('click', (event) => {
 
 
         initMap();
-        fetchTxs();
         updateSatsDisplay();
         requestAnimationFrame(gameLoop);
         
@@ -1692,6 +1706,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
+
 
 
 
