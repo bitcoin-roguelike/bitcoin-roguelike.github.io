@@ -12,7 +12,7 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            min-height: 100vh; 
+            min-height: 0vh; 
             background: #222; 
             font-family: 'VT323', monospace;
             overflow: hidden;
@@ -1250,15 +1250,17 @@ async function fetchTxs() {
         if (enemies.length === 0 && initialSpawnDoneThisFloor) {
             console.warn(`No valid Whale transactions spawned enemies, scheduling retry in ${API_INTERVAL / 1000}s`);
         } else {
-            initialWaveSpawned = true;
-            waveActive = enemies.length > 0;
-            document.getElementById('wave').textContent = wave;
-            needsRedraw = true;
+            if (enemyCount > 0 || enemies.length > 0) { // New wave spawned
+                wave++; // Increment wave
+                initialWaveSpawned = true;
+                waveActive = enemies.length > 0;
+                document.getElementById('wave').textContent = wave; // Update display
+                needsRedraw = true;
+            }
         }
     } catch (e) {
         console.error('fetchTxs Error:', e, e.stack);
     } finally {
-        // Schedule next call (only one timer)
         nextApiCallTime = now + API_INTERVAL;
         apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
     }
@@ -1445,21 +1447,24 @@ function attack() {
         }
 
 function restart() {
-    // Reset game state
+    console.log('Restarting game'); // Debug
     floor = 1;
-    wave = 0;
+    wave = 1;
     p.hp = 24;
     p.potions = 0;
     p.x = 2;
     p.y = 2;
     enemies = [];
+    map = [];
+    rooms = [];
     exit = null;
     gameOver = false;
-    gameOverSoundPlayed = false; // Reset game-over sound flag
+    gameOverSoundPlayed = false;
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
-    nextApiCallTime = null;
+    initialWaveSpawned = false;
     waveActive = false;
+    nextApiCallTime = null;
     whaleHashIds = ['Whale Transactions:'];
     battleLog = ['Battle Log:'];
     satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
@@ -1467,20 +1472,28 @@ function restart() {
     satoshiDrops = [];
     retryDelay = 5000;
     swordDir = 'right';
-    
+    swordActive = false;
+    fogMap = [];
+    blockLogUntil = 0;
+
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = battleLog.join('\n');
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+    document.getElementById('wave').textContent = wave;
+    document.getElementById('health').textContent = p.hp;
+    document.getElementById('potions').textContent = p.potions;
+    document.getElementById('sats').textContent = '0';
     document.getElementById('game-over').style.display = 'none';
     document.getElementById('download-stats').style.display = 'none';
-    updateSatsDisplay();
-    initMap();
-    fetchTxs();
-    // Stop music and reset splash screen
+    document.getElementById('splash-screen').style.display = 'block';
+    splashActive = true;
+
     sounds.music.pause();
     sounds.music.currentTime = 0;
     resetSplashScreen();
+    initMap();
     needsRedraw = true;
+    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive); // Debug
 }
 
 function downloadStats() {
@@ -1679,6 +1692,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
+
 
 
 
