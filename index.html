@@ -482,9 +482,11 @@ sounds.music.loop = true;
 Object.values(sounds).forEach(s => {
     if (Array.isArray(s)) {
         s.forEach(instance => {
+            instance.volume = 1.0; // Explicit max volume
             instance.onerror = () => console.error(`Failed to load sound: ${instance.src}`);
         });
     } else {
+        s.volume = 1.0;
         s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
     }
 });
@@ -493,24 +495,22 @@ function preloadSounds() {
     Object.entries(sounds).forEach(([key, sound]) => {
         if (key === 'music') return; // Skip music preloading
         if (Array.isArray(sound)) {
-            sound.forEach(instance => {
-                const originalVolume = instance.volume;
+            sound.forEach((instance, idx) => {
                 instance.volume = 0; // Mute for preloading
                 instance.play().then(() => {
                     instance.pause();
                     instance.currentTime = 0;
-                    instance.volume = originalVolume;
-                    console.log(`Preloaded sound: ${instance.src}`);
-                }).catch(e => console.error(`Preload sound error for ${instance.src}:`, e));
+                    instance.volume = 1.0; // Restore max volume
+                    console.log(`Preloaded sound instance ${idx}: ${instance.src}, volume=${instance.volume}`);
+                }).catch(e => console.error(`Preload sound error for ${instance.src} instance ${idx}:`, e));
             });
         } else {
-            const originalVolume = sound.volume;
             sound.volume = 0;
             sound.play().then(() => {
                 sound.pause();
                 sound.currentTime = 0;
-                sound.volume = originalVolume;
-                console.log(`Preloaded sound: ${sound.src}`);
+                sound.volume = 1.0;
+                console.log(`Preloaded sound: ${sound.src}, volume=${sound.volume}`);
             }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
         }
     });
@@ -519,27 +519,37 @@ function preloadSounds() {
 function playSoundWithFallback(soundArray) {
     let index = 0;
     const locks = new Array(soundArray.length).fill(false); // Track instance locks
+    const maxPoolSize = 10; // Cap pool to prevent memory issues
 
     function tryPlay() {
         if (index >= soundArray.length) {
-            console.error('All sound instances failed or busy:', soundArray[0].src);
-            return;
+            if (soundArray.length < maxPoolSize) {
+                console.warn(`All ${soundArray.length} sound instances failed or busy for ${soundArray[0].src}, creating new instance`);
+                const newSound = new Audio(soundArray[0].src);
+                newSound.volume = 1.0; // Ensure max volume
+                soundArray.push(newSound);
+                locks.push(false);
+                index = soundArray.length - 1;
+            } else {
+                console.error(`Sound pool limit (${maxPoolSize}) reached for ${soundArray[0].src}`);
+                return;
+            }
         }
         const sound = soundArray[index];
         if (locks[index] || (!sound.paused && sound.currentTime > 0)) {
-            // Sound is locked or playing, try next instance
             console.log(`Sound instance ${index} busy for ${sound.src}, trying next`);
             index++;
             tryPlay();
             return;
         }
         locks[index] = true; // Lock instance
-        console.log(`Playing sound instance ${index}: ${sound.src}`);
+        sound.volume = 1.0; // Ensure max volume
+        console.log(`Playing sound instance ${index}: ${sound.src}, volume=${sound.volume}`);
         sound.play().then(() => {
             console.log(`Sound instance ${index} started: ${sound.src}`);
             sound.onended = () => {
                 sound.currentTime = 0;
-                locks[index] = false; // Unlock instance
+                locks[index] = false;
                 console.log(`Sound instance ${index} ended: ${sound.src}`);
             };
             // Fallback for interrupted sounds
@@ -550,7 +560,7 @@ function playSoundWithFallback(soundArray) {
                     sound.currentTime = 0;
                     locks[index] = false;
                 }
-            }, 1000); // Assume max 1s duration for hit/pickup
+            }, 950); // Match pickup.wav duration
         }).catch(e => {
             console.error(`Sound instance ${index} play failed for ${sound.src}:`, e);
             locks[index] = false; // Unlock on failure
