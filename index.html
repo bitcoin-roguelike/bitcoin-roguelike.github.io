@@ -442,6 +442,7 @@
         let musicMuted = false;        
         let swordDir = 'right', swordActive = false, swordStart = 0;
         let gameOverSoundPlayed = false; // Tracks if gameover.wav has played
+        let fogMap = []; // Tracks fog of war: 0 (unexplored), 1 (explored)
         const types = [
             {name: 'Shrimp', min: 0, max: 0.01, img: new Image(), hp: 1, atk: 1, reward: 0, move: 1},
             {name: 'Crab', min: 0.01, max: 0.1, img: new Image(), hp: 2, atk: 2, reward: 0, move: 1},
@@ -582,46 +583,41 @@ document.getElementById('start-button').addEventListener('click', () => {
 function initMap() {
     try {
         map = Array(H).fill().map(() => Array(W).fill(1));
+        fogMap = Array(H).fill().map(() => Array(W).fill(0)); // Initialize fogMap as unexplored
         rooms = [];
         satoshiDrops = [];
         
-        // Generate at least 3 rooms, up to 5
-        let maxAttempts = 100; // Prevent infinite loops
+        // Generate rooms (existing code unchanged)
+        let maxAttempts = 100;
         while (rooms.length < 3 && maxAttempts > 0) {
-            let rw = 4 + Math.floor(Math.random() * 4); // Room width: 4-7
-            let rh = 4 + Math.floor(Math.random() * 4); // Room height: 4-7
+            let rw = 4 + Math.floor(Math.random() * 4);
+            let rh = 4 + Math.floor(Math.random() * 4);
             let rx = 1 + Math.floor(Math.random() * (W - rw - 2));
             let ry = 1 + Math.floor(Math.random() * (H - rh - 2));
-            
-            // Check for overlap with existing rooms
             if (!rooms.some(r => rx < r.x + r.w && rx + rw > r.x && ry < r.y + r.h && ry + rh > r.y)) {
                 rooms.push({x: rx, y: ry, w: rw, h: rh});
                 for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
             }
             maxAttempts--;
         }
-        
-        // Try to add up to 2 more rooms (optional, max 5 total)
-        maxAttempts = 50; // Limit attempts for additional rooms
+        maxAttempts = 50;
         while (rooms.length < 5 && maxAttempts > 0) {
             let rw = 4 + Math.floor(Math.random() * 4);
             let rh = 4 + Math.floor(Math.random() * 4);
             let rx = 1 + Math.floor(Math.random() * (W - rw - 2));
             let ry = 1 + Math.floor(Math.random() * (H - rh - 2));
-            
             if (!rooms.some(r => rx < r.x + r.w && rx + rw > r.x && ry < r.y + r.h && ry + rh > r.y)) {
                 rooms.push({x: rx, y: ry, w: rw, h: rh});
                 for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) map[y][x] = 0;
             }
             maxAttempts--;
         }
-        
         if (rooms.length < 3) {
             console.warn('Failed to generate at least 3 rooms, retrying map generation');
-            return initMap(); // Recursively retry if we didn't get enough rooms
+            return initMap();
         }
         
-        // Connect rooms with corridors
+        // Connect rooms with corridors (existing code unchanged)
         for (let i = 1; i < rooms.length; i++) {
             let r1 = rooms[i - 1], r2 = rooms[i];
             let x1 = r1.x + Math.floor(r1.w / 2), y1 = r1.y + Math.floor(r1.h / 2);
@@ -639,10 +635,13 @@ function initMap() {
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) { p.x = x; p.y = y; break; }
         }
         
-        // Place potions
+        // Mark initial player area as explored
+        updateFogMap(p.x, p.y);
+        
+        // Place potions (existing code unchanged)
         let potionPositions = [];
         let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, rooms.length));
-        let proximityRange = 5; // Initial proximity range
+        let proximityRange = 5;
         for (let r of selectedRooms) {
             let x, y, attempts = 100;
             while (attempts > 0 && potionPositions.length < 3) {
@@ -672,6 +671,63 @@ function initMap() {
     } catch (e) {
         console.error('initMap Error:', e, e.stack);
         throw e;
+    }
+}
+
+function updateFogMap(px, py) {
+    const radius = 4; // Visibility radius
+    const currentRoom = rooms.find(r => px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h);
+
+    // Enhanced Bresenham's line algorithm with corner checking
+    function hasLineOfSight(x0, y0, x1, y1) {
+        let x = x0, y = y0;
+        const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+        const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        let err = dx - dy;
+
+        while (true) {
+            // Check current tile and adjacent tiles to block diagonal slips
+            if (x >= 0 && x < W && y >= 0 && y < H) {
+                if (map[y][x] === 1) return false; // Hit a wall
+                // Check adjacent tiles to prevent corner penetration
+                if (dx === dy) { // 45-degree line, check orthogonally adjacent tiles
+                    if (sx === 1 && sy === 1) { // Moving SE
+                        if (y - 1 >= 0 && map[y - 1][x] === 1) return false; // Wall above
+                        if (x - 1 >= 0 && map[y][x - 1] === 1) return false; // Wall left
+                    } else if (sx === 1 && sy === -1) { // Moving NE
+                        if (y + 1 < H && map[y + 1][x] === 1) return false; // Wall below
+                        if (x - 1 >= 0 && map[y][x - 1] === 1) return false; // Wall left
+                    } else if (sx === -1 && sy === 1) { // Moving SW
+                        if (y - 1 >= 0 && map[y - 1][x] === 1) return false; // Wall above
+                        if (x + 1 < W && map[y][x + 1] === 1) return false; // Wall right
+                    } else if (sx === -1 && sy === -1) { // Moving NW
+                        if (y + 1 < H && map[y + 1][x] === 1) return false; // Wall below
+                        if (x + 1 < W && map[y][x + 1] === 1) return false; // Wall right
+                    }
+                }
+            } else {
+                return false; // Out of bounds
+            }
+            if (x === x1 && y === y1) return true; // Reached target
+            const e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x += sx; }
+            if (e2 < dx) { err += dx; y += sy; }
+        }
+    }
+
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+            if (dist <= radius) {
+                // Check if tile is in the same room or has line-of-sight
+                const tileRoom = rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+                const inSameRoom = currentRoom && tileRoom && currentRoom === tileRoom;
+                const hasLOS = hasLineOfSight(px, py, x, y);
+                if (inSameRoom || hasLOS) {
+                    fogMap[y][x] = 1; // Mark as explored
+                }
+            }
+        }
     }
 }
 
@@ -836,64 +892,63 @@ async function fetchTxs() {
     }
 }
 
-        function move(dir) {
-            if (gameOver || splashActive) return;
-            swordDir = dir;
-            let nx = p.x, ny = p.y;
-            if (dir === 'up') ny--;
-            if (dir === 'down') ny++;
-            if (dir === 'left') nx--;
-            if (dir === 'right') nx++;
-            if (!map[ny] || map[ny][nx] === undefined) {
-                console.error('Invalid map access: nx=', nx, 'ny=', ny);
-                initMap();
-                needsRedraw = true;
-                return;
-            }
+function move(dir) {
+    if (gameOver || splashActive) return;
+    swordDir = dir;
+    let nx = p.x, ny = p.y;
+    if (dir === 'up') ny--;
+    if (dir === 'down') ny++;
+    if (dir === 'left') nx--;
+    if (dir === 'right') nx++;
+    if (!map[ny] || map[ny][nx] === undefined) {
+        console.error('Invalid map access: nx=', nx, 'ny=', ny);
+        initMap();
+        needsRedraw = true;
+        return;
+    }
 
-            // Check if the target position is occupied by an enemy
-            if (enemies.some(e => e.x === nx && e.y === ny)) {
-                // If the target position is occupied, do not move the player
-                return;
-            }
+    // Check if the target position is occupied by an enemy
+    if (enemies.some(e => e.x === nx && e.y === ny)) {
+        return;
+    }
 
-            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
-                p.x = nx; p.y = ny;
-                if (map[ny][nx] === 2) { 
-                    p.potions++; 
-                    map[ny][nx] = 0; 
-                    sounds.pickup.play().catch(e => console.error('Pickup sound error:', e)); 
-                }
-                if (map[ny][nx] === 3) {
-                    const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
-                    if (drop) {
-                        satsEarned[drop.type] += drop.sats;
-                        map[ny][nx] = 0;
-                        satoshiDrops = satoshiDrops.filter(d => d !== drop);
-                        sounds.pickup.play().catch(e => console.error('Pickup sound error:', e));
-                        updateSatsDisplay();
-                    }
-                }
-// Reset the enemiesSpawnedThisFloor counter when the player moves to the next floor (e.g., when entering stairs)
-if (exit && p.x === exit.x && p.y === exit.y) {
-    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-    enemiesSpawnedThisFloor = 0;
-    initialSpawnDoneThisFloor = false;
-    enemies = [];
-    floor++;
-    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-    initMap();
-    initialWaveSpawned = false;
-    waveActive = false;
-    wave = 1;
-    console.log(`Moved to floor ${floor}, reset enemy spawns`);
-    nextApiCallTime = null;
-    fetchTxs();
-}
-            }
-            moveEnemies();
-            needsRedraw = true;
+    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
+        p.x = nx; p.y = ny;
+        if (map[ny][nx] === 2) { 
+            p.potions++; 
+            map[ny][nx] = 0; 
+            sounds.pickup.play().catch(e => console.error('Pickup sound error:', e)); 
         }
+        if (map[ny][nx] === 3) {
+            const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
+            if (drop) {
+                satsEarned[drop.type] += drop.sats;
+                map[ny][nx] = 0;
+                satoshiDrops = satoshiDrops.filter(d => d !== drop);
+                sounds.pickup.play().catch(e => console.error('Pickup sound error:', e));
+                updateSatsDisplay();
+            }
+        }
+        if (exit && p.x === exit.x && p.y === exit.y) {
+            sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+            enemiesSpawnedThisFloor = 0;
+            initialSpawnDoneThisFloor = false;
+            enemies = [];
+            floor++;
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+            initMap();
+            initialWaveSpawned = false;
+            waveActive = false;
+            wave = 1;
+            console.log(`Moved to floor ${floor}, reset enemy spawns`);
+            nextApiCallTime = null;
+            fetchTxs();
+        }
+        updateFogMap(p.x, p.y); // Update fog after moving
+    }
+    moveEnemies();
+    needsRedraw = true;
+}
 
         function moveEnemies() {
             if (gameOver || splashActive) return;
@@ -1043,6 +1098,7 @@ function restart() {
     satoshiDrops = [];
     retryDelay = 5000;
     swordDir = 'right';
+    
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = battleLog.join('\n');
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
@@ -1067,8 +1123,8 @@ function downloadStats() {
 }
 
 function draw() {
-    if (!map?.[0] || !p || !enemies || !rooms?.length) {
-        console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms);
+    if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
+        console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
         initMap();
         return;
     }
@@ -1076,68 +1132,79 @@ function draw() {
     c.fillRect(0, 0, W * S, H * S);
     if (gameOver) {
         const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
-        // Ensure opaque black background
-        gameOverCanvas.clearRect(0, 0, 320, 320); // Clear any previous content
-        gameOverCanvas.fillStyle = '#000'; // Solid black
-        gameOverCanvas.fillRect(0, 0, 320, 320); // Fill entire canvas
+        gameOverCanvas.clearRect(0, 0, 320, 320);
+        gameOverCanvas.fillStyle = '#000';
+        gameOverCanvas.fillRect(0, 0, 320, 320);
         const scale = window.innerWidth <= 700 ? 1.5 : 2;
         const gw = 128 * scale, gh = 32 * scale, pw = 96 * scale, ph = 32 * scale;
         const offsetY = (Math.sin(Date.now() / 500) * 10);
-        // Draw images and text
         gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh - ph - 50) / 2, gw, gh);
-        // Draw stats
         gameOverCanvas.fillStyle = '#ff8c00';
         gameOverCanvas.font = '18px "VT323"';
         gameOverCanvas.textAlign = 'center';
         gameOverCanvas.fillText(`Floor Reached: ${floor}`, 160, 220);
         const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
         gameOverCanvas.fillText(`Bag: ${totalSats < 1e8 ? totalSats : (totalSats / 1e8).toFixed(6) + ' BTC'}`, 160, 240);
-
         document.getElementById('game-over').style.display = 'block';
         document.getElementById('download-stats').style.display = 'block';
-        //needsRedraw = true; // Keep redrawing for animation // disabled for now
         return;
     }
-            if (splashActive) { needsRedraw = false; return; }
-            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-                if (map[y][x] !== 1) c.drawImage(assets.floor, x * S, y * S, S, S);
-            }
-            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-                if (map[y][x] === 1) c.drawImage(assets.wall, x * S, y * S, S, S);
-            }
-            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-                if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
-                if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
-            }
-            if (exit) c.drawImage(assets.stairs, exit.x * S, exit.y * S, S, S);
-            if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
-                c.drawImage(assets.player, p.x * S, p.y * S, S, S);
-            }
-            enemies.forEach(e => {
-                if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
-                    c.drawImage(e.type.img, e.x * S, e.y * S, S, S);
-                }
-            });
-            if (swordActive && Date.now() - swordStart < 200) {
-                let sx = p.x, sy = p.y;
-                if (swordDir === 'up') sy--;
-                if (swordDir === 'down') sy++;
-                if (swordDir === 'left') sx--;
-                if (swordDir === 'right') sx++;
-                if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
-                    c.save();
-                    c.translate(sx * S + S / 2, sy * S + S / 2);
-                    if (swordDir === 'up') c.rotate(-Math.PI / 2);
-                    if (swordDir === 'down') c.rotate(Math.PI / 2);
-                    if (swordDir === 'left') c.rotate(Math.PI);
-                    c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
-                    c.restore();
-                }
-            }
-            document.getElementById('potions').textContent = p.potions;
-            document.getElementById('health').textContent = Math.max(0, p.hp);
-            needsRedraw = false;
+    if (splashActive) { needsRedraw = false; return; }
+
+    const radius = 4; // Visibility radius
+    // Draw walls first (always visible)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (map[y][x] === 1) c.drawImage(assets.wall, x * S, y * S, S, S);
+    }
+    // Draw floors, items, and stairs if explored or within visibility radius
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+        const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
+        if (isVisible && map[y][x] !== 1) {
+            c.drawImage(assets.floor, x * S, y * S, S, S);
+            if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
+            if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
+            if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
+    }
+    // Draw player
+    if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
+        c.drawImage(assets.player, p.x * S, p.y * S, S, S);
+    }
+    // Draw sword within visibility radius
+    if (swordActive && Date.now() - swordStart < 200) {
+        let sx = p.x, sy = p.y;
+        if (swordDir === 'up') sy--;
+        if (swordDir === 'down') sy++;
+        if (swordDir === 'left') sx--;
+        if (swordDir === 'right') sx++;
+        if (sx >= 0 && sx < W && sy >= 0 && sy < H && Math.sqrt((sx - p.x) ** 2 + (sy - p.y) ** 2) <= radius) {
+            c.save();
+            c.translate(sx * S + S / 2, sy * S + S / 2);
+            if (swordDir === 'up') c.rotate(-Math.PI / 2);
+            if (swordDir === 'down') c.rotate(Math.PI / 2);
+            if (swordDir === 'left') c.rotate(Math.PI);
+            c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
+            c.restore();
+        }
+    }
+    // Draw black fog overlay for unexplored tiles
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (map[y][x] !== 1 && !fogMap[y][x]) {
+            c.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Black fog for unexplored
+            c.fillRect(x * S, y * S, S, S);
+        }
+    }
+    // Draw enemies after fog (always visible for red eyes effect)
+    enemies.forEach(e => {
+        if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
+            c.drawImage(e.type.img, e.x * S, e.y * S, S, S);
+        }
+    });
+    document.getElementById('potions').textContent = p.potions;
+    document.getElementById('health').textContent = Math.max(0, p.hp);
+    needsRedraw = false;
+}
 
 function gameLoop(timestamp) {
     if (!map?.[0] || !p || !enemies || !rooms?.length) {
@@ -1182,6 +1249,10 @@ document.addEventListener('keydown', e => {
         }
         fadeSplash();
         return; // Prevent other key actions during splash
+    }
+    if (gameOver && e.key === 'Enter') {
+        restart(); // Restart game on Enter key
+        return; // Prevent other key actions during game-over
     }
     if (gameOver || splashActive) return;
     if (e.key === 'ArrowUp') move('up');
