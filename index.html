@@ -441,6 +441,7 @@
         let waveActive = false;
         let musicMuted = false;        
         let swordDir = 'right', swordActive = false, swordStart = 0;
+        let gameOverSoundPlayed = false; // Tracks if gameover.wav has played
         const types = [
             {name: 'Shrimp', min: 0, max: 0.01, img: new Image(), hp: 1, atk: 1, reward: 0, move: 1},
             {name: 'Crab', min: 0.01, max: 0.1, img: new Image(), hp: 2, atk: 2, reward: 0, move: 1},
@@ -467,15 +468,33 @@
         Object.values(assets).forEach(asset => { asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`); });
         types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
 
-	const sounds = {
-    	    attack: new Audio('attack.wav'), 
-    	    potion: new Audio('potion.wav'), 
-    	    hit: new Audio('hit.wav'),
-    	    pickup: new Audio('pickup.wav'), 
-    	    music: new Audio('music.mp3')
-	};
-	sounds.music.loop = true;
-	Object.values(sounds).forEach(s => { s.onerror = () => console.error(`Failed to load sound: ${s.src}`); });
+const sounds = {
+    attack: new Audio('attack.wav'),
+    potion: new Audio('potion.wav'),
+    hit: new Audio('hit.wav'),
+    pickup: new Audio('pickup.wav'),
+    music: new Audio('music.mp3'),
+    gameover: new Audio('gameover.wav'),
+    stairs: new Audio('stairs.wav')
+};
+sounds.music.loop = true;
+Object.values(sounds).forEach(s => {
+    s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
+});
+
+function preloadSounds() {
+    Object.values(sounds).forEach(sound => {
+        if (sound !== sounds.music) { // Skip music
+            const originalVolume = sound.volume;
+            sound.volume = 0;
+            sound.play().then(() => {
+                sound.pause();
+                sound.currentTime = 0;
+                sound.volume = originalVolume;
+            }).catch(e => console.error('Preload sound error:', e));
+        }
+    });
+}
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
 const splashImg = new Image();
@@ -521,6 +540,7 @@ function resetSplashScreen() {
 
 document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
+        preloadSounds(); // Initialize all sounds for iOS
         if (!musicMuted) {
             sounds.music.currentTime = 0; // Ensure music starts from beginning
             sounds.music.play().catch(e => console.error('Music play failed:', e));
@@ -854,9 +874,9 @@ async function fetchTxs() {
                         updateSatsDisplay();
                     }
                 }
-// Reset the enemiesSpawnedThisFloor counter when the player moves to the next floor
+// Reset the enemiesSpawnedThisFloor counter when the player moves to the next floor (e.g., when entering stairs)
 if (exit && p.x === exit.x && p.y === exit.y) {
-// In your floor transition function (e.g., when entering stairs)
+    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     enemies = [];
@@ -869,7 +889,6 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     console.log(`Moved to floor ${floor}, reset enemy spawns`);
     nextApiCallTime = null;
     fetchTxs();
-
 }
             }
             moveEnemies();
@@ -1012,6 +1031,7 @@ function restart() {
     enemies = [];
     exit = null;
     gameOver = false;
+    gameOverSoundPlayed = false; // Reset game-over sound flag
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     nextApiCallTime = null;
@@ -1129,12 +1149,16 @@ function gameLoop(timestamp) {
         fetchTxs();
         lastUpdate = timestamp;
     }
-    if (gameOver) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
-        document.getElementById('health').textContent = 0;
-        needsRedraw = true;
+if (gameOver) {
+    sounds.music.pause();
+    sounds.music.currentTime = 0;
+    if (!gameOverSoundPlayed) {
+        sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
+        gameOverSoundPlayed = true; // Mark sound as played
     }
+    document.getElementById('health').textContent = 0;
+    needsRedraw = true;
+}
     if (needsRedraw && !splashActive) draw();
     if (p.hp <= 0 && !gameOver) {
         p.hp = 0;
@@ -1144,15 +1168,29 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
-        document.addEventListener('keydown', e => {
-            if (gameOver || splashActive) return;
-            if (e.key === 'ArrowUp') move('up');
-            if (e.key === 'ArrowDown') move('down');
-            if (e.key === 'ArrowLeft') move('left');
-            if (e.key === 'ArrowRight') move('right');
-            if (e.key === 'a') attack();
-            if (e.key === 'd') usePotion();
-        });
+document.addEventListener('keydown', e => {
+    if (splashActive && e.key === 'Enter') {
+        const startButton = document.getElementById('start-button');
+        startButton.style.background = '#00b7ef'; // Mimic :hover color
+        setTimeout(() => {
+            startButton.style.background = '#00e8d8'; // Revert to original color
+        }, 200); // Short duration to simulate tap
+        preloadSounds(); // Initialize all sounds for iOS
+        if (!musicMuted) {
+            sounds.music.currentTime = 0; // Ensure music starts from beginning
+            sounds.music.play().catch(e => console.error('Music play failed:', e));
+        }
+        fadeSplash();
+        return; // Prevent other key actions during splash
+    }
+    if (gameOver || splashActive) return;
+    if (e.key === 'ArrowUp') move('up');
+    if (e.key === 'ArrowDown') move('down');
+    if (e.key === 'ArrowLeft') move('left');
+    if (e.key === 'ArrowRight') move('right');
+    if (e.key === 'a') attack();
+    if (e.key === 'd') usePotion();
+});
 
 document.getElementById('game-over').addEventListener('click', (event) => {
     if (gameOver && !document.getElementById('download-stats').contains(event.target)) {
