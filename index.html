@@ -469,23 +469,35 @@
         Object.values(assets).forEach(asset => { asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`); });
         types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
 
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioContext = new AudioContext();
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
-    hit: [new Audio('hit.wav'), new Audio('hit.wav'), new Audio('hit.wav')],
-    pickup: [new Audio('pickup.wav'), new Audio('pickup.wav'), new Audio('pickup.wav')],
+    hit: { buffer: null, url: 'hit.wav' }, // Web Audio buffer
+    pickup: { buffer: null, url: 'pickup.wav' }, // Web Audio buffer
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav')
 };
 sounds.music.loop = true;
+
+// Load Web Audio buffers
+function loadSoundBuffer(url, key) {
+    fetch(url)
+        .then(response => response.arrayBuffer())
+        .then(data => audioContext.decodeAudioData(data))
+        .then(buffer => {
+            sounds[key].buffer = buffer;
+            console.log(`Loaded Web Audio buffer for ${key}: ${url}`);
+        })
+        .catch(e => console.error(`Failed to load Web Audio buffer for ${key}: ${url}`, e));
+}
+loadSoundBuffer('hit.wav', 'hit');
+loadSoundBuffer('pickup.wav', 'pickup');
+
 Object.values(sounds).forEach(s => {
-    if (Array.isArray(s)) {
-        s.forEach(instance => {
-            instance.volume = 1.0; // Explicit max volume
-            instance.onerror = () => console.error(`Failed to load sound: ${instance.src}`);
-        });
-    } else {
+    if (s instanceof Audio) {
         s.volume = 1.0;
         s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
     }
@@ -493,14 +505,14 @@ Object.values(sounds).forEach(s => {
 
 function preloadSounds() {
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'music') return; // Skip music preloading
+        if (key === 'music' || key === 'hit' || key === 'pickup') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 instance.volume = 0; // Mute for preloading
                 instance.play().then(() => {
                     instance.pause();
                     instance.currentTime = 0;
-                    instance.volume = 1.0; // Restore max volume
+                    instance.volume = 1.0;
                     console.log(`Preloaded sound instance ${idx}: ${instance.src}, volume=${instance.volume}`);
                 }).catch(e => console.error(`Preload sound error for ${instance.src} instance ${idx}:`, e));
             });
@@ -514,6 +526,28 @@ function preloadSounds() {
             }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
         }
     });
+}
+function playWebAudioSound(soundObj) {
+    if (!soundObj.buffer) {
+        console.warn(`Buffer not loaded for ${soundObj.url}`);
+        return;
+    }
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('AudioContext resumed');
+        }).catch(e => console.error('Failed to resume AudioContext:', e));
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = soundObj.buffer;
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 1.0; // Max volume
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    source.start(0);
+    console.log(`Playing Web Audio sound: ${soundObj.url}, volume=${gainNode.gain.value}`);
+    source.onended = () => {
+        console.log(`Web Audio sound ended: ${soundObj.url}`);
+    };
 }
 
 function playSoundWithFallback(soundArray) {
@@ -999,7 +1033,7 @@ function move(dir) {
         if (map[ny][nx] === 2) { 
             p.potions++; 
             map[ny][nx] = 0; 
-            playSoundWithFallback(sounds.pickup);
+            playWebAudioSound(sounds.pickup);
         }
         if (map[ny][nx] === 3) {
             const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
@@ -1007,7 +1041,7 @@ function move(dir) {
                 satsEarned[drop.type] += drop.sats;
                 map[ny][nx] = 0;
                 satoshiDrops = satoshiDrops.filter(d => d !== drop);
-                playSoundWithFallback(sounds.pickup);
+                playWebAudioSound(sounds.pickup);
                 updateSatsDisplay();
             }
         }
@@ -1066,7 +1100,7 @@ function moveEnemies() {
             ) {
                 p.hp -= e.type.atk;
                 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${e.type.atk} DMG`);
-                playSoundWithFallback(sounds.hit);
+                playWebAudioSound(sounds.hit);
                 if (p.hp <= 0) {
                     p.hp = 0;
                     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
@@ -1102,7 +1136,7 @@ function attack() {
     });
     if (hit) {
         hit.hp -= p.atk;
-        playSoundWithFallback(sounds.hit);
+        playWebAudioSound(sounds.hit);
         if (hit.hp <= 0) {
             kills[hit.type.name]++;
             let dropPlaced = false;
