@@ -101,8 +101,9 @@
     scroll-behavior: smooth;
     z-index: 10;
     pointer-events: none;
-    transition: transform 0.3s ease; /* Smooth sliding animation */
-    transform: translateX(-100%); /* Start hidden off-screen to the left */
+    transition: transform 0.3s ease, opacity 0.2s ease; /* Animate transform and opacity */
+    transform: translateX(-100%);
+    opacity: 0; /* Start invisible */
 }
         #inventory { 
             position: absolute;
@@ -244,7 +245,10 @@
         #start-button:hover {
             background: #00b7ef;
         }
-        
+#dpad button:active, #dpad button.pressed {
+    background: rgba(224, 123, 0, 0.7); /* Slightly darker than hover */
+}
+    
 /* Phones (320px–767px) */
 @media only screen and (min-width: 320px) and (max-width: 767px) {
     body {
@@ -349,7 +353,7 @@
         align-items: center;
     }
     #mute {
-        padding: 2px;
+        padding: 0px;
         border-radius: 25%;
         height: 20px;
         width: 20px;
@@ -362,20 +366,20 @@
     }
     #attack {
         padding: 0px;
-        margin-right: 20px;
+        margin-right: 5px;
         background: #ff8c00;
-        height: 30px;
-        width: 30px;
+        height: 35px;
+        width: 35px;
         border-radius: 50%;
         margin-top: 165px;
         z-index: 30;
     }
     #potion {
         padding: 0px;
-        margin-right: 0px;
+        margin-right: 5px;
         background: #ff8c00;
-        height: 30px;
-        width: 30px;
+        height: 35px;
+        width: 35px;
         border-radius: 50%;
         margin-top: 105px;
         z-index: 30;
@@ -522,20 +526,20 @@
     }
     #attack {
         padding: 0px;
-        margin-right: 40px;
+        margin-right: 5px;
         background: #ff8c00;
-        height: 40px;
-        width: 40px;
+        height: 35px;
+        width: 35px;
         border-radius: 50%;
         margin-top: 165px;
         z-index: 30;
     }
     #potion {
         padding: 0px;
-        margin-right: 10px;
+        margin-right: 5px;
         background: #ff8c00;
-        height: 40px;
-        width: 40px;
+        height: 35px;
+        width: 35px;
         border-radius: 50%;
         margin-top: 105px;
         z-index: 30;
@@ -896,15 +900,17 @@ function logBattleEvent(event) {
     const textarea = document.getElementById('battle-events');
     textarea.value = battleLog.join('\n');
     textarea.scrollTop = textarea.scrollHeight;
-    // Clear any existing timeout to reset the 7-second timer
+    // Clear any existing timeout to reset the 3-second timer
     if (battleLogTimeout) {
         clearTimeout(battleLogTimeout);
     }
-    // Slide in the battle log
+    // Slide in and fade in
     textarea.style.transform = 'translateX(0)';
-    // Schedule slide out after 7 seconds
+    textarea.style.opacity = '1';
+    // Schedule slide out and fade out after 3 seconds
     battleLogTimeout = setTimeout(() => {
         textarea.style.transform = 'translateX(-100%)';
+        textarea.style.opacity = '0';
         battleLogTimeout = null; // Clear timeout reference
     }, 3000);
 }
@@ -1642,12 +1648,17 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         fetchTxs();
         updateSatsDisplay();
         requestAnimationFrame(gameLoop);
-        document.querySelectorAll('#dpad button').forEach(button => {
-    	    button.addEventListener('touchstart', (e) => {
-    	        e.preventDefault(); // Prevent scrolling
-    	        button.click(); // Trigger onclick
-    	    });
-	});
+        
+document.querySelectorAll('#dpad button').forEach(button => {
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Prevent scrolling
+        button.classList.add('pressed'); // Add visual feedback
+        button.click(); // Trigger onclick
+    }, { passive: false });
+    button.addEventListener('touchend', () => {
+        button.classList.remove('pressed'); // Remove visual feedback
+    });
+});
 
 // go to game-over screen at startup (DEBUG)
 //function initGameOver() {
