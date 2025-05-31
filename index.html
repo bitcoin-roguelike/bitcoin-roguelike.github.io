@@ -304,13 +304,13 @@
         padding: 5px;
         display: flex;
         justify-content: flex-start;
-        gap: 40px; /* Doubled from 20px */
+        gap: 40px;
     }
     #dpad {
         display: grid;
         grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 5px;
-        margin-left: 10px;
+        gap: 0px; /* Reduced from 5px to bring buttons closer */
+        margin-left: -10px;
     }
     #up {
         grid-area: t;
@@ -343,7 +343,7 @@
     }
     #actions {
         display: flex;
-        gap: 10px; /* Base gap, controlled by margins */
+        gap: 10px;
         align-items: center;
     }
     #mute {
@@ -353,14 +353,14 @@
         width: 20px;
         background: #fff;
         color: #000;
-        margin-right: 20px; /* Unchanged */
-        margin-left: -20px;
+        margin-right: 20px;
+        margin-left: -15px;
         margin-top: 120px;
         z-index: 30;
     }
     #attack {
         padding: 0px;
-        margin-right: 20px; /* Doubled from 10px */
+        margin-right: 20px;
         background: #ff8c00;
         height: 30px;
         width: 30px;
@@ -370,7 +370,7 @@
     }
     #potion {
         padding: 0px;
-        margin-right: 10px;
+        margin-right: 0px;
         background: #ff8c00;
         height: 30px;
         width: 30px;
@@ -383,7 +383,7 @@
     }
     #download-stats {
         position: absolute;
-        bottom: 40%;
+        bottom: 42%;
         left: 50%;
         transform: translateX(-50%);
         margin-top: -10px;
@@ -464,12 +464,12 @@
         padding: 5px;
         display: flex;
         justify-content: flex-start;
-        gap: 120px; /* Doubled from 60px */
+        gap: 120px;
     }
     #dpad {
         display: grid;
         grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 5px;
+        gap: 0px; /* Reduced from 5px to bring buttons closer */
         margin-left: 20px;
     }
     #up {
@@ -503,24 +503,24 @@
     }
     #actions {
         display: flex;
-        gap: 10px; /* Base gap, controlled by margins */
+        gap: 10px;
         align-items: center;
     }
     #mute {
-        padding: 2px;
+        padding: 0px;
         border-radius: 25%;
         height: 24px;
         width: 24px;
         background: #fff;
         color: #000;
-        margin-right: 80px; /* Unchanged */
-        margin-left: -20px;
+        margin-right: 80px;
+        margin-left: -15px;
         margin-top: 120px;
         z-index: 30;
     }
     #attack {
         padding: 0px;
-        margin-right: 40px; /* Doubled from 20px */
+        margin-right: 40px;
         background: #ff8c00;
         height: 40px;
         width: 40px;
