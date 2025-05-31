@@ -474,8 +474,8 @@ const audioContext = new AudioContext();
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
-    hit: { buffer: null, url: 'hit.wav' }, // Web Audio buffer
-    pickup: { buffer: null, url: 'pickup.wav' }, // Web Audio buffer
+    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 }, // Web Audio buffer with flag and duration
+    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 }, // Web Audio buffer with flag and duration
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav')
@@ -527,9 +527,14 @@ function preloadSounds() {
         }
     });
 }
+
 function playWebAudioSound(soundObj) {
     if (!soundObj.buffer) {
         console.warn(`Buffer not loaded for ${soundObj.url}`);
+        return;
+    }
+    if (soundObj.isPlaying) {
+        console.log(`Skipping playback of ${soundObj.url}: already playing`);
         return;
     }
     if (audioContext.state === 'suspended') {
@@ -537,6 +542,7 @@ function playWebAudioSound(soundObj) {
             console.log('AudioContext resumed');
         }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
+    soundObj.isPlaying = true; // Set flag
     const source = audioContext.createBufferSource();
     source.buffer = soundObj.buffer;
     const gainNode = audioContext.createGain();
@@ -546,8 +552,16 @@ function playWebAudioSound(soundObj) {
     source.start(0);
     console.log(`Playing Web Audio sound: ${soundObj.url}, volume=${gainNode.gain.value}`);
     source.onended = () => {
+        soundObj.isPlaying = false; // Clear flag
         console.log(`Web Audio sound ended: ${soundObj.url}`);
     };
+    // Fallback timeout to clear flag if onended fails
+    setTimeout(() => {
+        if (soundObj.isPlaying) {
+            soundObj.isPlaying = false;
+            console.log(`Cleared isPlaying flag for ${soundObj.url} via timeout`);
+        }
+    }, soundObj.duration);
 }
 
 function playSoundWithFallback(soundArray) {
@@ -1136,7 +1150,7 @@ function attack() {
     });
     if (hit) {
         hit.hp -= p.atk;
-        playWebAudioSound(sounds.hit);
+        // Removed playWebAudioSound(sounds.hit)
         if (hit.hp <= 0) {
             kills[hit.type.name]++;
             let dropPlaced = false;
