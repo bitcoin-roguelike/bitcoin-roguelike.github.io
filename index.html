@@ -284,7 +284,7 @@
     #battle-log textarea {
         width: 100%;
         margin-left: 20px;
-        height: 50px;
+        height: 81px;
         font-size: 9px;
     }
     #inventory {
@@ -405,6 +405,7 @@
         border-radius: 5%;
         z-index: 40;
     }
+
 }
 
 /* Tablets (768px–1024px, high pixel ratio) */
@@ -444,7 +445,7 @@
     #battle-log textarea {
         width: 100%;
         margin-left: -50px;
-        height: 80px;
+        height: 146px;
         font-size: 1.2rem;
     }
     #inventory {
@@ -565,6 +566,7 @@
         border-radius: 5%;
         z-index: 40;
     }
+
 }
     </style>
 </head>
@@ -590,16 +592,11 @@
                 Health: <span id="health">24</span><br>
                 Potions: <span id="potions">0</span><br>
                 Bag: <span id="sats">0</span><br>
-                <br>
-                Kills:<br>
-                <span id="sats-breakdown">
-                    Shrimp: 0<br>Crab: 0<br>Squid: 0<br>Dolphin: 0<br>Shark: 0<br>Whale: 0
-                </span><br>
             </div>
         </div>
-        <div id="battle-log">
-            <textarea id="battle-events" readonly>Battle Log:</textarea>
-        </div>
+<div id="battle-log">
+    <textarea id="battle-events" readonly>Battle Log:</textarea>
+</div>
         <div id="controller">
             <div id="dpad">
                 <button id="up" onclick="move('up')">↑</button>
@@ -616,24 +613,107 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
-    
-	/* 
-	IOS fix, stop users from zooming in and out the screen
-	*/
-	document.ondblclick = function (e) {
-    		e.preventDefault();
-	}
-    
-	document.addEventListener('gesturestart', function (e) {
-            e.preventDefault();
-        });
-        document.addEventListener('touchmove', function (e) {
-            if (e.scale !== 1) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+
+// Prevent pinch-to-zoom and double-tap zoom
+document.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Blocked multi-touchstart');
+    }
+}, { passive: false });
+document.addEventListener('touchmove', (e) => {
+    if (e.scale !== 1 || e.touches.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Blocked multi-touchmove or pinch');
+    }
+}, { passive: false });
+document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Blocked gesturestart');
+}, { passive: false });
+document.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Blocked gesturechange');
+}, { passive: false });
+document.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Blocked gestureend');
+}, { passive: false });
+document.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Blocked dblclick');
+}, { passive: false });
+
+// Block canvas touch interference
+const canvas = document.getElementById('game');
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Canvas blocked multi-touchstart');
+    } else if (!e.target.closest('#dpad, #actions')) {
+        e.preventDefault();
+        console.log(`Canvas single-touchstart blocked at ${e.touches[0].clientX}, ${e.touches[0].clientY}`);
+    }
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+    if (e.scale !== 1 || e.touches.length > 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Canvas blocked multi-touchmove or pinch');
+    }
+}, { passive: false });
+
+// Touch handlers for #dpad buttons
+document.querySelectorAll('#dpad button').forEach(button => {
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Prevent scrolling
+        e.stopPropagation(); // Stop event bubbling
+        button.classList.add('pressed'); // Add visual feedback
+        console.log(`Touchstart on ${button.id}, relying on onclick`);
+    }, { passive: false });
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed'); // Remove visual feedback
+        console.log(`Touchend on ${button.id}`);
+    }, { passive: false });
+    button.addEventListener('click', (e) => {
+        e.preventDefault(); // Prevent default click behavior after onclick
+        console.log(`Click processed on ${button.id}`);
+    }, { passive: false });
+});
+
+// Touch handlers for #actions buttons
+document.querySelectorAll('#actions button').forEach(button => {
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Prevent scrolling
+        e.stopPropagation(); // Stop event bubbling
+        button.classList.add('pressed'); // Add visual feedback
+        if (button.id === 'mute') toggleMute();
+        else if (button.id === 'attack') attack();
+        else if (button.id === 'potion') usePotion();
+        console.log(`Touchstart triggered on ${button.id}`);
+    }, { passive: false });
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed'); // Remove visual feedback
+        console.log(`Touchend on ${button.id}`);
+    }, { passive: false });
+    button.addEventListener('click', (e) => {
+        e.preventDefault(); // Prevent default click behavior
+        console.log(`Click processed on ${button.id}`);
+    }, { passive: false });
+});
         
-        const canvas = document.getElementById('game');
+
         const c = canvas.getContext('2d');
         const W = 20, H = 20, S = 16;
         let map = [], p = {x: 2, y: 2, hp: 24, potions: 0, atk: 2}, enemies = [], rooms = [];
@@ -912,21 +992,29 @@ let battleLogTimeout = null; // Track timeout to prevent overlap
 function logBattleEvent(event) {
     if (gameOver) return;
     battleLog.push(event);
-    const textarea = document.getElementById('battle-events');
-    textarea.value = battleLog.join('\n');
-    textarea.scrollTop = textarea.scrollHeight;
+    const battleEvents = document.getElementById('battle-events');
+    // Preserve kills lines if they exist
+    let lines = battleEvents.value.split('\n');
+    const killsLines = lines.filter(line => line.startsWith('Kills:') || line.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/));
+    // Update with new battle log, excluding old kills
+    lines = battleLog.concat(exit && enemies.length === 0 ? killsLines : []);
+    battleEvents.value = lines.join('\n');
+    battleEvents.scrollTop = battleEvents.scrollHeight;
     // Clear any existing timeout to reset the 3-second timer
     if (battleLogTimeout) {
         clearTimeout(battleLogTimeout);
     }
     // Slide in and fade in
-    textarea.style.transform = 'translateX(0)';
-    textarea.style.opacity = '1';
-    // Schedule slide out and fade out after 3 seconds
+    battleEvents.style.transform = 'translateX(0)';
+    battleEvents.style.opacity = '1';
+    // Schedule slide out after 3 seconds for regular events
     battleLogTimeout = setTimeout(() => {
-        textarea.style.transform = 'translateX(-100%)';
-        textarea.style.opacity = '0';
-        battleLogTimeout = null; // Clear timeout reference
+        // Only hide if no kills are displayed
+        if (!exit || enemies.length > 0) {
+            battleEvents.style.transform = 'translateX(-100%)';
+            battleEvents.style.opacity = '0';
+        }
+        battleLogTimeout = null;
     }, 3000);
 }
 
@@ -964,13 +1052,32 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
-        function updateSatsDisplay() {
-            const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-            document.getElementById('sats').textContent = totalSats < 1e8 ? `${totalSats} sats` : `${(totalSats / 1e8).toFixed(1)} BTC`;
-            document.getElementById('sats-breakdown').innerHTML = 
-                `Shrimp: ${kills.Shrimp}<br>Crab: ${kills.Crab}<br>Squid: ${kills.Squid}<br>` +
-                `Dolphin: ${kills.Dolphin}<br>Shark: ${kills.Shark}<br>Whale: ${kills.Whale}`;
-        }
+function updateSatsDisplay() {
+    const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
+    document.getElementById('sats').textContent = totalSats < 1e8 ? `${totalSats} sats` : `${(totalSats / 1e8).toFixed(1)} BTC`;
+    const battleEvents = document.getElementById('battle-events');
+    // Get current battle log lines, excluding old kills
+    let lines = battleEvents.value.split('\n').filter(line => !line.startsWith('Kills:') && !line.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/));
+    // Add kills breakdown if exit exists and no enemies remain
+    if (exit && enemies.length === 0) {
+        lines.push(
+            '',
+            'Kills:',
+            `Shrimp: ${kills.Shrimp}`,
+            `Crab: ${kills.Crab}`,
+            `Squid: ${kills.Squid}`,
+            `Dolphin: ${kills.Dolphin}`,
+            `Shark: ${kills.Shark}`,
+            `Whale: ${kills.Whale}`
+        );
+        // Show textarea with slide-in animation
+        battleEvents.style.transform = 'translateX(0)';
+        battleEvents.style.opacity = '1';
+    }
+    // Update textarea content
+    battleEvents.value = lines.join('\n');
+    battleEvents.scrollTop = battleEvents.scrollHeight; // Scroll to bottom
+}
 
 function initMap() {
     try {
@@ -1300,7 +1407,6 @@ function move(dir) {
             initialSpawnDoneThisFloor = false;
             enemies = [];
             floor++;
-            // Do not reset wave, let it continue incrementing
             initialWaveSpawned = false;
             waveActive = false;
             exit = null;
@@ -1309,8 +1415,15 @@ function move(dir) {
             console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
             initMap();
             nextApiCallTime = null;
+            // Clear kills from battle log on floor transition
+            const battleEvents = document.getElementById('battle-events');
+            battleEvents.value = battleEvents.value.split('\n')
+                .filter(line => !line.startsWith('Kills:') && !line.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/))
+                .join('\n');
+            battleEvents.style.transform = 'translateX(-100%)';
+            battleEvents.style.opacity = '0';
             setTimeout(() => {
-                if (!gameOver && !splashActive && floor > 0) { // Skip enemy spawn on Floor 0
+                if (!gameOver && !splashActive && floor > 0) {
                     fetchTxs();
                     console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
                 }
@@ -1374,6 +1487,7 @@ function moveEnemies() {
         while (map[y][x] !== 0 || (x === p.x && y === p.y));
         exit = {x, y};
         console.log(`Stairs spawned at (${x}, ${y}) on floor ${floor}, wave=${wave}`);
+        updateSatsDisplay(); // Update to show kills in battle log when stairs appear
         needsRedraw = true;
     }
     // Handle wave completion
@@ -1495,6 +1609,10 @@ function restart() {
     document.getElementById('game-over').style.display = 'none';
     document.getElementById('download-stats').style.display = 'none';
     document.getElementById('splash-screen').style.display = 'block';
+    // Hide battle log on restart
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.style.transform = 'translateX(-100%)';
+    battleEvents.style.opacity = '0';
     splashActive = true;
 
     sounds.music.pause();
@@ -1511,6 +1629,7 @@ function restart() {
     needsRedraw = true;
     console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit);
 }
+
 function downloadStats() {
     const gameOverCanvas = document.getElementById('game-over-canvas');
     const link = document.createElement('a');
@@ -1706,6 +1825,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
+
 
 
 
