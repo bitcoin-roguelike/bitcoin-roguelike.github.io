@@ -1255,7 +1255,7 @@ async function fetchTxs() {
         if (initialSpawnDoneThisFloor) {
             console.log(`Initial spawn done for floor ${floor}, checking for Whales or new wave`);
         } else {
-            console.log(`Spawning non-Whales for floor ${floor}, ${enemiesSpawnedThisFloor}/10 spawned`);
+            console.log(`Spawning enemies for floor ${floor}, ${enemiesSpawnedThisFloor}/10 spawned`);
         }
         await new Promise(resolve => setTimeout(resolve, 25));
         const res = await axios.get('https://mempool.space/api/mempool/recent');
@@ -1299,13 +1299,12 @@ async function fetchTxs() {
                 console.log(`No type for BTC: ${btc}, Tx: ${tx.txid}`);
                 continue;
             }
-            if (exit) {
-                console.log(`Exit exists at (${exit.x}, ${exit.y}), skipping enemy spawn for tx ${tx.txid}`);
-                continue;
-            }
+
+            // Handle initial spawn (up to 10 enemies, including Whales)
             if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10) {
-                if (type.name === 'Whale') {
-                    console.log(`Skipping Whale for initial spawn: ${tx.txid}`);
+                // Skip non-Whale spawn if exit exists
+                if (type.name !== 'Whale' && exit) {
+                    console.log(`Exit exists at (${exit.x}, ${exit.y}), skipping non-Whale spawn for tx ${tx.txid}`);
                     continue;
                 }
                 console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
@@ -1320,10 +1319,16 @@ async function fetchTxs() {
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 enemiesSpawnedThisFloor++;
                 enemyCount++;
+                if (type.name === 'Whale') {
+                    console.log(`Whale tx:`, tx, `Hash ID: ${tx.txid}`);
+                    logWhaleHashId(tx.txid);
+                    document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
+                    setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
+                }
                 if (enemiesSpawnedThisFloor >= 10) {
                     initialSpawnDoneThisFloor = true;
                 }
-            } else if (type.name === 'Whale' && enemies.length === 0) {
+            } else if (type.name === 'Whale') { // Allow Whale spawns after initial spawn, regardless of exit
                 console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value=${value}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
                 let x, y;
@@ -1342,7 +1347,7 @@ async function fetchTxs() {
             }
         }
         if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
-            console.warn(`Only spawned ${enemiesSpawnedThisFloor} non-Whale enemies due to insufficient valid blockchain data`);
+            console.warn(`Only spawned ${enemiesSpawnedThisFloor} enemies due to insufficient valid blockchain data`);
         }
         if (enemyCount > 0 && enemies.length > 0 && !exit) {
             if (!waveActive) {
