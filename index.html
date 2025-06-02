@@ -78,12 +78,13 @@
             text-align: center; 
         }
         #battle-log { 
-            width: 620px; 
+            width: 620px;
+            margin-left: 20px; 
             background: transparent; 
             color: #ff8c00; 
-            padding: 8px; 
+            padding: 16px; 
             border: none; 
-            font-size: 14px;
+            font-size: 16px;
             z-index: 10;
             margin-top: -240px;
         }
@@ -92,7 +93,7 @@
     color: #ff8c00;
     border: none;
     font-family: 'VT323', monospace;
-    font-size: 14px;
+    font-size: 16px;
     resize: none;
     width: 100%;
     height: 200px;
@@ -101,9 +102,15 @@
     scroll-behavior: smooth;
     z-index: 10;
     pointer-events: none;
-    transition: transform 0.3s ease, opacity 0.2s ease; /* Animate transform and opacity */
+    transition: transform 0.3s ease, opacity 0.2s ease;
     transform: translateX(-100%);
-    opacity: 0; /* Start invisible */
+    opacity: 0;
+    /* Hide scrollbar */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+#battle-log textarea::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, WebKit */
 }
         #inventory { 
             position: absolute;
@@ -283,7 +290,7 @@
     }
     #battle-log textarea {
         width: 100%;
-        margin-left: 20px;
+        margin-left: 0px;
         height: 81px;
         font-size: 9px;
     }
@@ -361,27 +368,28 @@
         color: #000;
         margin-right: 20px;
         margin-left: -15px;
-        margin-top: 165px;
+        margin-top: 60px;
         z-index: 30;
     }
     #attack {
         padding: 0px;
-        margin-right: 5px;
+        margin-right: 0px;
         background: #ff8c00;
-        height: 35px;
-        width: 35px;
+        height: 45px;
+        width: 45px;
         border-radius: 50%;
         margin-top: 165px;
         z-index: 30;
     }
     #potion {
         padding: 0px;
-        margin-right: 5px;
+        margin-right: 0px;
+                margin-left: 20px;
         background: #ff8c00;
         height: 35px;
         width: 35px;
         border-radius: 50%;
-        margin-top: 105px;
+        margin-top: 80px;
         z-index: 30;
     }
     #mute:hover {
@@ -444,7 +452,7 @@
     }
     #battle-log textarea {
         width: 100%;
-        margin-left: -50px;
+        margin-left: -60px;
         height: 146px;
         font-size: 1.2rem;
     }
@@ -522,15 +530,15 @@
         color: #000;
         margin-right: 80px;
         margin-left: -15px;
-        margin-top: 165px;
+        margin-top: 45px;
         z-index: 30;
     }
     #attack {
         padding: 0px;
         margin-right: 5px;
         background: #ff8c00;
-        height: 35px;
-        width: 35px;
+        height: 65px;
+        width: 65px;
         border-radius: 50%;
         margin-top: 165px;
         z-index: 30;
@@ -538,11 +546,12 @@
     #potion {
         padding: 0px;
         margin-right: 5px;
+        margin-left: 20px;
         background: #ff8c00;
-        height: 35px;
-        width: 35px;
+        height: 45px;
+        width: 45px;
         border-radius: 50%;
-        margin-top: 105px;
+        margin-top: 80px;
         z-index: 30;
     }
     #mute:hover {
@@ -586,13 +595,14 @@
                 <button id="download-stats">screenshot</button>
             </div>
             <div id="floor-indicator">Floor 1</div>
-            <div id="inventory">
-                Wave: <span id="wave">0</span><br>
-                <br>
-                Health: <span id="health">24</span><br>
-                Potions: <span id="potions">0</span><br>
-                Bag: <span id="sats">0</span><br>
-            </div>
+<div id="inventory">
+    Wave: <span id="wave">0</span><br>
+    <br>
+    Health: <span id="health">24</span><br>
+    Potions: <span id="potions">0</span><br>
+    Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
+    Bag: <span id="sats">0</span><br>
+</div>
         </div>
 <div id="battle-log">
     <textarea id="battle-events" readonly>Battle Log:</textarea>
@@ -716,19 +726,19 @@ document.querySelectorAll('#actions button').forEach(button => {
 
         const c = canvas.getContext('2d');
         const W = 20, H = 20, S = 16;
-        let map = [], p = {x: 2, y: 2, hp: 24, potions: 0, atk: 2}, enemies = [], rooms = [];
-        let floor = 1, wave = 0, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
-        let whaleHashIds = ['Whale Transactions:'], battleLog = ['Battle Log:'];
-        let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-        let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-        let satoshiDrops = [];
-        let retryDelay = 5000;
-        let splashActive = true
-        let waveActive = false;
-        let musicMuted = false;        
-        let swordDir = 'right', swordActive = false, swordStart = 0;
-        let gameOverSoundPlayed = false; // Tracks if gameover.wav has played
-        let fogMap = []; // Tracks fog of war: 0 (unexplored), 1 (explored)
+let map = [], p = {x: 2, y: 2, hp: 24, potions: 0, atk: 2, pickaxes: 0, hasArmor: false}, enemies = [], rooms = [];
+let floor = 1, wave = 0, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
+let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
+let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+let satoshiDrops = [];
+let splashActive = true;
+let waveActive = false;
+let musicMuted = false;        
+let swordDir = 'right', swordActive = false, swordStart = 0;
+let gameOverSoundPlayed = false;
+let fogMap = [];
+let battleLogTimeout = null;
         const types = [
             {name: 'Shrimp', min: 0, max: 0.01, img: new Image(), hp: 1, atk: 1, reward: 0, move: 1},
             {name: 'Crab', min: 0.01, max: 0.1, img: new Image(), hp: 2, atk: 2, reward: 0, move: 1},
@@ -737,22 +747,40 @@ document.querySelectorAll('#actions button').forEach(button => {
             {name: 'Shark', min: 10, max: 100, img: new Image(), hp: 5, atk: 5, reward: 0, move: 2},
             {name: 'Whale', min: 100, max: Infinity, img: new Image(), hp: 6, atk: 4, reward: 0, move: 2}
         ];
-        const assets = {
-            floor: new Image(),
-            wall: new Image(),
-            potion: new Image(),
-            player: new Image(), 
-            stairs: new Image(),
-            bitcoin: new Image(),
-            gameOver: new Image(),
-            sword: new Image()
-        };
-        types[0].img.src = 'shrimp.png'; types[1].img.src = 'crab.png'; types[2].img.src = 'squid.png';
-        types[3].img.src = 'dolphin.png'; types[4].img.src = 'shark.png'; types[5].img.src = 'whale.png';
-        assets.floor.src = 'floor.png'; assets.wall.src = 'wall.png'; assets.potion.src = 'potion.png';
-        assets.player.src = 'player.png'; assets.stairs.src = 'stairs.png'; assets.bitcoin.src = 'bitcoin.png';
+const assets = {
+    floor: new Image(),
+    wall: new Image(),
+    potion: new Image(),
+    player: new Image(),
+    stairs: new Image(),
+    bitcoin: new Image(),
+    gameOver: new Image(),
+    sword: new Image(),
+    pickaxe: new Image(), // New pickaxe asset
+    armor: new Image(),   // New armor asset
+    player_armor: new Image(), // New armored player sprite
+    pickaxe_sword: new Image() // New pickaxe-sword asset
+};
+        types[0].img.src = 'shrimp.png';
+        types[1].img.src = 'crab.png';
+        types[2].img.src = 'squid.png';
+        types[3].img.src = 'dolphin.png';
+        types[4].img.src = 'shark.png';
+        types[5].img.src = 'whale.png';
+        assets.floor.src = 'floor.png';
+        assets.wall.src = 'wall.png';
+        assets.potion.src = 'potion.png';
+	assets.player.src = 'player.png'; // Ensure player.png is set as default
+	assets.pickaxe.src = 'pickaxe.png';
+	assets.armor.src = 'armor.png';
+	assets.player_armor.src = 'player_armor.png';
+        assets.stairs.src = 'stairs.png'; 
+        assets.bitcoin.src = 'bitcoin.png';
         assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
-        Object.values(assets).forEach(asset => { asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`); });
+        assets.pickaxe_sword.src = 'pickaxe-sword.png'; // New asset source
+        Object.values(assets).forEach(asset => {
+    asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
+});
         types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -760,12 +788,14 @@ const audioContext = new AudioContext();
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
-    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 }, // Web Audio buffer with flag and duration
-    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 }, // Web Audio buffer with flag and duration
+    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
+    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
-    stairs: new Audio('stairs.wav')
+    stairs: new Audio('stairs.wav'),
+    secret: new Audio('secret.wav') // New secret sound for wall-breaking
 };
+
 sounds.music.loop = true;
 
 // Load Web Audio buffers
@@ -850,61 +880,6 @@ function playWebAudioSound(soundObj) {
     }, soundObj.duration);
 }
 
-function playSoundWithFallback(soundArray) {
-    let index = 0;
-    const locks = new Array(soundArray.length).fill(false); // Track instance locks
-    const maxPoolSize = 10; // Cap pool to prevent memory issues
-
-    function tryPlay() {
-        if (index >= soundArray.length) {
-            if (soundArray.length < maxPoolSize) {
-                console.warn(`All ${soundArray.length} sound instances failed or busy for ${soundArray[0].src}, creating new instance`);
-                const newSound = new Audio(soundArray[0].src);
-                newSound.volume = 1.0; // Ensure max volume
-                soundArray.push(newSound);
-                locks.push(false);
-                index = soundArray.length - 1;
-            } else {
-                console.error(`Sound pool limit (${maxPoolSize}) reached for ${soundArray[0].src}`);
-                return;
-            }
-        }
-        const sound = soundArray[index];
-        if (locks[index] || (!sound.paused && sound.currentTime > 0)) {
-            console.log(`Sound instance ${index} busy for ${sound.src}, trying next`);
-            index++;
-            tryPlay();
-            return;
-        }
-        locks[index] = true; // Lock instance
-        sound.volume = 1.0; // Ensure max volume
-        console.log(`Playing sound instance ${index}: ${sound.src}, volume=${sound.volume}`);
-        sound.play().then(() => {
-            console.log(`Sound instance ${index} started: ${sound.src}`);
-            sound.onended = () => {
-                sound.currentTime = 0;
-                locks[index] = false;
-                console.log(`Sound instance ${index} ended: ${sound.src}`);
-            };
-            // Fallback for interrupted sounds
-            setTimeout(() => {
-                if (!sound.paused && sound.currentTime > 0 && locks[index]) {
-                    console.warn(`Sound instance ${index} interrupted: ${sound.src}`);
-                    sound.pause();
-                    sound.currentTime = 0;
-                    locks[index] = false;
-                }
-            }, 950); // Match pickup.wav duration
-        }).catch(e => {
-            console.error(`Sound instance ${index} play failed for ${sound.src}:`, e);
-            locks[index] = false; // Unlock on failure
-            index++;
-            tryPlay(); // Try next instance
-        });
-    }
-    tryPlay();
-}
-
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
 const splashImg = new Image();
 splashImg.src = 'splash.png';
@@ -987,33 +962,74 @@ function toggleMute() {
             console.log('Whale Hash ID:', txid);
         }
 
-let battleLogTimeout = null; // Track timeout to prevent overlap
-
 function logBattleEvent(event) {
     if (gameOver) return;
-    battleLog.push(event);
     const battleEvents = document.getElementById('battle-events');
-    // Preserve kills lines if they exist
-    let lines = battleEvents.value.split('\n');
-    const killsLines = lines.filter(line => line.startsWith('Kills:') || line.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/));
-    // Update with new battle log, excluding old kills
-    lines = battleLog.concat(exit && enemies.length === 0 ? killsLines : []);
-    battleEvents.value = lines.join('\n');
+    // Handle kills display (static, no fading)
+    if (event.startsWith('Kills:') || event.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/) || event === '') {
+        // Clear killsLog if starting a new kills block
+        if (event === 'Kills:') {
+            killsLog = [event];
+        } else {
+            killsLog.push(event);
+        }
+        if (exit && enemies.length === 0) {
+            // Show exactly 8 kills lines
+            battleEvents.value = killsLog.join('\n');
+            battleEvents.scrollTop = battleEvents.scrollHeight;
+            // Keep visible without fade-out
+            battleEvents.style.transform = 'translateX(0)';
+            battleEvents.style.opacity = '1';
+            if (battleLogTimeout) {
+                clearTimeout(battleLogTimeout);
+                battleLogTimeout = null;
+            }
+            console.log('Kills display updated: persistent, lines=', killsLog.length, killsLog);
+            return;
+        }
+    }
+    // Keep last 3 messages for regular events (reverse waterfall)
+    battleLog.push(event);
+    battleLog = battleLog.slice(-3); // Keep last 3 events
+    battleEvents.value = battleLog.join('\n');
     battleEvents.scrollTop = battleEvents.scrollHeight;
-    // Clear any existing timeout to reset the 3-second timer
+    // Clear any existing timeout
     if (battleLogTimeout) {
         clearTimeout(battleLogTimeout);
     }
     // Slide in and fade in
     battleEvents.style.transform = 'translateX(0)';
     battleEvents.style.opacity = '1';
-    // Schedule slide out after 3 seconds for regular events
+    // Schedule slide out after 3 seconds for non-kills events
     battleLogTimeout = setTimeout(() => {
-        // Only hide if no kills are displayed
-        if (!exit || enemies.length > 0) {
-            battleEvents.style.transform = 'translateX(-100%)';
-            battleEvents.style.opacity = '0';
-        }
+        battleEvents.style.transform = 'translateX(-100%)';
+        battleEvents.style.opacity = '0';
+        setTimeout(() => {
+            const computedStyle = window.getComputedStyle(battleEvents);
+            if (computedStyle.opacity === '0') {
+                battleLog = [];
+                battleEvents.value = '';
+                console.log('Battle log cleared after fade-out');
+                // Restore kills display if still valid
+                if (exit && enemies.length === 0) {
+                    killsLog = [
+                        'Kills:',
+                        `Shrimp: ${kills.Shrimp}`,
+                        `Crab: ${kills.Crab}`,
+                        `Squid: ${kills.Squid}`,
+                        `Dolphin: ${kills.Dolphin}`,
+                        `Shark: ${kills.Shark}`,
+                        `Whale: ${kills.Whale}`,
+                        '' // Empty line for 8 lines total
+                    ];
+                    battleEvents.value = killsLog.join('\n');
+                    battleEvents.style.transform = 'translateX(0)';
+                    battleEvents.style.opacity = '1';
+                    battleEvents.scrollTop = battleEvents.scrollHeight;
+                    console.log('Kills display restored after fade-out, lines=', killsLog.length, killsLog);
+                }
+            }
+        }, 300); // Wait for transition (0.3s)
         battleLogTimeout = null;
     }, 3000);
 }
@@ -1055,34 +1071,54 @@ function gameLoop(timestamp) {
 function updateSatsDisplay() {
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
     document.getElementById('sats').textContent = totalSats < 1e8 ? `${totalSats} sats` : `${(totalSats / 1e8).toFixed(1)} BTC`;
-    const battleEvents = document.getElementById('battle-events');
-    // Get current battle log lines, excluding old kills
-    let lines = battleEvents.value.split('\n').filter(line => !line.startsWith('Kills:') && !line.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/));
-    // Add kills breakdown if exit exists and no enemies remain
+    // Trigger kills display only when exit exists and no enemies remain
     if (exit && enemies.length === 0) {
-        lines.push(
-            '',
-            'Kills:',
-            `Shrimp: ${kills.Shrimp}`,
-            `Crab: ${kills.Crab}`,
-            `Squid: ${kills.Squid}`,
-            `Dolphin: ${kills.Dolphin}`,
-            `Shark: ${kills.Shark}`,
-            `Whale: ${kills.Whale}`
-        );
-        // Show textarea with slide-in animation
-        battleEvents.style.transform = 'translateX(0)';
-        battleEvents.style.opacity = '1';
+        logBattleEvent(`Kills:`);
+        const enemyTypes = ['Shrimp', 'Crab', 'Squid', 'Dolphin', 'Shark', 'Whale'];
+        for (const type of enemyTypes) {
+            if (kills[type] > 0) {
+                logBattleEvent(`${type}: ${kills[type]}`);
+            }
+        }
     }
-    // Update textarea content
-    battleEvents.value = lines.join('\n');
-    battleEvents.scrollTop = battleEvents.scrollHeight; // Scroll to bottom
+}
+
+function spawnItemWithChance(itemType, chance, maxItems, proximityRange, excludePlayer = true) {
+    if (Math.random() > chance) {
+        console.log(`No ${itemType} spawned: chance=${chance}`);
+        return [];
+    }
+    let itemPositions = [];
+    let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(rooms.length, maxItems));
+    for (let r of selectedRooms) {
+        let x, y, attempts = 100;
+        while (attempts > 0 && itemPositions.length < maxItems) {
+            x = r.x + Math.floor(Math.random() * r.w);
+            y = r.y + Math.floor(Math.random() * r.h);
+            if (
+                map[y][x] === 0 &&
+                (!excludePlayer || (x !== p.x || y !== p.y)) &&
+                !itemPositions.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange) &&
+                !satoshiDrops.some(d => d.x === x && d.y === y)
+            ) {
+                itemPositions.push({ x, y });
+                map[y][x] = itemType; // Set map tile to itemType (e.g., 4 for pickaxe, 5 for armor)
+                console.log(`${itemType} placed at (${x}, ${y})`);
+                break;
+            }
+            attempts--;
+        }
+        if (attempts === 0) {
+            console.warn(`${itemType} placement failed in room:`, r);
+        }
+    }
+    return itemPositions;
 }
 
 function initMap() {
     try {
         map = Array(H).fill().map(() => Array(W).fill(1));
-        fogMap = Array(H).fill().map(() => Array(W).fill(0)); // Initialize fogMap as unexplored
+        fogMap = Array(H).fill().map(() => Array(W).fill(0));
         rooms = [];
         satoshiDrops = [];
         
@@ -1137,7 +1173,8 @@ function initMap() {
         // Mark initial player area as explored
         updateFogMap(p.x, p.y);
         
-        // Place potions (existing code unchanged)
+
+        // Place potions (existing code)
         let potionPositions = [];
         let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, rooms.length));
         let proximityRange = 5;
@@ -1149,9 +1186,7 @@ function initMap() {
                 if (map[y][x] === 0 && (x !== p.x || y !== p.y) && !potionPositions.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange)) {
                     map[y][x] = 2;
                     potionPositions.push({x, y});
-                    if (potionPositions.length === 3) {
-                        break;
-                    }
+                    if (potionPositions.length === 3) break;
                 }
                 attempts--;
             }
@@ -1162,8 +1197,11 @@ function initMap() {
                 continue;
             }
         }
+
+        // Place pickaxe (new code)
+        let pickaxePositions = spawnItemWithChance(4, 1, 1, 5);
         
-        console.log('Rooms generated:', rooms.length, 'Potions placed:', potionPositions);
+        console.log('Rooms generated:', rooms.length, 'Potions placed:', potionPositions, 'Pickaxes placed:', pickaxePositions);
         exit = null;
         initialWaveSpawned = false;
         needsRedraw = true;
@@ -1171,6 +1209,166 @@ function initMap() {
         console.error('initMap Error:', e, e.stack);
         throw e;
     }
+}
+
+function createSecretRoom(wx, wy, px, py, dir) {
+    // Create a 3x3 room based on player's facing direction
+    const roomSize = 3;
+    let rx, ry;
+    // Position room based on direction
+    switch (dir) {
+        case 'up':
+            rx = wx;
+            ry = wy - roomSize;
+            break;
+        case 'down':
+            rx = wx;
+            ry = wy + 1;
+            break;
+        case 'left':
+            rx = wx - roomSize;
+            ry = wy;
+            break;
+        case 'right':
+            rx = wx + 1;
+            ry = wy;
+            break;
+        default:
+            console.error(`Invalid direction: ${dir}`);
+            p.pickaxes++;
+            logBattleEvent(`Floor ${floor} - Secret Room Failed: Invalid direction`);
+            return;
+    }
+    // Check if room fits within map bounds
+    if (rx < 1 || rx + roomSize > W - 1 || ry < 1 || ry + roomSize > H - 1) {
+        console.warn(`Failed to create secret room at (${rx}, ${ry}): out of bounds`);
+        p.pickaxes++;
+        logBattleEvent(`Floor ${floor} - No space for secret room! Pickaxe refunded`);
+        return;
+    }
+    // Check if the 3x3 area is all walls
+    let allWalls = true;
+    for (let y = ry; y < ry + roomSize; y++) {
+        for (let x = rx; x < rx + roomSize; x++) {
+            if (map[y][x] !== 1) {
+                allWalls = false;
+                break;
+            }
+        }
+        if (!allWalls) break;
+    }
+    if (!allWalls) {
+        console.warn(`Failed to create secret room at (${rx}, ${ry}): not a 3x3 wall block`);
+        p.pickaxes++;
+        logBattleEvent(`Floor ${floor} - No 3x3 wall block for secret room! Pickaxe refunded`);
+        return;
+    }
+    // Validate room placement
+    let valid = true;
+    for (let y = ry; y < ry + roomSize; y++) {
+        for (let x = rx; x < rx + roomSize; x++) {
+            if (
+                [2, 3, 4, 5].includes(map[y][x]) || // Items
+                (x === px && y === py) || // Player
+                enemies.some(e => e.x === x && e.y === y) // Enemies
+            ) {
+                valid = false;
+                break;
+            }
+        }
+        if (!valid) break;
+    }
+    // Allow overlap with one room (e.g., corridor)
+    let overlapCount = 0;
+    rooms.forEach(r => {
+        if (!(rx >= r.x + r.w || rx + roomSize <= r.x || ry >= r.y + r.h || ry + roomSize <= r.y)) {
+            overlapCount++;
+        }
+    });
+    if (overlapCount > 1) valid = false;
+    if (!valid) {
+        console.warn(`Failed to create secret room at (${rx}, ${ry}): invalid placement (items, player, or overlap)`);
+        p.pickaxes++;
+        logBattleEvent(`Floor ${floor} - No space for secret room! Pickaxe refunded`);
+        return;
+    }
+    // Carve out the room
+    for (let y = ry; y < ry + roomSize; y++) {
+        for (let x = rx; x < rx + roomSize; x++) {
+            map[y][x] = 0;
+        }
+    }
+    // Clear the broken wall
+    map[wy][wx] = 0;
+    // Punch a non-directional hole (clear one adjacent tile)
+    const adjacent = [
+        { x: wx - 1, y: wy }, // Left
+        { x: wx + 1, y: wy }, // Right
+        { x: wx, y: wy - 1 }, // Up
+        { x: wx, y: wy + 1 }  // Down
+    ].filter(pos => pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] !== 0);
+    if (adjacent.length > 0) {
+        const hole = adjacent[Math.floor(Math.random() * adjacent.length)];
+        map[hole.y][hole.x] = 0;
+        console.log(`Punched hole at (${hole.x}, ${hole.y}) for access`);
+    }
+    // Carve a corridor to a nearby floor tile
+    let floorTiles = [];
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] === 0 && !(x === px && y === py) && !(x === wx && y === wy)) {
+                floorTiles.push({ x, y });
+            }
+        }
+    }
+    if (floorTiles.length > 0) {
+        floorTiles.sort((a, b) => {
+            const distA = Math.abs(a.x - wx) + Math.abs(a.y - wy);
+            const distB = Math.abs(b.x - wx) + Math.abs(b.y - wy);
+            return distA - distB;
+        });
+        const target = floorTiles[0];
+        let x = wx, y = wy;
+        while (x !== target.x || y !== target.y) {
+            if (Math.abs(target.x - x) > Math.abs(target.y - y)) {
+                x += target.x > x ? 1 : -1;
+            } else {
+                y += target.y > y ? 1 : -1;
+            }
+            if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 0) {
+                map[y][x] = 0;
+            }
+        }
+        console.log(`Carved corridor from (${wx}, ${wy}) to (${target.x}, ${target.y})`);
+    } else {
+        console.warn(`No floor tile found to connect secret room at (${wx}, ${wy})`);
+    }
+    // Place armor in the center
+    const armorX = rx + 1;
+    const armorY = ry + 1;
+    map[armorY][armorX] = 5;
+    rooms.push({ x: rx, y: ry, w: roomSize, h: roomSize });
+    // Show "Found Secret!" in Whale alert area and log success
+    const floorIndicator = document.getElementById('floor-indicator');
+    floorIndicator.textContent = `Found Secret!`;
+    logBattleEvent(`Floor ${floor} - Secret Room Created!`);
+    setTimeout(() => {
+        floorIndicator.textContent = `Floor ${floor}`;
+    }, 5000);
+    updateFogMap(px, py);
+    console.log(`Secret room (3x3) created at (${rx}, ${ry}), armor at (${armorX}, ${armorY}), entry at (${wx}, ${wy}), dir=${dir}`);
+    needsRedraw = true;
+}
+
+function updatePlayerState() {
+    if (p.hp <= 24 && p.hasArmor) {
+        p.hasArmor = false;
+        logBattleEvent(`Floor ${floor} - Armor boost lost!`);
+        console.log(`Armor boost lost: p.hp=${p.hp}, p.hasArmor=${p.hasArmor}`);
+    }
+    document.getElementById('health').textContent = Math.max(0, p.hp);
+    document.getElementById('pickaxes').textContent = p.pickaxes;
+    needsRedraw = true;
 }
 
 function updateFogMap(px, py) {
@@ -1406,37 +1604,54 @@ function move(dir) {
                 updateSatsDisplay();
             }
         }
-        if (exit && p.x === exit.x && p.y === exit.y) {
-            sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-            enemiesSpawnedThisFloor = 0;
-            initialSpawnDoneThisFloor = false;
-            enemies = [];
-            floor++;
-            initialWaveSpawned = false;
-            waveActive = false;
-            exit = null;
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-            document.getElementById('wave').textContent = wave;
-            console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
-            initMap();
-            nextApiCallTime = null;
-            // Clear kills from battle log on floor transition
-            const battleEvents = document.getElementById('battle-events');
-            battleEvents.value = battleEvents.value.split('\n')
-                .filter(line => !line.startsWith('Kills:') && !line.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/))
-                .join('\n');
-            battleEvents.style.transform = 'translateX(-100%)';
-            battleEvents.style.opacity = '0';
-            setTimeout(() => {
-                if (!gameOver && !splashActive && floor > 0) {
-                    fetchTxs();
-                    console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
-                }
-            }, 1000);
+        if (map[ny][nx] === 4) {
+            p.pickaxes++;
+            map[ny][nx] = 0;
+            playWebAudioSound(sounds.pickup);
+            logBattleEvent(`Floor ${floor} - Pickaxe Found!`);
         }
+if (map[ny][nx] === 5) {
+    if (p.hp >= 24) {
+        p.hp += 12; // Add +12 HP if already at or above 24
+    } else {
+        p.hp = 24 + 12; // Set to 24 + 12 if below 24
+    }
+    p.hasArmor = true;
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
+    updatePlayerState();
+}
+if (exit && p.x === exit.x && p.y === exit.y) {
+    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+    enemiesSpawnedThisFloor = 0;
+    initialSpawnDoneThisFloor = false;
+    enemies = [];
+    floor++;
+    initialWaveSpawned = false;
+    waveActive = false;
+    exit = null;
+    killsLog = []; // Reset kills display
+    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+    document.getElementById('wave').textContent = wave;
+    console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
+    initMap();
+    nextApiCallTime = null;
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value = '';
+    battleEvents.style.transform = 'translateX(-100%)';
+    battleEvents.style.opacity = '0';
+    setTimeout(() => {
+        if (!gameOver && !splashActive && floor > 0) {
+            fetchTxs();
+            console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+        }
+    }, 1000);
+}
         updateFogMap(p.x, p.y);
     }
     moveEnemies();
+    updatePlayerState(); // Check HP and armor state after potential enemy attacks
     needsRedraw = true;
 }
 
@@ -1481,10 +1696,10 @@ function moveEnemies() {
                     gameOver = true;
                     console.log(`Game Over: p.hp=${p.hp}`);
                 }
+                updatePlayerState(); // Check HP and armor state after damage
             }
         }
     });
-    // Spawn stairs before resetting wave state
     if (enemies.length === 0 && !exit && waveActive) {
         let r = rooms[Math.floor(Math.random() * rooms.length)];
         let x, y;
@@ -1492,10 +1707,9 @@ function moveEnemies() {
         while (map[y][x] !== 0 || (x === p.x && y === p.y));
         exit = {x, y};
         console.log(`Stairs spawned at (${x}, ${y}) on floor ${floor}, wave=${wave}`);
-        updateSatsDisplay(); // Update to show kills in battle log when stairs appear
+        updateSatsDisplay();
         needsRedraw = true;
     }
-    // Handle wave completion
     if (enemies.length === 0 && waveActive) {
         waveActive = false;
         logBattleEvent(`Floor ${floor} - Wave ${wave} Completed!`);
@@ -1506,11 +1720,15 @@ function moveEnemies() {
     needsRedraw = true;
 }
 
+let usePickaxeSword = false; // Global flag for draw
+
 function attack() {
     if (gameOver || splashActive) return;
     swordActive = true;
     swordStart = Date.now();
     sounds.attack.play().catch(e => console.error('Attack sound error:', e));
+    const initialPickaxes = p.pickaxes; // Store initial pickaxe count
+    usePickaxeSword = initialPickaxes > 0; // Set flag for animation
     let hit = enemies.find(e => {
         let sx = p.x, sy = p.y;
         if (swordDir === 'up') sy--;
@@ -1519,59 +1737,87 @@ function attack() {
         if (swordDir === 'right') sx++;
         return e.x === sx && e.y === sy;
     });
-    if (hit) {
-        hit.hp -= p.atk;
-        // Removed playWebAudioSound(sounds.hit)
-        if (hit.hp <= 0) {
-            kills[hit.type.name]++;
-            let dropPlaced = false;
-            if (map[hit.y][hit.x] === 0) {
-                map[hit.y][hit.x] = 3;
-                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                dropPlaced = true;
-            } else {
-                const adjacent = [
-                    {x: hit.x, y: hit.y - 1}, // Up
-                    {x: hit.x, y: hit.y + 1}, // Down
-                    {x: hit.x - 1, y: hit.y}, // Left
-                    {x: hit.x + 1, y: hit.y}  // Right
-                ];
-                for (const pos of adjacent) {
-                    const nx = pos.x, ny = pos.y;
-                    if (
-                        nx >= 0 && nx < W && ny >= 0 && ny < H && // Within bounds
-                        map[ny][nx] === 0 && // Empty tile
-                        !enemies.some(e => e.x === nx && e.y === ny) // Not occupied by enemy
-                    ) {
-                        map[ny][nx] = 3;
-                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                        dropPlaced = true;
-                        console.log(`Placed satoshi drop at adjacent tile (${nx}, ${ny})`);
-                        break;
-                    }
+if (hit) {
+    hit.hp -= p.atk;
+    if (hit.hp <= 0) {
+        kills[hit.type.name]++;
+        let dropPlaced = false;
+        if (map[hit.y][hit.x] === 0) {
+            map[hit.y][hit.x] = 3;
+            satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+            dropPlaced = true;
+        } else {
+            const adjacent = [
+                {x: hit.x, y: hit.y - 1},
+                {x: hit.x, y: hit.y + 1},
+                {x: hit.x - 1, y: hit.y},
+                {x: hit.x + 1, y: hit.y}
+            ];
+            for (const pos of adjacent) {
+                const nx = pos.x, ny = pos.y;
+                if (
+                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                    map[ny][nx] === 0 &&
+                    !enemies.some(e => e.x === nx && e.y === ny)
+                ) {
+                    map[ny][nx] = 3;
+                    satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                    dropPlaced = true;
+                    console.log(`Placed satoshi drop at adjacent tile (${nx}, ${ny})`);
+                    break;
                 }
             }
-            if (!dropPlaced) {
-                console.log(`No empty adjacent tile found for satoshi drop at (${hit.x}, ${hit.y})`);
-            }
-            enemies = enemies.filter(e => e !== hit);
-            updateSatsDisplay();
+        }
+        if (!dropPlaced) {
+            console.log(`No empty adjacent tile found for satoshi drop at (${hit.x}, ${hit.y})`);
+        }
+        enemies = enemies.filter(e => e !== hit);
+        if (exit && enemies.length === 0) {
+            updateSatsDisplay(); // Update only when all enemies are cleared
         }
     }
+} else if (initialPickaxes > 0) {
+    // Check for wall hit
+    let sx = p.x, sy = p.y;
+    if (swordDir === 'up') sy--;
+    if (swordDir === 'down') sy++;
+    if (swordDir === 'left') sx--;
+    if (swordDir === 'right') sx++;
+    if (sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1) {
+        usePickaxeSword = true; // Ensure pickaxe-sword animation
+        p.pickaxes--; // Consume pickaxe
+        sounds.secret.play().catch(e => console.error('Secret sound error:', e));
+        logBattleEvent(`Floor ${floor} - Wall Broken!`);
+        createSecretRoom(sx, sy, p.x, p.y, swordDir);
+    } else {
+        usePickaxeSword = true; // Show pickaxe-sword for air swings
+    }
+}
     moveEnemies();
     needsRedraw = true;
-    setTimeout(() => { swordActive = false; needsRedraw = true; }, 200);
+    setTimeout(() => {
+        swordActive = false;
+        usePickaxeSword = false; // Clear flag after animation
+        needsRedraw = true;
+    }, 200);
 }
 
-        function usePotion() {
-            if (gameOver || splashActive || p.potions <= 0) return;
-            p.potions--;
-            p.hp = Math.min(24, p.hp + 12);
-            logBattleEvent(`Floor ${floor} - Potion Used: +12 HP`);
-            sounds.potion.play().catch(e => console.error('Potion sound error:', e));
-            moveEnemies();
-            needsRedraw = true;
-        }
+function usePotion() {
+    if (gameOver || splashActive || p.potions <= 0) return;
+    if (p.hp >= 24) {
+        logBattleEvent(`Floor ${floor} - Potion Returned: HP already at ${p.hp}!`);
+        sounds.potion.play().catch(e => console.error('Potion sound error:', e));
+        return; // Refund potion by not decrementing p.potions
+    }
+    p.potions--;
+    const oldHP = p.hp;
+    p.hp = Math.min(24, p.hp + 12);
+    logBattleEvent(`Floor ${floor} - Potion Used: +${p.hp - oldHP} HP (now ${p.hp})`);
+    sounds.potion.play().catch(e => console.error('Potion sound error:', e));
+    moveEnemies();
+    updatePlayerState();
+    needsRedraw = true;
+}
 
 function restart() {
     console.log('Restarting game');
@@ -1579,6 +1825,8 @@ function restart() {
     wave = 1;
     p.hp = 24;
     p.potions = 0;
+    p.pickaxes = 0;
+    p.hasArmor = false;
     p.x = 2;
     p.y = 2;
     p.atk = 2;
@@ -1594,27 +1842,27 @@ function restart() {
     waveActive = false;
     nextApiCallTime = null;
     whaleHashIds = ['Whale Transactions:'];
-    battleLog = ['Battle Log:'];
+    battleLog = [];
+    killsLog = [];
     satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
     kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
     satoshiDrops = [];
-    retryDelay = 5000;
     swordDir = 'right';
     swordActive = false;
     swordStart = 0;
     fogMap = [];
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
-    document.getElementById('battle-events').value = battleLog.join('\n');
+    document.getElementById('battle-events').value = '';
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
     document.getElementById('health').textContent = p.hp;
     document.getElementById('potions').textContent = p.potions;
+    document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('sats').textContent = '0';
     document.getElementById('game-over').style.display = 'none';
     document.getElementById('download-stats').style.display = 'none';
     document.getElementById('splash-screen').style.display = 'block';
-    // Hide battle log on restart
     const battleEvents = document.getElementById('battle-events');
     battleEvents.style.transform = 'translateX(-100%)';
     battleEvents.style.opacity = '0';
@@ -1651,33 +1899,33 @@ function draw() {
     }
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
-    if (gameOver) {
-        const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
-        gameOverCanvas.clearRect(0, 0, 320, 320);
-        gameOverCanvas.fillStyle = '#000';
-        gameOverCanvas.fillRect(0, 0, 320, 320);
-        const scale = window.innerWidth <= 700 ? 1.5 : 2;
-        const gw = 128 * scale, gh = 32 * scale, pw = 96 * scale, ph = 32 * scale;
-        const offsetY = (Math.sin(Date.now() / 500) * 10);
-        gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh - ph - 50) / 2, gw, gh);
-        gameOverCanvas.fillStyle = '#ff8c00';
-        gameOverCanvas.font = '18px "VT323"';
-        gameOverCanvas.textAlign = 'center';
-        gameOverCanvas.fillText(`Floor Reached: ${floor}`, 160, 220);
-        const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-        gameOverCanvas.fillText(`Bag: ${totalSats < 1e8 ? totalSats : (totalSats / 1e8).toFixed(6) + ' BTC'}`, 160, 240);
-        document.getElementById('game-over').style.display = 'block';
-        document.getElementById('download-stats').style.display = 'block';
-        return;
-    }
+if (gameOver) {
+    const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
+    gameOverCanvas.clearRect(0, 0, 320, 320);
+    gameOverCanvas.fillStyle = '#000';
+    gameOverCanvas.fillRect(0, 0, 320, 320);
+    const scale = window.innerWidth <= 700 ? 1.5 : 2;
+    const gw = 128 * scale, gh = 32 * scale, pw = 96 * scale, ph = 32 * scale;
+    const offsetY = (Math.sin(Date.now() / 500) * 10);
+    gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh - ph - 50) / 2, gw, gh);
+    gameOverCanvas.fillStyle = '#ff8c00';
+    gameOverCanvas.font = '18px "VT323"';
+    gameOverCanvas.textAlign = 'center';
+    gameOverCanvas.fillText(`Floor Reached: ${floor}`, 160, 220);
+    const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
+    gameOverCanvas.fillText(`Bag: ${totalSats < 1e8 ? totalSats : (totalSats / 1e8).toFixed(6) + ' BTC'}`, 160, 240);
+    document.getElementById('game-over').style.display = 'block';
+    document.getElementById('download-stats').style.display = 'block';
+    return;
+}
     if (splashActive) { needsRedraw = false; return; }
 
-    const radius = 4; // Visibility radius
-    // Draw walls first (always visible)
+    const radius = 4;
+    // Draw walls first
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 1) c.drawImage(assets.wall, x * S, y * S, S, S);
     }
-    // Draw floors, items, and stairs if explored or within visibility radius
+    // Draw floors, items, and stairs
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
         const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
@@ -1685,14 +1933,16 @@ function draw() {
             c.drawImage(assets.floor, x * S, y * S, S, S);
             if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
             if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
+            if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
+            if (map[y][x] === 5) c.drawImage(assets.armor, x * S, y * S, S, S);
             if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
     // Draw player
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
-        c.drawImage(assets.player, p.x * S, p.y * S, S, S);
+        c.drawImage(p.hasArmor ? assets.player_armor : assets.player, p.x * S, p.y * S, S, S);
     }
-    // Draw sword within visibility radius
+    // Draw sword or pickaxe-sword
     if (swordActive && Date.now() - swordStart < 200) {
         let sx = p.x, sy = p.y;
         if (swordDir === 'up') sy--;
@@ -1705,18 +1955,18 @@ function draw() {
             if (swordDir === 'up') c.rotate(-Math.PI / 2);
             if (swordDir === 'down') c.rotate(Math.PI / 2);
             if (swordDir === 'left') c.rotate(Math.PI);
-            c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
+            c.drawImage(usePickaxeSword ? assets.pickaxe_sword : assets.sword, -S / 2, -S / 2, S, S);
             c.restore();
         }
     }
-    // Draw black fog overlay for unexplored tiles
+    // Draw fog overlay
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] !== 1 && !fogMap[y][x]) {
-            c.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Black fog for unexplored
+            c.fillStyle = 'rgba(0, 0, 0, 0.7)';
             c.fillRect(x * S, y * S, S, S);
         }
     }
-    // Draw enemies after fog (always visible for red eyes effect)
+    // Draw enemies
     enemies.forEach(e => {
         if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
             c.drawImage(e.type.img, e.x * S, e.y * S, S, S);
@@ -1724,6 +1974,7 @@ function draw() {
     });
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
+    document.getElementById('pickaxes').textContent = p.pickaxes;
     needsRedraw = false;
 }
 
@@ -1830,9 +2081,4 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
-
-
-
-
-
 
