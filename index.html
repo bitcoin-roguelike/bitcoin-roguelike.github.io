@@ -3,8 +3,10 @@
 <link rel="icon" href="bitcoin.ico">
 <head>
     <title>btc-dungeon</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes"> <!-- Added for PWA support -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://noexxibndcooqjquhqzk.supabase.co https://mempool.space; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
         body { 
@@ -214,24 +216,6 @@
         #attack:hover, #potion:hover {
             background: #e07b00;
         }
-        #download-stats {
-            position: absolute;
-            bottom: 265px;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-top: 20;
-            padding: 0px;
-            width: 120px;
-            height: 50px;
-            background: #ff8c00;
-            color: #fff;
-            font-family: 'VT323', monospace;
-            font-size: 24px;
-            border: none;
-            cursor: pointer;
-            border-radius: 5%;
-            z-index: 40;
-        }
         #start-button {
             position: absolute;
             top: 75%;
@@ -254,6 +238,52 @@
         }
 #dpad button:active, #dpad button.pressed {
     background: rgba(224, 123, 0, 0.7); /* Slightly darker than hover */
+}
+
+#submit-score, #view-leaderboard, #restart-game {
+    background: #ff8c00;
+    color: #fff;
+    border: none;
+    padding: 0px;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 5px;
+    width: 120px; /* Keep for view-leaderboard and restart-game */
+    height: 40px;
+    z-index: 40;
+}
+#submit-score {
+    width: 220px; /* Almost doubled from 120px */
+}
+
+#submit-score:disabled {
+    background: #666;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+#leaderboard-output {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111;
+    color: #ff8c00;
+    border: 2px solid #ff8c00;
+    padding: 0px;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    width: 640px;
+    max-width: 100%;
+    text-align: left;
+    white-space: pre;
+    line-height: 1.2;
+    box-sizing: border-box;
+    word-break: break-word; /* Handle long text */
 }
     
 /* Phones (320px–767px) */
@@ -290,7 +320,7 @@
     }
     #battle-log textarea {
         width: 100%;
-        margin-left: 0px;
+        margin-left: 7px;
         height: 81px;
         font-size: 9px;
     }
@@ -395,23 +425,29 @@
     #mute:hover {
         background: #ccc;
     }
-    #download-stats {
-        position: absolute;
-        bottom: 41%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-top: -10px;
-        padding: 0px;
-        width: 80px;
-        height: 40px;
-        background: #ff8c00;
-        color: #fff;
-        font-family: 'VT323', monospace;
+    
+    #submit-score, #view-leaderboard, #restart-game {
+        width: 80px; /* Keep for view-leaderboard and restart-game */
+        height: 30px;
         font-size: 16px;
-        border: none;
-        cursor: pointer;
-        border-radius: 5%;
-        z-index: 40;
+    }
+    #submit-score {
+        width: 160px; /* Doubled from 80px */
+    }
+#username-input {
+    width: 150px;
+    font-size: 14px;
+}
+    #leaderboard-output {
+        top: 5px;
+        width: 100%;
+        max-width: 640px;
+        font-size: 12px;
+        max-height: 160px;
+        text-align: left;
+        white-space: pre;
+        line-height: 1.2;
+        word-break: break-word;
     }
 
 }
@@ -557,23 +593,29 @@
     #mute:hover {
         background: #ccc;
     }
-    #download-stats {
-        position: absolute;
-        bottom: 41%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-top: -10px;
-        padding: 0px;
-        width: 100px;
+
+    #submit-score, #view-leaderboard, #restart-game {
+        width: 100px; /* Keep for view-leaderboard and restart-game */
         height: 48px;
-        background: #ff8c00;
-        color: #fff;
-        font-family: 'VT323', monospace;
-        font-size: 1.4rem;
-        border: none;
-        cursor: pointer;
-        border-radius: 5%;
-        z-index: 40;
+        font-size: 18px;
+    }
+    #submit-score {
+        width: 200px; /* Doubled from 100px */
+    }
+#username-input {
+    width: 180px;
+    font-size: 16px;
+}
+    #leaderboard-output {
+        top: 8px;
+        width: 100%;
+        max-width: 640px;
+        font-size: 14px;
+        max-height: 200px;
+        text-align: left;
+        white-space: pre;
+        line-height: 1.2;
+        word-break: break-word;
     }
 
 }
@@ -590,10 +632,16 @@
     		<canvas id="splash-canvas" width="320" height="320"></canvas>
     	    <button id="start-button">START</button>
 	    </div>
-            <div id="game-over">
-                <canvas id="game-over-canvas" width="320" height="320"></canvas>
-                <button id="download-stats">screenshot</button>
-            </div>
+<div id="game-over">
+    <pre id="leaderboard-output"></pre>
+    <canvas id="game-over-canvas" width="320" height="320"></canvas>
+    <div style="position: absolute; top: 60%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px;"> <!-- Increased gap from 10px to 15px -->
+        <input id="username-input" type="text" placeholder="Enter Username" maxlength="20" style="background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 8px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; width: 200px;">
+        <button id="submit-score" onclick="submitScore()">Submit Score</button>
+        <button id="view-leaderboard" onclick="fetchLeaderboard()">Leaderboard</button>
+        <button id="restart-game" onclick="restart()">Restart</button>
+    </div>
+</div>
             <div id="floor-indicator">Floor 1</div>
 <div id="inventory">
     Wave: <span id="wave">0</span><br>
@@ -623,6 +671,129 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
+
+const SUPABASE_URL = 'https://noexxibndcooqjquhqzk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vZXh4aWJuZGNvb3FqcXVocXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyNzY3NDgsImV4cCI6MjA2NDg1Mjc0OH0.LvN81angnwKM5IS1lCrr-dUESgeJfvO6VjkC0lMB0y4';
+const headers = {
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'apikey': SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+};
+
+async function submitScore() {
+    if (!gameOver) return; // Only allow submission on game-over
+    if (scoreSubmitted) {
+        document.getElementById('leaderboard-output').textContent = 'Score already submitted for this game!';
+        document.getElementById('leaderboard-output').style.display = 'block';
+        console.log('Score submission blocked: already submitted');
+        return;
+    }
+    if (floor < 3) {
+        document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
+        document.getElementById('leaderboard-output').style.display = 'block';
+        console.log('Score submission blocked: floor=', floor, '< 3');
+        return;
+    }
+    const username = document.getElementById('username-input').value.trim();
+    if (!username) {
+        document.getElementById('leaderboard-output').textContent = 'Please enter a username!';
+        document.getElementById('leaderboard-output').style.display = 'block';
+        return;
+    }
+    const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ username, score: totalSats, floor })
+        });
+        const text = await response.text();
+        console.log(`POST Status: ${response.status}, Response: ${text}`);
+        let data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (e) {
+            data = { raw: text };
+        }
+        if (response.ok) {
+            scoreSubmitted = true; // Mark score as submitted
+            document.getElementById('submit-score').disabled = true; // Disable button
+            document.getElementById('submit-score').style.background = '#666'; // Gray out button
+            document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${totalSats} sats (Floor ${floor})`;
+        } else {
+            document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
+            if (response.status === 400 && text.includes('new row violates row-level security policy')) {
+                document.getElementById('leaderboard-output').textContent = 'Submission blocked: Must reach at least Floor 3!';
+            }
+        }
+        document.getElementById('leaderboard-output').style.display = 'block';
+    } catch (error) {
+        document.getElementById('leaderboard-output').textContent = `Fetch error: ${error.message}`;
+        document.getElementById('leaderboard-output').style.display = 'block';
+    }
+}
+
+async function fetchLeaderboard() {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard?select=username,score,floor&order=score.desc&limit=10`, {
+            method: 'GET',
+            headers
+        });
+        const text = await response.text();
+        console.log(`GET Status: ${response.status}, Response: ${text}`);
+        let data;
+        try {
+            data = text ? JSON.parse(text) : [];
+        } catch (e) {
+            data = { raw: text };
+        }
+        if (response.ok && Array.isArray(data)) {
+            // Format leaderboard with wider space-based alignment
+            const maxUsernameLength = 20; // Increased from 15
+            const scoreWidth = 20; // Increased from 15
+            const numberWidth = 12; // Increased from 8
+            const floorWidth = 8; // Increased from 5
+            const header = `Rank  Username               Score               Floor`;
+            const rows = data.map((entry, index) => {
+                const rank = (index + 1).toString().padStart(2, '0'); // e.g., "01", "10"
+                const username = entry.username.length > maxUsernameLength
+                    ? entry.username.substring(0, maxUsernameLength - 2) + '..' // Truncate long names
+                    : entry.username.padEnd(maxUsernameLength); // Pad short names
+                // Convert score to BTC if >= 1e8, otherwise display as sats
+                const scoreValue = entry.score;
+                let numberPart, unitPart;
+                if (scoreValue >= 1e8) {
+                    numberPart = (scoreValue / 1e8).toFixed(1); // e.g., "1.0"
+                    unitPart = 'BTC';
+                } else {
+                    numberPart = scoreValue.toString(); // e.g., "2349"
+                    unitPart = 'sats';
+                }
+                const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
+                const score = scoreDisplay.padStart(scoreWidth); // Right-align score
+                const floor = entry.floor.toString().padStart(floorWidth); // Right-align floor
+                return `${rank}    ${username}  ${score}  ${floor}`;
+            });
+            const leaderboardText = `${header}\n${rows.join('\n') || 'No entries yet!'}`;
+            document.getElementById('leaderboard-output').textContent = leaderboardText;
+        } else {
+            document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
+        }
+        document.getElementById('leaderboard-output').style.display = 'block';
+    } catch (error) {
+        document.getElementById('leaderboard-output').textContent = `Fetch error: ${error.message}`;
+        console.error('Fetch leaderboard error:', error);
+        document.getElementById('leaderboard-output').style.display = 'block';
+    }
+}
+
+document.getElementById('username-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && gameOver) {
+        e.preventDefault(); // Prevent any default behavior
+        submitScore(); // Trigger score submission
+    }
+});
 
 // Prevent pinch-to-zoom and double-tap zoom
 document.addEventListener('touchstart', (e) => {
@@ -728,6 +899,7 @@ document.querySelectorAll('#actions button').forEach(button => {
         const W = 20, H = 20, S = 16;
 let map = [], p = {x: 2, y: 2, hp: 24, potions: 0, atk: 2, pickaxes: 0, hasArmor: false}, enemies = [], rooms = [];
 let floor = 1, wave = 0, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
+let scoreSubmitted = false; // Tracks if score has been submitted
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
@@ -1466,12 +1638,12 @@ async function fetchTxs() {
         }
         let enemyCount = 0;
         const processedTxids = new Set();
-        for (const tx of res.data.slice(0, 10)) {
+        // Fetch up to 15 transactions to compensate for potential 404s
+        for (const tx of res.data.slice(0, 15)) {
             if (processedTxids.has(tx.txid)) continue;
             processedTxids.add(tx.txid);
             let value = 0;
             let address = 'Invalid address';
-            console.log(`Fetching tx details for ${tx.txid}`);
             try {
                 await new Promise(resolve => setTimeout(resolve, 25));
                 const txRes = await axios.get(`https://mempool.space/api/tx/${tx.txid}`);
@@ -1483,8 +1655,8 @@ async function fetchTxs() {
                     continue;
                 }
             } catch (e) {
-                console.error(`Failed to fetch tx ${tx.txid}:`, e);
-                continue;
+                console.log(`Skipping tx ${tx.txid} due to fetch error:`, e.message);
+                continue; // Skip to next transaction
             }
             if (value <= 0) {
                 console.log(`Skipping tx ${tx.txid}: Zero/negative value`, value);
@@ -1526,7 +1698,7 @@ async function fetchTxs() {
                 if (enemiesSpawnedThisFloor >= 10) {
                     initialSpawnDoneThisFloor = true;
                 }
-            } else if (type.name === 'Whale') { // Allow Whale spawns after initial spawn, regardless of exit
+            } else if (type.name === 'Whale') { // Allow Whale spawns after initial spawn
                 console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value=${value}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
                 let x, y;
@@ -1627,7 +1799,7 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     enemies = [];
-    floor++;
+    floor++; // Increment floor here
     initialWaveSpawned = false;
     waveActive = false;
     exit = null;
@@ -1851,6 +2023,7 @@ function restart() {
     swordActive = false;
     swordStart = 0;
     fogMap = [];
+    scoreSubmitted = false; // Reset submission flag
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = '';
@@ -1861,7 +2034,14 @@ function restart() {
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('sats').textContent = '0';
     document.getElementById('game-over').style.display = 'none';
-    document.getElementById('download-stats').style.display = 'none';
+    document.getElementById('submit-score').style.display = 'none';
+    document.getElementById('view-leaderboard').style.display = 'none';
+    document.getElementById('restart-game').style.display = 'none';
+    document.getElementById('username-input').value = '';
+    document.getElementById('leaderboard-output').textContent = '';
+    document.getElementById('leaderboard-output').style.display = 'none';
+    document.getElementById('submit-score').disabled = false; // Re-enable button
+    document.getElementById('submit-score').style.background = '#ff8c00'; // Restore button color
     document.getElementById('splash-screen').style.display = 'block';
     const battleEvents = document.getElementById('battle-events');
     battleEvents.style.transform = 'translateX(-100%)';
@@ -1880,15 +2060,7 @@ function restart() {
     initMap();
     updateSatsDisplay();
     needsRedraw = true;
-    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit);
-}
-
-function downloadStats() {
-    const gameOverCanvas = document.getElementById('game-over-canvas');
-    const link = document.createElement('a');
-    link.href = gameOverCanvas.toDataURL('image/png');
-    link.download = `BTC_Dungeon_Floor_${floor}_Stats.png`;
-    link.click();
+    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit, 'gameOver=', gameOver, 'scoreSubmitted=', scoreSubmitted);
 }
 
 function draw() {
@@ -1905,17 +2077,13 @@ if (gameOver) {
     gameOverCanvas.fillStyle = '#000';
     gameOverCanvas.fillRect(0, 0, 320, 320);
     const scale = window.innerWidth <= 700 ? 1.5 : 2;
-    const gw = 128 * scale, gh = 32 * scale, pw = 96 * scale, ph = 32 * scale;
+    const gw = 128 * scale, gh = 32 * scale;
     const offsetY = (Math.sin(Date.now() / 500) * 10);
-    gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh - ph - 50) / 2, gw, gh);
-    gameOverCanvas.fillStyle = '#ff8c00';
-    gameOverCanvas.font = '18px "VT323"';
-    gameOverCanvas.textAlign = 'center';
-    gameOverCanvas.fillText(`Floor Reached: ${floor}`, 160, 220);
-    const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-    gameOverCanvas.fillText(`Bag: ${totalSats < 1e8 ? totalSats : (totalSats / 1e8).toFixed(6) + ' BTC'}`, 160, 240);
+    gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh) / 2 + offsetY, gw, gh);
     document.getElementById('game-over').style.display = 'block';
-    document.getElementById('download-stats').style.display = 'block';
+    document.getElementById('submit-score').style.display = 'block';
+    document.getElementById('view-leaderboard').style.display = 'block';
+    document.getElementById('restart-game').style.display = 'block';
     return;
 }
     if (splashActive) { needsRedraw = false; return; }
@@ -2026,10 +2194,6 @@ document.addEventListener('keydown', e => {
         fadeSplash();
         return; // Prevent other key actions during splash
     }
-    if (gameOver && e.key === 'Enter') {
-        restart(); // Restart game on Enter key
-        return; // Prevent other key actions during game-over
-    }
     if (gameOver || splashActive) return;
     if (e.key === 'ArrowUp') move('up');
     if (e.key === 'ArrowDown') move('down');
@@ -2040,12 +2204,17 @@ document.addEventListener('keydown', e => {
 });
 
 document.getElementById('game-over').addEventListener('click', (event) => {
-    if (gameOver && !document.getElementById('download-stats').contains(event.target)) {
-        restart();
+    if (
+        gameOver &&
+        !document.getElementById('username-input').contains(event.target) &&
+        !document.getElementById('submit-score').contains(event.target) &&
+        !document.getElementById('view-leaderboard').contains(event.target) &&
+        !document.getElementById('restart-game').contains(event.target) &&
+        !document.getElementById('leaderboard-output').contains(event.target)
+    ) {
+        // No action on canvas click; restart only via button
     }
 });
-        document.getElementById('download-stats').addEventListener('click', downloadStats);
-
 
         initMap();
         updateSatsDisplay();
@@ -2065,20 +2234,22 @@ document.querySelectorAll('#dpad button').forEach(button => {
 // go to game-over screen at startup (DEBUG)
 //function initGameOver() {
 //    gameOver = true;
-//    floor = 1; // Default floor for display
-//    satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-//    kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+//    floor = 3;
+//    satsEarned = {Shrimp: 2349, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+//    kills = {Shrimp: 1, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 //    document.getElementById('game-over').style.display = 'block';
-//    document.getElementById('download-stats').style.display = 'block';
+//    document.getElementById('submit-score').style.display = 'block';
+//    document.getElementById('view-leaderboard').style.display = 'block';
+//    document.getElementById('restart-game').style.display = 'block';
 //    updateSatsDisplay();
 //    needsRedraw = true;
-//    console.log('Initialized to game-over: gameOver=', gameOver);
+//    console.log('Initialized to game-over: gameOver=', gameOver, 'floor=', floor);
 //}
-//
 //initGameOver();
 //requestAnimationFrame(gameLoop);
 
     </script>
 </body>
 </html>
+
 
