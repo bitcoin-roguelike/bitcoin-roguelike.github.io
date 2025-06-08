@@ -895,9 +895,49 @@ document.querySelectorAll('#actions button').forEach(button => {
 });
         
 
-        const c = canvas.getContext('2d');
-        const W = 20, H = 20, S = 16;
-let map = [], p = {x: 2, y: 2, hp: 24, potions: 0, atk: 2, pickaxes: 0, hasArmor: false}, enemies = [], rooms = [];
+const c = canvas.getContext('2d');
+const W = 20, H = 20, S = 16;
+        
+let map = [], 
+    p = {
+        x: 2,
+        y: 2,
+        hp: 24,
+        potions: 0,
+        atk: 2,
+        pickaxes: 0,
+        hasArmor: false,
+        anim: {
+            frames: {
+                front: [new Image(), new Image()],
+                back: [new Image(), new Image()],
+                right: [new Image(), new Image()],
+                armor_front: [new Image(), new Image()],
+                armor_back: [new Image(), new Image()],
+                armor_right: [new Image(), new Image()]
+            },
+            direction: 'front',
+            frameIndex: 0,
+            lastFrameTime: 0,
+            frameDuration: 200
+        }
+    }, 
+    enemies = [], 
+    rooms = [];
+// Load animation frames
+p.anim.frames.front[0].src = 'player-front1.png';
+p.anim.frames.front[1].src = 'player-front2.png';
+p.anim.frames.back[0].src = 'player-back1.png';
+p.anim.frames.back[1].src = 'player-back2.png';
+p.anim.frames.right[0].src = 'player-right1.png';
+p.anim.frames.right[1].src = 'player-right2.png';
+p.anim.frames.armor_front[0].src = 'player_armor-front1.png';
+p.anim.frames.armor_front[1].src = 'player_armor-front2.png';
+p.anim.frames.armor_back[0].src = 'player_armor-back1.png';
+p.anim.frames.armor_back[1].src = 'player_armor-back2.png';
+p.anim.frames.armor_right[0].src = 'player_armor-right1.png';
+p.anim.frames.armor_right[1].src = 'player_armor-right2.png';
+
 let floor = 1, wave = 0, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
 let scoreSubmitted = false; // Tracks if score has been submitted
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
@@ -1098,6 +1138,32 @@ document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
         console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted, 'wave=', wave);
         preloadSounds();
+        // Preload player animation frames
+        const imagesToLoad = [
+            p.anim.frames.front[0], p.anim.frames.front[1],
+            p.anim.frames.back[0], p.anim.frames.back[1],
+            p.anim.frames.right[0], p.anim.frames.right[1],
+            p.anim.frames.armor_front[0], p.anim.frames.armor_front[1],
+            p.anim.frames.armor_back[0], p.anim.frames.armor_back[1],
+            p.anim.frames.armor_right[0], p.anim.frames.armor_right[1]
+        ];
+        let loadedCount = 0;
+        imagesToLoad.forEach(img => {
+            if (img.complete) {
+                loadedCount++;
+                if (loadedCount === imagesToLoad.length) {
+                    console.log('All player animation frames loaded');
+                }
+            } else {
+                img.onload = () => {
+                    loadedCount++;
+                    if (loadedCount === imagesToLoad.length) {
+                        console.log('All player animation frames loaded');
+                    }
+                };
+                img.onerror = () => console.error(`Failed to load image: ${img.src}`);
+            }
+        });
         if (!musicMuted) {
             sounds.music.pause();
             sounds.music.currentTime = 0;
@@ -1712,10 +1778,25 @@ function move(dir) {
     if (gameOver || splashActive) return;
     swordDir = dir;
     let nx = p.x, ny = p.y;
-    if (dir === 'up') ny--;
-    if (dir === 'down') ny++;
-    if (dir === 'left') nx--;
-    if (dir === 'right') nx++;
+    let newDirection = p.anim.direction; // Default to current direction
+    if (dir === 'up') {
+        ny--;
+        newDirection = 'back';
+    }
+    if (dir === 'down') {
+        ny++;
+        newDirection = 'front';
+    }
+    if (dir === 'left') {
+        nx--;
+        newDirection = 'left';
+    }
+    if (dir === 'right') {
+        nx++;
+        newDirection = 'right';
+    }
+    // Update direction even if move is blocked
+    p.anim.direction = newDirection;
     if (!map[ny] || map[ny][nx] === undefined) {
         console.error('Invalid map access: nx=', nx, 'ny=', ny);
         initMap();
@@ -1726,7 +1807,10 @@ function move(dir) {
         return;
     }
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
-        p.x = nx; p.y = ny;
+        p.x = nx;
+        p.y = ny;
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2; // Cycle frames
+        p.anim.lastFrameTime = performance.now(); // Update frame time
         if (map[ny][nx] === 2) { 
             p.potions++; 
             map[ny][nx] = 0; 
@@ -1748,48 +1832,48 @@ function move(dir) {
             playWebAudioSound(sounds.pickup);
             logBattleEvent(`Floor ${floor} - Pickaxe Found!`);
         }
-if (map[ny][nx] === 5) {
-    if (p.hp >= 24) {
-        p.hp += 12; // Add +12 HP if already at or above 24
-    } else {
-        p.hp = 24 + 12; // Set to 24 + 12 if below 24
-    }
-    p.hasArmor = true;
-    map[ny][nx] = 0;
-    playWebAudioSound(sounds.pickup);
-    logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
-    updatePlayerState();
-}
-if (exit && p.x === exit.x && p.y === exit.y) {
-    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-    enemiesSpawnedThisFloor = 0;
-    initialSpawnDoneThisFloor = false;
-    enemies = [];
-    floor++; // Increment floor here
-    initialWaveSpawned = false;
-    waveActive = false;
-    exit = null;
-    killsLog = []; // Reset kills display
-    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-    document.getElementById('wave').textContent = wave;
-    console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
-    initMap();
-    nextApiCallTime = null;
-    const battleEvents = document.getElementById('battle-events');
-    battleEvents.value = '';
-    battleEvents.style.transform = 'translateX(-100%)';
-    battleEvents.style.opacity = '0';
-    setTimeout(() => {
-        if (!gameOver && !splashActive && floor > 0) {
-            fetchTxs();
-            console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+        if (map[ny][nx] === 5) {
+            if (p.hp >= 24) {
+                p.hp += 12;
+            } else {
+                p.hp = 24 + 12;
+            }
+            p.hasArmor = true;
+            map[ny][nx] = 0;
+            playWebAudioSound(sounds.pickup);
+            logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
+            updatePlayerState();
         }
-    }, 1000);
-}
+        if (exit && p.x === exit.x && p.y === exit.y) {
+            sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+            enemiesSpawnedThisFloor = 0;
+            initialSpawnDoneThisFloor = false;
+            enemies = [];
+            floor++;
+            initialWaveSpawned = false;
+            waveActive = false;
+            exit = null;
+            killsLog = [];
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+            document.getElementById('wave').textContent = wave;
+            console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
+            initMap();
+            nextApiCallTime = null;
+            const battleEvents = document.getElementById('battle-events');
+            battleEvents.value = '';
+            battleEvents.style.transform = 'translateX(-100%)';
+            battleEvents.style.opacity = '0';
+            setTimeout(() => {
+                if (!gameOver && !splashActive && floor > 0) {
+                    fetchTxs();
+                    console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+                }
+            }, 1000);
+        }
         updateFogMap(p.x, p.y);
     }
     moveEnemies();
-    updatePlayerState(); // Check HP and armor state after potential enemy attacks
+    updatePlayerState();
     needsRedraw = true;
 }
 
@@ -1865,6 +1949,13 @@ function attack() {
     swordActive = true;
     swordStart = Date.now();
     sounds.attack.play().catch(e => console.error('Attack sound error:', e));
+    // Update player direction to match swordDir
+    let newDirection = p.anim.direction;
+    if (swordDir === 'up') newDirection = 'back';
+    if (swordDir === 'down') newDirection = 'front';
+    if (swordDir === 'left') newDirection = 'left';
+    if (swordDir === 'right') newDirection = 'right';
+    p.anim.direction = newDirection;
     const initialPickaxes = p.pickaxes; // Store initial pickaxe count
     usePickaxeSword = initialPickaxes > 0; // Set flag for animation
     let hit = enemies.find(e => {
@@ -1875,62 +1966,62 @@ function attack() {
         if (swordDir === 'right') sx++;
         return e.x === sx && e.y === sy;
     });
-if (hit) {
-    hit.hp -= p.atk;
-    if (hit.hp <= 0) {
-        kills[hit.type.name]++;
-        let dropPlaced = false;
-        if (map[hit.y][hit.x] === 0) {
-            map[hit.y][hit.x] = 3;
-            satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-            dropPlaced = true;
-        } else {
-            const adjacent = [
-                {x: hit.x, y: hit.y - 1},
-                {x: hit.x, y: hit.y + 1},
-                {x: hit.x - 1, y: hit.y},
-                {x: hit.x + 1, y: hit.y}
-            ];
-            for (const pos of adjacent) {
-                const nx = pos.x, ny = pos.y;
-                if (
-                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                    map[ny][nx] === 0 &&
-                    !enemies.some(e => e.x === nx && e.y === ny)
-                ) {
-                    map[ny][nx] = 3;
-                    satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                    dropPlaced = true;
-                    console.log(`Placed satoshi drop at adjacent tile (${nx}, ${ny})`);
-                    break;
+    if (hit) {
+        hit.hp -= p.atk;
+        if (hit.hp <= 0) {
+            kills[hit.type.name]++;
+            let dropPlaced = false;
+            if (map[hit.y][hit.x] === 0) {
+                map[hit.y][hit.x] = 3;
+                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                dropPlaced = true;
+            } else {
+                const adjacent = [
+                    {x: hit.x, y: hit.y - 1},
+                    {x: hit.x, y: hit.y + 1},
+                    {x: hit.x - 1, y: hit.y},
+                    {x: hit.x + 1, y: hit.y}
+                ];
+                for (const pos of adjacent) {
+                    const nx = pos.x, ny = pos.y;
+                    if (
+                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                        map[ny][nx] === 0 &&
+                        !enemies.some(e => e.x === nx && e.y === ny)
+                    ) {
+                        map[ny][nx] = 3;
+                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                        dropPlaced = true;
+                        console.log(`Placed satoshi drop at adjacent tile (${nx}, ${ny})`);
+                        break;
+                    }
                 }
             }
+            if (!dropPlaced) {
+                console.log(`No empty adjacent tile found for satoshi drop at (${hit.x}, ${hit.y})`);
+            }
+            enemies = enemies.filter(e => e !== hit);
+            if (exit && enemies.length === 0) {
+                updateSatsDisplay(); // Update only when all enemies are cleared
+            }
         }
-        if (!dropPlaced) {
-            console.log(`No empty adjacent tile found for satoshi drop at (${hit.x}, ${hit.y})`);
-        }
-        enemies = enemies.filter(e => e !== hit);
-        if (exit && enemies.length === 0) {
-            updateSatsDisplay(); // Update only when all enemies are cleared
+    } else if (initialPickaxes > 0) {
+        // Check for wall hit
+        let sx = p.x, sy = p.y;
+        if (swordDir === 'up') sy--;
+        if (swordDir === 'down') sy++;
+        if (swordDir === 'left') sx--;
+        if (swordDir === 'right') sx++;
+        if (sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1) {
+            usePickaxeSword = true; // Ensure pickaxe-sword animation
+            p.pickaxes--; // Consume pickaxe
+            sounds.secret.play().catch(e => console.error('Secret sound error:', e));
+            logBattleEvent(`Floor ${floor} - Wall Broken!`);
+            createSecretRoom(sx, sy, p.x, p.y, swordDir);
+        } else {
+            usePickaxeSword = true; // Show pickaxe-sword for air swings
         }
     }
-} else if (initialPickaxes > 0) {
-    // Check for wall hit
-    let sx = p.x, sy = p.y;
-    if (swordDir === 'up') sy--;
-    if (swordDir === 'down') sy++;
-    if (swordDir === 'left') sx--;
-    if (swordDir === 'right') sx++;
-    if (sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1) {
-        usePickaxeSword = true; // Ensure pickaxe-sword animation
-        p.pickaxes--; // Consume pickaxe
-        sounds.secret.play().catch(e => console.error('Secret sound error:', e));
-        logBattleEvent(`Floor ${floor} - Wall Broken!`);
-        createSecretRoom(sx, sy, p.x, p.y, swordDir);
-    } else {
-        usePickaxeSword = true; // Show pickaxe-sword for air swings
-    }
-}
     moveEnemies();
     needsRedraw = true;
     setTimeout(() => {
@@ -2072,10 +2163,27 @@ if (gameOver) {
             if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
-    // Draw player
-    if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
-        c.drawImage(p.hasArmor ? assets.player_armor : assets.player, p.x * S, p.y * S, S, S);
+// Draw player
+if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
+    const now = performance.now();
+    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2; // Cycle frames
+        p.anim.lastFrameTime = now;
     }
+    const direction = p.anim.direction;
+    const baseDirection = direction === 'left' ? 'right' : direction; // Use right frames for left
+    const frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
+    const frame = p.anim.frames[frameKey][p.anim.frameIndex];
+    c.save();
+    if (direction === 'left') {
+        c.translate((p.x + 1) * S, p.y * S);
+        c.scale(-1, 1); // Mirror horizontally
+        c.drawImage(frame, 0, 0, S, S);
+    } else {
+        c.drawImage(frame, p.x * S, p.y * S, S, S);
+    }
+    c.restore();
+}
     // Draw sword or pickaxe-sword
     if (swordActive && Date.now() - swordStart < 200) {
         let sx = p.x, sy = p.y;
