@@ -14,7 +14,7 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            min-height: 0vh; 
+            min-height: 10px; 
             background: #222; 
             font-family: 'VT323', monospace;
             overflow: hidden;
@@ -721,20 +721,23 @@ async function submitScore() {
             document.getElementById('submit-score').disabled = true; // Disable button
             document.getElementById('submit-score').style.background = '#666'; // Gray out button
             document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${totalSats} sats (Floor ${floor})`;
+            document.getElementById('leaderboard-output').style.display = 'block';
+            // Automatically show leaderboard after submission
+            await fetchLeaderboard(username, totalSats, floor);
         } else {
             document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
             if (response.status === 400 && text.includes('new row violates row-level security policy')) {
                 document.getElementById('leaderboard-output').textContent = 'Submission blocked: Must reach at least Floor 3!';
             }
+            document.getElementById('leaderboard-output').style.display = 'block';
         }
-        document.getElementById('leaderboard-output').style.display = 'block';
     } catch (error) {
         document.getElementById('leaderboard-output').textContent = `Fetch error: ${error.message}`;
         document.getElementById('leaderboard-output').style.display = 'block';
     }
 }
 
-async function fetchLeaderboard() {
+async function fetchLeaderboard(submittedUsername = null, submittedScore = null, submittedFloor = null) {
     try {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard?select=username,score,floor&order=score.desc&limit=10`, {
             method: 'GET',
@@ -749,32 +752,85 @@ async function fetchLeaderboard() {
             data = { raw: text };
         }
         if (response.ok && Array.isArray(data)) {
-            // Format leaderboard with wider space-based alignment
-            const maxUsernameLength = 20; // Increased from 15
-            const scoreWidth = 20; // Increased from 15
-            const numberWidth = 12; // Increased from 8
-            const floorWidth = 8; // Increased from 5
-            const header = `Rank  Username               Score               Floor`;
-            const rows = data.map((entry, index) => {
-                const rank = (index + 1).toString().padStart(2, '0'); // e.g., "01", "10"
+            let playerInTop10 = submittedUsername ? data.some(entry => entry.username === submittedUsername && entry.score === submittedScore && entry.floor === submittedFloor) : false;
+            let playerEntry = null;
+            let playerRank = null;
+
+            // Fetch player's score and rank if not in top 10 and floor >= 3
+            if (submittedUsername && !playerInTop10 && submittedFloor >= 3) {
+                try {
+                    const playerResponse = await fetch(
+                        `${SUPABASE_URL}/rest/v1/leaderboard?select=username,score,floor&username=eq.${encodeURIComponent(submittedUsername)}&score=eq.${submittedScore}&floor=eq.${submittedFloor}`,
+                        { method: 'GET', headers }
+                    );
+                    const playerData = await playerResponse.json();
+                    if (playerResponse.ok && playerData.length > 0) {
+                        playerEntry = playerData[0];
+                        const rankResponse = await fetch(
+                            `${SUPABASE_URL}/rest/v1/leaderboard?select=score&score=gt.${submittedScore}&order=score.desc`,
+                            { method: 'GET', headers }
+                        );
+                        const rankData = await rankResponse.json();
+                        if (rankResponse.ok) {
+                            playerRank = rankData.length + 1;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error fetching player score or rank:', e);
+                }
+            }
+
+            // Format leaderboard
+            const maxUsernameLength = 20;
+            const scoreWidth = 14; // Increased from 12 to handle large BTC values
+            const numberWidth = 10; // Increased from 8 for consistent score padding
+            const floorWidth = 6;  // Increased from 5 for better floor alignment
+            const header = `Rank  Username                Score         Floor`; // Adjusted spacing
+            let rows = data.map((entry, index) => {
+                const rank = (index + 1).toString().padStart(2, '0');
                 const username = entry.username.length > maxUsernameLength
-                    ? entry.username.substring(0, maxUsernameLength - 2) + '..' // Truncate long names
-                    : entry.username.padEnd(maxUsernameLength); // Pad short names
-                // Convert score to BTC if >= 1e8, otherwise display as sats
+                    ? entry.username.substring(0, maxUsernameLength - 2) + '..'
+                    : entry.username.padEnd(maxUsernameLength);
                 const scoreValue = entry.score;
                 let numberPart, unitPart;
                 if (scoreValue >= 1e8) {
-                    numberPart = (scoreValue / 1e8).toFixed(1); // e.g., "1.0"
+                    numberPart = (scoreValue / 1e8).toFixed(1);
                     unitPart = 'BTC';
                 } else {
-                    numberPart = scoreValue.toString(); // e.g., "2349"
+                    numberPart = scoreValue.toString();
                     unitPart = 'sats';
                 }
                 const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
-                const score = scoreDisplay.padStart(scoreWidth); // Right-align score
-                const floor = entry.floor.toString().padStart(floorWidth); // Right-align floor
-                return `${rank}    ${username}  ${score}  ${floor}`;
+                const score = scoreDisplay.padEnd(scoreWidth);
+                const floor = entry.floor.toString().padStart(floorWidth);
+                return `${rank}    ${username}${score}${floor}`;
             });
+
+            // Replace or append player's entry with actual rank if not in top 10
+            if (playerEntry && !playerInTop10 && playerRank) {
+                const username = playerEntry.username.length > maxUsernameLength
+                    ? playerEntry.username.substring(0, maxUsernameLength - 2) + '..'
+                    : playerEntry.username.padEnd(maxUsernameLength);
+                const scoreValue = playerEntry.score;
+                let numberPart, unitPart;
+                if (scoreValue >= 1e8) {
+                    numberPart = (scoreValue / 1e8).toFixed(1);
+                    unitPart = 'BTC';
+                } else {
+                    numberPart = scoreValue.toString();
+                    unitPart = 'sats';
+                }
+                const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
+                const score = scoreDisplay.padEnd(scoreWidth);
+                const floor = playerEntry.floor.toString().padStart(floorWidth);
+                const playerRow = `${playerRank.toString().padStart(2, '0')}    ${username}${score}${floor}`;
+                if (rows.length >= 10) {
+                    rows[9] = playerRow; // Replace 10th entry
+                } else {
+                    rows.push(playerRow); // Append if fewer than 10 entries
+                }
+            }
+
             const leaderboardText = `${header}\n${rows.join('\n') || 'No entries yet!'}`;
             document.getElementById('leaderboard-output').textContent = leaderboardText;
         } else {
@@ -2321,6 +2377,3 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
-
-
-
