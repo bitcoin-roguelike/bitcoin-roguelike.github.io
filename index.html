@@ -1206,40 +1206,6 @@ function logBattleEvent(event) {
     }, 3000);
 }
 
-function gameLoop(timestamp) {
-    if (!map?.[0] || !p || !enemies || !rooms?.length) {
-        console.error('Invalid state');
-        initMap();
-        needsRedraw = true;
-    }
-    if (!gameOver && !splashActive && !exit && !waveActive && floor > 0 && timestamp - lastUpdate >= 20000) {
-        fetchTxs();
-        lastUpdate = timestamp;
-        console.log(`gameLoop triggered fetchTxs: floor=${floor}, wave=${wave}`);
-    }
-    if (gameOver) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
-        if (!gameOverSoundPlayed) {
-            sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
-            gameOverSoundPlayed = true;
-        }
-        document.getElementById('health').textContent = 0;
-        document.getElementById('wave').textContent = wave;
-        console.log(`Game Over: wave=${wave}, enemies=${enemies.length}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
-        needsRedraw = true;
-    }
-    if (needsRedraw && !splashActive) draw();
-    if (p.hp <= 0 && !gameOver) {
-        p.hp = 0;
-        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-        gameOver = true;
-        console.log(`Game Over: wave=${wave}, enemies=${enemies.length}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
-    }
-    document.getElementById('wave').textContent = wave;
-    requestAnimationFrame(gameLoop);
-}
-
 function updateSatsDisplay() {
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
     document.getElementById('sats').textContent = totalSats < 1e8 ? `${totalSats} sats` : `${(totalSats / 1e8).toFixed(1)} BTC`;
@@ -1638,8 +1604,9 @@ async function fetchTxs() {
         }
         let enemyCount = 0;
         const processedTxids = new Set();
-        // Fetch up to 15 transactions to compensate for potential 404s
-        for (const tx of res.data.slice(0, 15)) {
+        // Changed to console.warn for visibility
+        console.warn(`[WHALE ATTEMPT] Checking ${res.data.length} transactions for Whale spawns (> 100 BTC)`);
+        for (const tx of res.data.slice(0, 10)) {
             if (processedTxids.has(tx.txid)) continue;
             processedTxids.add(tx.txid);
             let value = 0;
@@ -1656,7 +1623,7 @@ async function fetchTxs() {
                 }
             } catch (e) {
                 console.log(`Skipping tx ${tx.txid} due to fetch error:`, e.message);
-                continue; // Skip to next transaction
+                continue;
             }
             if (value <= 0) {
                 console.log(`Skipping tx ${tx.txid}: Zero/negative value`, value);
@@ -1672,7 +1639,6 @@ async function fetchTxs() {
 
             // Handle initial spawn (up to 10 enemies, including Whales)
             if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10) {
-                // Skip non-Whale spawn if exit exists
                 if (type.name !== 'Whale' && exit) {
                     console.log(`Exit exists at (${exit.x}, ${exit.y}), skipping non-Whale spawn for tx ${tx.txid}`);
                     continue;
@@ -1690,7 +1656,7 @@ async function fetchTxs() {
                 enemiesSpawnedThisFloor++;
                 enemyCount++;
                 if (type.name === 'Whale') {
-                    console.log(`Whale tx:`, tx, `Hash ID: ${tx.txid}`);
+                    console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
                     logWhaleHashId(tx.txid);
                     document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
                     setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
@@ -1698,8 +1664,8 @@ async function fetchTxs() {
                 if (enemiesSpawnedThisFloor >= 10) {
                     initialSpawnDoneThisFloor = true;
                 }
-            } else if (type.name === 'Whale') { // Allow Whale spawns after initial spawn
-                console.log(`Parsed Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value=${value}`);
+            } else if (type.name === 'Whale') {
+                console.log(`[WHALE SPAWN ATTEMPT] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
                 let x, y;
                 do {
@@ -1709,7 +1675,7 @@ async function fetchTxs() {
                 enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
-                console.log(`Whale tx:`, tx, `Hash ID: ${tx.txid}`);
+                console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
                 logWhaleHashId(tx.txid);
                 document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
                 setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
@@ -2152,20 +2118,16 @@ function gameLoop(timestamp) {
         initMap();
         needsRedraw = true;
     }
-    if (!gameOver && !splashActive && timestamp - lastUpdate >= 60000) {
-        fetchTxs();
-        lastUpdate = timestamp;
+    if (gameOver) {
+        sounds.music.pause();
+        sounds.music.currentTime = 0;
+        if (!gameOverSoundPlayed) {
+            sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
+            gameOverSoundPlayed = true; // Mark sound as played
+        }
+        document.getElementById('health').textContent = 0;
+        needsRedraw = true;
     }
-if (gameOver) {
-    sounds.music.pause();
-    sounds.music.currentTime = 0;
-    if (!gameOverSoundPlayed) {
-        sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
-        gameOverSoundPlayed = true; // Mark sound as played
-    }
-    document.getElementById('health').textContent = 0;
-    needsRedraw = true;
-}
     if (needsRedraw && !splashActive) draw();
     if (p.hp <= 0 && !gameOver) {
         p.hp = 0;
