@@ -35,13 +35,14 @@
             width: 100%;
             box-sizing: border-box;
         }
-        #whale-log { 
+#whale-log { 
             width: 618px; 
             height: 24px; 
             overflow-y: auto;
             scroll-behavior: smooth; 
             background: #111; 
-            color: #ff8c00; 
+            color: var(--text-color, #ff8c00) !important; 
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
             padding: 12px; 
             border: 2px solid #ff8c00; 
             font-size: 14px; 
@@ -50,7 +51,8 @@
             max-width: 620px; 
         }
         #whale-hash-ids a { 
-            color: #ff8c00; 
+            color: var(--text-color, #ff8c00) !important; 
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
             text-decoration: none; 
         }
         #whale-hash-ids a:hover { 
@@ -79,11 +81,12 @@
             display: none; 
             text-align: center; 
         }
-        #battle-log { 
+#battle-log { 
             width: 620px;
             margin-left: 20px; 
             background: transparent; 
-            color: #ff8c00; 
+            color: var(--text-color, #ff8c00) !important; 
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
             padding: 16px; 
             border: none; 
             font-size: 16px;
@@ -92,7 +95,8 @@
         }
 #battle-log textarea {
     background: transparent;
-    color: #ff8c00;
+    color: var(--text-color, #ff8c00) !important;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
     border: none;
     font-family: 'VT323', monospace;
     font-size: 16px;
@@ -111,15 +115,13 @@
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
 }
-#battle-log textarea::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, WebKit */
-}
-        #inventory { 
+#inventory { 
             position: absolute;
             top: 10px;
             right: -24px;
             background: transparent;
-            color: #ff8c00;
+            color: var(--text-color, #ff8c00) !important;
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
             border: none;
             padding: 8px;
             z-index: 10;
@@ -133,7 +135,8 @@
             top: 11px; 
             left: 10px; 
             background: transparent; 
-            color: #ff8c00; 
+            color: var(--text-color, #ff8c00) !important; 
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
             padding: 8px; 
             z-index: 10; 
             font-family: 'VT323', monospace;
@@ -953,6 +956,14 @@ document.querySelectorAll('#actions button').forEach(button => {
 
 const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
+let currentTheme = 'dungeon'; // Default theme
+const themes = ['dungeon', 'desert', 'paradise', 'hell'];
+let initialWaveSpawned = false; // Track if initial wave has spawned
+
+function selectNewTheme(current) {
+    const availableThemes = themes.filter(t => t !== current);
+    return availableThemes[Math.floor(Math.random() * availableThemes.length)];
+}
         
 let map = [], 
     p = {
@@ -1017,19 +1028,24 @@ let projectiles = [];
             {name: 'Whale', min: 100, max: Infinity, img: new Image(), hp: 6, atk: 4, reward: 0, move: 2}
         ];
 const assets = {
-    floor: new Image(),
-    wall: new Image(),
+    themes: {
+        dungeon: { floor: new Image(), wall: new Image() },
+        desert: { floor: new Image(), wall: new Image(), special: new Image() },
+        paradise: { floor: new Image(), wall: new Image(), special: new Image() },
+        hell: { floor: new Image(), wall: new Image(), special: new Image() }
+    },
     potion: new Image(),
     player: new Image(),
     stairs: new Image(),
     bitcoin: new Image(),
     gameOver: new Image(),
     sword: new Image(),
-    pickaxe: new Image(), // New pickaxe asset
-    armor: new Image(),   // New armor asset
-    player_armor: new Image(), // New armored player sprite
-    pickaxe_sword: new Image(), // New pickaxe-sword asset
-    shoot_sword: new Image()
+    pickaxe: new Image(),
+    armor: new Image(),
+    player_armor: new Image(),
+    pickaxe_sword: new Image(),
+    shoot_sword: new Image(),
+    gnome: new Image()
 };
         types[0].img.src = 'shrimp.png';
         types[1].img.src = 'crab.png';
@@ -1037,21 +1053,37 @@ const assets = {
         types[3].img.src = 'dolphin.png';
         types[4].img.src = 'shark.png';
         types[5].img.src = 'whale.png';
-        assets.floor.src = 'floor.png';
-        assets.wall.src = 'wall.png';
+        assets.themes.dungeon.floor.src = 'floor.png';
+        assets.themes.dungeon.wall.src = 'wall.png';
+        assets.themes.desert.floor.src = 'sand_floor.png';
+        assets.themes.desert.wall.src = 'sand_wall.png';
+        assets.themes.desert.special.src = 'quicksand.png';
+        assets.themes.paradise.floor.src = 'paradise_floor.png';
+        assets.themes.paradise.wall.src = 'paradise_wall.png';
+        assets.themes.paradise.special.src = 'pond.png';
+        assets.themes.hell.floor.src = 'hell_floor.png';
+        assets.themes.hell.wall.src = 'hell_wall.png';
+        assets.themes.hell.special.src = 'lava.png';
         assets.potion.src = 'potion.png';
-	assets.player.src = 'player.png'; // Ensure player.png is set as default
+        assets.gnome.src = 'gnome.png';
+	assets.player.src = 'player.png';
 	assets.pickaxe.src = 'pickaxe.png';
 	assets.armor.src = 'armor.png';
 	assets.player_armor.src = 'player_armor.png';
         assets.stairs.src = 'stairs.png'; 
         assets.bitcoin.src = 'bitcoin.png';
         assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
-        assets.pickaxe_sword.src = 'pickaxe-sword.png'; // New asset source
+        assets.pickaxe_sword.src = 'pickaxe-sword.png';
         assets.shoot_sword.src = 'shoot_sword.png';
         Object.values(assets).forEach(asset => {
-    asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
-});
+            if (asset instanceof Image) {
+                asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
+            } else if (typeof asset === 'object') {
+                Object.values(asset).forEach(subAsset => {
+                    subAsset.onerror = () => console.error(`Failed to load asset: ${subAsset.src}`);
+                });
+            }
+        });
         types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -1338,49 +1370,81 @@ function updateSatsDisplay() {
     // Trigger kills display only when exit exists and no enemies remain
     if (exit && enemies.length === 0) {
         logBattleEvent(`Kills:`);
-        const enemyTypes = ['Shrimp', 'Crab', 'Squid', 'Dolphin', 'Shark', 'Whale'];
-        for (const type of enemyTypes) {
-            if (kills[type] > 0) {
-                logBattleEvent(`${type}: ${kills[type]}`);
+        for (const type of types) {
+            if (kills[type.name] > 0) {
+                logBattleEvent(`${type.name}: ${kills[type.name]}`);
             }
         }
     }
 }
 
-function spawnItemWithChance(itemType, chance, maxItems, proximityRange, excludePlayer = true) {
-    if (Math.random() > chance) {
-        console.log(`No ${itemType} spawned: chance=${chance}`);
-        return [];
-    }
-    let itemPositions = [];
-    let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(rooms.length, maxItems));
-    for (let r of selectedRooms) {
-        let x, y, attempts = 100;
-        while (attempts > 0 && itemPositions.length < maxItems) {
-            x = r.x + Math.floor(Math.random() * r.w);
-            y = r.y + Math.floor(Math.random() * r.h);
-            if (
-                map[y][x] === 0 &&
-                (!excludePlayer || (x !== p.x || y !== p.y)) &&
-                !itemPositions.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange) &&
-                !satoshiDrops.some(d => d.x === x && d.y === y)
-            ) {
-                itemPositions.push({ x, y });
-                map[y][x] = itemType; // Set map tile to itemType (e.g., 4 for pickaxe, 5 for armor)
-                console.log(`${itemType} placed at (${x}, ${y})`);
-                break;
+function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer) {
+    let positions = [];
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (positions.length < maxItems && attempts < maxAttempts) {
+        if (Math.random() < chance) {
+            let x = Math.floor(Math.random() * W);
+            let y = Math.floor(Math.random() * H);
+            let valid = map[y][x] === 0;
+
+            if (avoidPlayer) {
+                valid = valid && Math.abs(x - p.x) >= 3 && Math.abs(y - p.y) >= 3; // Ensure 5x5 clear area
             }
-            attempts--;
+
+            if (valid) {
+                let isNearOtherItem = false;
+                for (let pos of positions) {
+                    if (Math.abs(x - pos[0]) <= 2 && Math.abs(y - pos[1]) <= 2) {
+                        isNearOtherItem = true;
+                        break;
+                    }
+                }
+                if (!isNearOtherItem) {
+                    positions.push([x, y]);
+                    if (item !== -1) {
+                        map[y][x] = item;
+                    }
+                }
+            }
         }
-        if (attempts === 0) {
-            console.warn(`${itemType} placement failed in room:`, r);
-        }
+        attempts++;
     }
-    return itemPositions;
+
+    return positions;
 }
 
 function initMap() {
     try {
+        // Change theme every fourth floor
+        if (floor % 4 === 0 && floor > 1) {
+            currentTheme = selectNewTheme(currentTheme);
+            console.log(`Floor ${floor} - Changed theme to ${currentTheme}`);
+        }
+        // Update text color based on theme
+        let textColor;
+        switch (currentTheme) {
+            case 'hell':
+                textColor = '#00ff00'; // Matrix green for hell
+                break;
+            case 'desert':
+            case 'paradise':
+                textColor = '#ff8c00'; // Orange for desert and paradise
+                break;
+            default:
+                textColor = '#ff8c00'; // Orange for dungeon
+        }
+        document.documentElement.style.setProperty('--text-color', textColor);
+        // Force re-render of text color
+        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator').forEach(el => {
+            el.style.color = textColor;
+        });
+        // Reset enemy spawning variables
+        enemies = [];
+        enemiesSpawnedThisFloor = 0;
+        initialSpawnDoneThisFloor = false;
+        initialWaveSpawned = false;
         map = Array(H).fill().map(() => Array(W).fill(1));
         fogMap = Array(H).fill().map(() => Array(W).fill(0));
         rooms = [];
@@ -1420,7 +1484,7 @@ function initMap() {
         for (let i = 1; i < rooms.length; i++) {
             let r1 = rooms[i - 1], r2 = rooms[i];
             let x1 = r1.x + Math.floor(r1.w / 2), y1 = r1.y + Math.floor(r1.h / 2);
-            let x2 = r2.x + Math.floor(r2.w / 2), y2 = r2.y + Math.floor(r2.h / 2);
+            let x2 = r2.x + Math.floor(r2.w / 2), y2 = r2.y + Math.floor(r1.h / 2);
             for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) map[y1][x] = 0;
             for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) map[y][x2] = 0;
         }
@@ -1437,6 +1501,36 @@ function initMap() {
         // Mark initial player area as explored
         updateFogMap(p.x, p.y);
         
+        // Place special tiles based on theme (pond, quicksand, lava)
+        let specialPositions = [];
+        if (currentTheme !== 'dungeon') {
+            specialPositions = spawnItemWithChance(6, 0.5, 2, 5, true); // 50% chance, max 2 tiles
+            console.log(`Special tiles (${currentTheme}) placed:`, specialPositions);
+        }
+
+// Place garden gnome with true 10% chance, only if no conflict with special tiles
+let gnomePositions = [];
+console.log('Attempting gnome spawn: theme=', currentTheme, 'specialPositions=', specialPositions.length);
+if (
+    currentTheme === 'dungeon' || 
+    currentTheme === 'desert' || 
+    currentTheme === 'hell' || 
+    currentTheme === 'paradise' || 
+    specialPositions.length < 2
+) {
+    if (Math.random() < 0.2) { // 20% chance to spawn a gnome
+        gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
+        if (gnomePositions.length > 0) {
+            console.log(`Garden gnome placed at:`, gnomePositions);
+        } else {
+            console.log('Gnome spawn failed: no valid positions found');
+        }
+    } else {
+        console.log('Gnome spawn skipped: failed 10% chance check');
+    }
+} else {
+    console.log(`Garden gnome skipped to prioritize ${currentTheme} special tiles`);
+}
 
         // Place potions (existing code)
         let potionPositions = [];
@@ -1713,9 +1807,9 @@ async function fetchTxs() {
         apiTimeoutId = null;
     }
     try {
-        console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
+        console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
         if (initialSpawnDoneThisFloor) {
-            console.log(`Initial spawn done for floor ${floor}, checking for Whales or new wave`);
+            console.log(`Initial spawn done for floor ${floor}, checking for Whales`);
         } else {
             console.log(`Spawning enemies for floor ${floor}, ${enemiesSpawnedThisFloor}/10 spawned`);
         }
@@ -1763,63 +1857,57 @@ async function fetchTxs() {
             }
 
             // Handle initial spawn (up to 10 enemies, including Whales)
-            if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10) {
+            if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10 && enemies.length < 10) {
                 if (type.name !== 'Whale' && exit) {
                     console.log(`Exit exists at (${exit.x}, ${exit.y}), skipping non-Whale spawn for tx ${tx.txid}`);
                     continue;
                 }
                 console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
-                let x, y;
+                let x, y, attempts = 50;
+                const auraRadius = 2; // 5x5 grid
+                let validPosition = false;
                 do {
                     x = r.x + Math.floor(Math.random() * r.w);
                     y = r.y + Math.floor(Math.random() * r.h);
-                } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
+                    validPosition = (
+                        map[y][x] === 0 &&
+                        !(x === p.x && y === p.y) &&
+                        !enemies.some(e => e.x === x && e.y === y) &&
+                        Math.abs(x - p.x) > auraRadius &&
+                        Math.abs(y - p.y) > auraRadius
+                    );
+                    attempts--;
+                } while (attempts > 0 && !validPosition);
                 const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
-                enemies.push(newEnemy);
-                // Push enemy away from player (invisible aura)
-                const auraRadius = 2; // 5x5 grid
-                if (Math.abs(newEnemy.x - p.x) <= auraRadius && Math.abs(newEnemy.y - p.y) <= auraRadius) {
-                    let newX, newY, attempts = 50;
-                    const playerRoom = rooms.find(r => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) || rooms[0];
-                    while (attempts > 0) {
-                        newX = playerRoom.x + Math.floor(Math.random() * playerRoom.w);
-                        newY = playerRoom.y + Math.floor(Math.random() * playerRoom.h);
-                        if (
-                            map[newY][newX] === 0 &&
-                            (newX !== p.x || newY !== p.y) &&
-                            Math.abs(newX - p.x) > auraRadius &&
-                            Math.abs(newY - p.y) > auraRadius &&
-                            !enemies.some(e => e !== newEnemy && e.x === newX && e.y === newY)
-                        ) {
-                            newEnemy.x = newX;
-                            newEnemy.y = newY;
-                            break;
-                        }
-                        attempts--;
-                    }
-                    if (attempts === 0) {
-                        // Fallback: try any floor tile in any room
-                        for (let r of rooms) {
-                            for (let y = r.y; y < r.y + r.h; y++) {
-                                for (let x = r.x; x < r.x + r.w; x++) {
-                                    if (
-                                        map[y][x] === 0 &&
-                                        (x !== p.x || y !== p.y) &&
-                                        Math.abs(x - p.x) > auraRadius &&
-                                        Math.abs(y - p.y) > auraRadius &&
-                                        !enemies.some(e => e !== newEnemy && e.x === x && e.y === y)
-                                    ) {
-                                        newEnemy.x = x;
-                                        newEnemy.y = y;
-                                        break;
-                                    }
+                if (!validPosition) {
+                    // Fallback: try any floor tile in any room
+                    for (let r of rooms) {
+                        for (let y = r.y; y < r.y + r.h; y++) {
+                            for (let x = r.x; x < r.x + r.w; x++) {
+                                if (
+                                    map[y][x] === 0 &&
+                                    !(x === p.x && y === p.y) &&
+                                    Math.abs(x - p.x) > auraRadius &&
+                                    Math.abs(y - p.y) > auraRadius &&
+                                    !enemies.some(e => e.x === x && e.y === y)
+                                ) {
+                                    newEnemy.x = x;
+                                    newEnemy.y = y;
+                                    validPosition = true;
+                                    break;
                                 }
                             }
-                            if (newEnemy.x !== p.x || newEnemy.y !== p.y) break;
+                            if (validPosition) break;
                         }
+                        if (validPosition) break;
                     }
                 }
+                if (!validPosition) {
+                    console.log(`No valid spawn position found for tx ${tx.txid}, skipping`);
+                    continue;
+                }
+                enemies.push(newEnemy);
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 enemiesSpawnedThisFloor++;
@@ -1836,56 +1924,50 @@ async function fetchTxs() {
             } else if (type.name === 'Whale') {
                 console.log(`[WHALE SPAWN ATTEMPT] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
-                let x, y;
+                let x, y, attempts = 50;
+                const auraRadius = 2; // 5x5 grid
+                let validPosition = false;
                 do {
                     x = r.x + Math.floor(Math.random() * r.w);
                     y = r.y + Math.floor(Math.random() * r.h);
-                } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
-                const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
-                enemies.push(newEnemy);
-                // Push enemy away from player (invisible aura)
-                const auraRadius = 2; // 5x5 grid
-                if (Math.abs(newEnemy.x - p.x) <= auraRadius && Math.abs(newEnemy.y - p.y) <= auraRadius) {
-                    let newX, newY, attempts = 50;
-                    const playerRoom = rooms.find(r => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) || rooms[0];
-                    while (attempts > 0) {
-                        newX = playerRoom.x + Math.floor(Math.random() * playerRoom.w);
-                        newY = playerRoom.y + Math.floor(Math.random() * playerRoom.h);
-                        if (
-                            map[newY][newX] === 0 &&
-                            (newX !== p.x || newY !== p.y) &&
-                            Math.abs(newX - p.x) > auraRadius &&
-                            Math.abs(newY - p.y) > auraRadius &&
-                            !enemies.some(e => e !== newEnemy && e.x === newX && e.y === newY)
-                        ) {
-                            newEnemy.x = newX;
-                            newEnemy.y = newY;
-                            break;
-                        }
-                        attempts--;
-                    }
-                    if (attempts === 0) {
-                        // Fallback: try any floor tile in any room
-                        for (let r of rooms) {
-                            for (let y = r.y; y < r.y + r.h; y++) {
-                                for (let x = r.x; x < r.x + r.w; x++) {
-                                    if (
-                                        map[y][x] === 0 &&
-                                        (x !== p.x || y !== p.y) &&
-                                        Math.abs(x - p.x) > auraRadius &&
-                                        Math.abs(y - p.y) > auraRadius &&
-                                        !enemies.some(e => e !== newEnemy && e.x === x && e.y === y)
-                                    ) {
-                                        newEnemy.x = x;
-                                        newEnemy.y = y;
-                                        break;
-                                    }
+                    validPosition = (
+                        map[y][x] === 0 &&
+                        !(x === p.x && y === p.y) &&
+                        !enemies.some(e => e.x === x && e.y === y) &&
+                        Math.abs(x - p.x) > auraRadius &&
+                        Math.abs(y - p.y) > auraRadius
+                    );
+                    attempts--;
+                } while (attempts > 0 && !validPosition);
+                if (!validPosition) {
+                    // Fallback: try any floor tile in any room
+                    for (let r of rooms) {
+                        for (let y = r.y; y < r.y + r.h; y++) {
+                            for (let x = r.x; x < r.x + r.w; x++) {
+                                if (
+                                    map[y][x] === 0 &&
+                                    !(x === p.x && y === p.y) &&
+                                    Math.abs(x - p.x) > auraRadius &&
+                                    Math.abs(y - p.y) > auraRadius &&
+                                    !enemies.some(e => e.x === x && e.y === y)
+                                ) {
+                                    x = x;
+                                    y = y;
+                                    validPosition = true;
+                                    break;
                                 }
                             }
-                            if (newEnemy.x !== p.x || newEnemy.y !== p.y) break;
+                            if (validPosition) break;
                         }
+                        if (validPosition) break;
                     }
                 }
+                if (!validPosition) {
+                    console.log(`No valid spawn position found for Whale tx ${tx.txid}, skipping`);
+                    continue;
+                }
+                const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
+                enemies.push(newEnemy);
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
@@ -1962,6 +2044,48 @@ function move(dir) {
             p.potions++; 
             map[ny][nx] = 0; 
             playWebAudioSound(sounds.pickup);
+        }
+if (map[ny][nx] === 6) {
+    if (currentTheme === 'paradise') {
+        if (p.hp <= 36) {
+            const oldHP = p.hp;
+            p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
+            logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
+            playWebAudioSound(sounds.pickup);
+        }
+        // If p.hp > 36, do nothing and continue
+    } else if (currentTheme === 'desert') {
+                p.hp = Math.max(0, p.hp - 2);
+                logBattleEvent(`Floor ${floor} - Quicksand: -2 HP (now ${p.hp})`);
+                playWebAudioSound(sounds.hit);
+                if (p.hp <= 0) {
+                    p.hp = 0;
+                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                    gameOver = true;
+                    console.log(`Game Over: p.hp=${p.hp} due to quicksand`);
+                }
+            } else if (currentTheme === 'hell') {
+                p.hp = Math.max(0, p.hp - 8);
+                logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
+                playWebAudioSound(sounds.hit);
+                if (p.hp <= 0) {
+                    p.hp = 0;
+                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                    gameOver = true;
+                    console.log(`Game Over: p.hp=${p.hp} due to lava`);
+                }
+            }
+            updatePlayerState();
+        }
+        if (map[ny][nx] === 7) {
+            const healthGain = p.potions * 12;
+            p.maxHP += healthGain;
+            p.hp += healthGain;
+            logBattleEvent(`Floor ${floor} - Gnome: Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
+            p.potions = 0;
+            map[ny][nx] = 0;
+            playWebAudioSound(sounds.pickup);
+            updatePlayerState();
         }
         if (map[ny][nx] === 3) {
             const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
@@ -2117,8 +2241,9 @@ function updateProjectiles() {
         // Check for first enemy hit and deal damage
         let hit = enemies.find(e => e.x === nx && e.y === ny);
         if (hit) {
-            hit.hp -= 2;
-            logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! 2 DMG`);
+            const damage = Math.floor(p.atk * 0.5) + (p.hasArmor ? 1 : 0); // Half player attack, +1 with armor
+            hit.hp -= damage;
+            logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (HP: ${hit.hp})`);
             playWebAudioSound(sounds.hit);
             if (hit.hp <= 0) {
                 kills[hit.type.name]++;
@@ -2149,7 +2274,7 @@ function updateProjectiles() {
                     }
                 }
                 if (!dropPlaced) {
-                    // No space for drop
+                    console.log(`No space to place drop for ${hit.type.name} at (${hit.x}, ${hit.y})`);
                 }
                 enemies = enemies.filter(en => en !== hit);
                 if (exit && enemies.length === 0) {
@@ -2198,7 +2323,10 @@ function attack() {
         usePickaxeSword = initialPickaxes > 0;
         let hit = enemies.find(e => e.x === sx && e.y === sy);
         if (hit) {
-            hit.hp -= p.atk;
+            const damage = p.atk + (p.hasArmor ? 1 : 0); // Bonus damage with armor
+            hit.hp -= damage;
+            logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
+            playWebAudioSound(sounds.hit);
             if (hit.hp <= 0) {
                 kills[hit.type.name]++;
                 let dropPlaced = false;
@@ -2228,7 +2356,7 @@ function attack() {
                     }
                 }
                 if (!dropPlaced) {
-                    // No space for drop
+                    console.log(`No space to place drop for ${hit.type.name} at (${hit.x}, ${hit.y})`);
                 }
                 enemies = enemies.filter(e => e !== hit);
                 if (exit && enemies.length === 0) {
@@ -2279,6 +2407,14 @@ function usePotion() {
 function restart() {
     console.log('Restarting game');
     floor = 1;
+    currentTheme = 'dungeon'; // Reset to default theme
+    p.maxHP = 24; // Reset max HP to default
+    document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
+    document.documentElement.style.setProperty('--text-shadow', '-1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000'); // Reset outlined font
+    // Force re-render of text color
+    document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator').forEach(el => {
+        el.style.color = '#ff8c00';
+    });
     wave = 1;
     p.hp = 24;
     p.potions = 0;
@@ -2377,18 +2513,20 @@ function draw() {
     const radius = 4;
     // Draw walls first
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        if (map[y][x] === 1) c.drawImage(assets.wall, x * S, y * S, S, S);
+        if (map[y][x] === 1) c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
     }
     // Draw floors, items, and stairs
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
         const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
         if (isVisible && map[y][x] !== 1) {
-            c.drawImage(assets.floor, x * S, y * S, S, S);
+            c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
             if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
             if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
             if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
             if (map[y][x] === 5) c.drawImage(assets.armor, x * S, y * S, S, S);
+            if (map[y][x] === 6 && currentTheme !== 'dungeon') c.drawImage(assets.themes[currentTheme].special, x * S, y * S, S, S);
+            if (map[y][x] === 7) c.drawImage(assets.gnome, x * S, y * S, S, S);
             if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
@@ -2450,10 +2588,39 @@ function draw() {
             c.fillRect(x * S, y * S, S, S);
         }
     }
-    // Draw enemies
+    // Draw enemies with theme-based color overlays, preserving transparent backgrounds
     enemies.forEach(e => {
         if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
-            c.drawImage(e.type.img, e.x * S, e.y * S, S, S);
+            const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
+            const isVisible = fogMap[e.y][e.x] === 1 || dist <= radius;
+            c.save();
+            // Create a temporary canvas to handle tinting without affecting transparent areas
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = S;
+            tempCanvas.height = S;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(e.type.img, 0, 0, S, S);
+            if (isVisible && currentTheme !== 'dungeon') {
+                // Apply tint only to non-transparent pixels
+                let tintColor;
+                switch (currentTheme) {
+                    case 'hell':
+                        tintColor = 'rgba(255, 0, 0, 0.3)'; // Transparent red
+                        break;
+                    case 'desert':
+                        tintColor = 'rgba(245, 245, 220, 0.3)'; // Transparent bone
+                        break;
+                    case 'paradise':
+                        tintColor = 'rgba(128, 0, 128, 0.3)'; // Transparent poison purple
+                        break;
+                }
+                tempCtx.globalCompositeOperation = 'source-atop';
+                tempCtx.fillStyle = tintColor;
+                tempCtx.fillRect(0, 0, S, S);
+            }
+            // Draw the enemy (tinted if visible, normal if in fog)
+            c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
+            c.restore();
         }
     });
 // Draw low-health warning border
