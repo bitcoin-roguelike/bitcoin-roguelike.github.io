@@ -1007,6 +1007,7 @@ let swordDir = 'right', swordActive = false, swordStart = 0;
 let gameOverSoundPlayed = false;
 let fogMap = [];
 let battleLogTimeout = null;
+let projectiles = [];
         const types = [
             {name: 'Shrimp', min: 0, max: 0.01, img: new Image(), hp: 1, atk: 1, reward: 0, move: 1},
             {name: 'Crab', min: 0.01, max: 0.1, img: new Image(), hp: 2, atk: 2, reward: 0, move: 1},
@@ -1027,7 +1028,8 @@ const assets = {
     pickaxe: new Image(), // New pickaxe asset
     armor: new Image(),   // New armor asset
     player_armor: new Image(), // New armored player sprite
-    pickaxe_sword: new Image() // New pickaxe-sword asset
+    pickaxe_sword: new Image(), // New pickaxe-sword asset
+    shoot_sword: new Image()
 };
         types[0].img.src = 'shrimp.png';
         types[1].img.src = 'crab.png';
@@ -1046,6 +1048,7 @@ const assets = {
         assets.bitcoin.src = 'bitcoin.png';
         assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
         assets.pickaxe_sword.src = 'pickaxe-sword.png'; // New asset source
+        assets.shoot_sword.src = 'shoot_sword.png';
         Object.values(assets).forEach(asset => {
     asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
 });
@@ -1061,7 +1064,8 @@ const sounds = {
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
-    secret: new Audio('secret.wav') // New secret sound for wall-breaking
+    secret: new Audio('secret.wav'), // New secret sound for wall-breaking
+    shoot_sword: new Audio('shoot_sword.wav')
 };
 
 sounds.music.loop = true;
@@ -1726,7 +1730,6 @@ async function fetchTxs() {
         }
         let enemyCount = 0;
         const processedTxids = new Set();
-        // Changed to console.warn for visibility
         console.warn(`[WHALE ATTEMPT] Checking ${res.data.length} transactions for Whale spawns (> 100 BTC)`);
         for (const tx of res.data.slice(0, 10)) {
             if (processedTxids.has(tx.txid)) continue;
@@ -1772,7 +1775,51 @@ async function fetchTxs() {
                     x = r.x + Math.floor(Math.random() * r.w);
                     y = r.y + Math.floor(Math.random() * r.h);
                 } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
-                enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
+                const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
+                enemies.push(newEnemy);
+                // Push enemy away from player (invisible aura)
+                const auraRadius = 2; // 5x5 grid
+                if (Math.abs(newEnemy.x - p.x) <= auraRadius && Math.abs(newEnemy.y - p.y) <= auraRadius) {
+                    let newX, newY, attempts = 50;
+                    const playerRoom = rooms.find(r => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) || rooms[0];
+                    while (attempts > 0) {
+                        newX = playerRoom.x + Math.floor(Math.random() * playerRoom.w);
+                        newY = playerRoom.y + Math.floor(Math.random() * playerRoom.h);
+                        if (
+                            map[newY][newX] === 0 &&
+                            (newX !== p.x || newY !== p.y) &&
+                            Math.abs(newX - p.x) > auraRadius &&
+                            Math.abs(newY - p.y) > auraRadius &&
+                            !enemies.some(e => e !== newEnemy && e.x === newX && e.y === newY)
+                        ) {
+                            newEnemy.x = newX;
+                            newEnemy.y = newY;
+                            break;
+                        }
+                        attempts--;
+                    }
+                    if (attempts === 0) {
+                        // Fallback: try any floor tile in any room
+                        for (let r of rooms) {
+                            for (let y = r.y; y < r.y + r.h; y++) {
+                                for (let x = r.x; x < r.x + r.w; x++) {
+                                    if (
+                                        map[y][x] === 0 &&
+                                        (x !== p.x || y !== p.y) &&
+                                        Math.abs(x - p.x) > auraRadius &&
+                                        Math.abs(y - p.y) > auraRadius &&
+                                        !enemies.some(e => e !== newEnemy && e.x === x && e.y === y)
+                                    ) {
+                                        newEnemy.x = x;
+                                        newEnemy.y = y;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (newEnemy.x !== p.x || newEnemy.y !== p.y) break;
+                        }
+                    }
+                }
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 enemiesSpawnedThisFloor++;
@@ -1794,7 +1841,51 @@ async function fetchTxs() {
                     x = r.x + Math.floor(Math.random() * r.w);
                     y = r.y + Math.floor(Math.random() * r.h);
                 } while (map[y][x] !== 0 || (x === p.x && y === p.y) || enemies.some(e => e.x === x && e.y === y));
-                enemies.push({ x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) });
+                const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
+                enemies.push(newEnemy);
+                // Push enemy away from player (invisible aura)
+                const auraRadius = 2; // 5x5 grid
+                if (Math.abs(newEnemy.x - p.x) <= auraRadius && Math.abs(newEnemy.y - p.y) <= auraRadius) {
+                    let newX, newY, attempts = 50;
+                    const playerRoom = rooms.find(r => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) || rooms[0];
+                    while (attempts > 0) {
+                        newX = playerRoom.x + Math.floor(Math.random() * playerRoom.w);
+                        newY = playerRoom.y + Math.floor(Math.random() * playerRoom.h);
+                        if (
+                            map[newY][newX] === 0 &&
+                            (newX !== p.x || newY !== p.y) &&
+                            Math.abs(newX - p.x) > auraRadius &&
+                            Math.abs(newY - p.y) > auraRadius &&
+                            !enemies.some(e => e !== newEnemy && e.x === newX && e.y === newY)
+                        ) {
+                            newEnemy.x = newX;
+                            newEnemy.y = newY;
+                            break;
+                        }
+                        attempts--;
+                    }
+                    if (attempts === 0) {
+                        // Fallback: try any floor tile in any room
+                        for (let r of rooms) {
+                            for (let y = r.y; y < r.y + r.h; y++) {
+                                for (let x = r.x; x < r.x + r.w; x++) {
+                                    if (
+                                        map[y][x] === 0 &&
+                                        (x !== p.x || y !== p.y) &&
+                                        Math.abs(x - p.x) > auraRadius &&
+                                        Math.abs(y - p.y) > auraRadius &&
+                                        !enemies.some(e => e !== newEnemy && e.x === x && e.y === y)
+                                    ) {
+                                        newEnemy.x = x;
+                                        newEnemy.y = y;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (newEnemy.x !== p.x || newEnemy.y !== p.y) break;
+                        }
+                    }
+                }
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
@@ -1998,6 +2089,86 @@ function moveEnemies() {
     needsRedraw = true;
 }
 
+function updateProjectiles() {
+    if (gameOver || splashActive) return;
+    projectiles = projectiles.filter(proj => {
+        // Only move every 50ms
+        if (Date.now() - proj.lastMoveTime < 50) return true;
+        
+        // Calculate next position
+        let nx = proj.x, ny = proj.y;
+        if (proj.dir === 'up') ny--;
+        if (proj.dir === 'down') ny++;
+        if (proj.dir === 'left') nx--;
+        if (proj.dir === 'right') nx++;
+        
+        // Check bounds
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
+            needsRedraw = true;
+            return false;
+        }
+        
+        // Check for wall hit before moving
+        if (map[ny][nx] === 1) {
+            needsRedraw = true;
+            return false;
+        }
+        
+        // Check for first enemy hit and deal damage
+        let hit = enemies.find(e => e.x === nx && e.y === ny);
+        if (hit) {
+            hit.hp -= 2;
+            logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! 2 DMG`);
+            playWebAudioSound(sounds.hit);
+            if (hit.hp <= 0) {
+                kills[hit.type.name]++;
+                let dropPlaced = false;
+                if (map[hit.y][hit.x] === 0) {
+                    map[hit.y][hit.x] = 3;
+                    satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                    dropPlaced = true;
+                } else {
+                    const adjacent = [
+                        {x: hit.x, y: hit.y - 1},
+                        {x: hit.x, y: hit.y + 1},
+                        {x: hit.x - 1, y: hit.y},
+                        {x: hit.x + 1, y: hit.y}
+                    ];
+                    for (const pos of adjacent) {
+                        const nx = pos.x, ny = pos.y;
+                        if (
+                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                            map[ny][nx] === 0 &&
+                            !enemies.some(en => en.x === nx && en.y === ny)
+                        ) {
+                            map[ny][nx] = 3;
+                            satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                            dropPlaced = true;
+                            break;
+                        }
+                    }
+                }
+                if (!dropPlaced) {
+                    // No space for drop
+                }
+                enemies = enemies.filter(en => en !== hit);
+                if (exit && enemies.length === 0) {
+                    updateSatsDisplay();
+                }
+            }
+            needsRedraw = true;
+            return false; // Destroy projectile on enemy hit
+        }
+        
+        // Update projectile position and move time
+        proj.x = nx;
+        proj.y = ny;
+        proj.lastMoveTime = Date.now();
+        needsRedraw = true;
+        return true;
+    });
+}
+
 let usePickaxeSword = false; // Global flag for draw
 
 function attack() {
@@ -2005,84 +2176,85 @@ function attack() {
     swordActive = true;
     swordStart = Date.now();
     sounds.attack.play().catch(e => console.error('Attack sound error:', e));
-    // Update player direction to match swordDir
+    // Update player direction
     let newDirection = p.anim.direction;
     if (swordDir === 'up') newDirection = 'back';
     if (swordDir === 'down') newDirection = 'front';
     if (swordDir === 'left') newDirection = 'left';
     if (swordDir === 'right') newDirection = 'right';
     p.anim.direction = newDirection;
-    const initialPickaxes = p.pickaxes; // Store initial pickaxe count
-    usePickaxeSword = initialPickaxes > 0; // Set flag for animation
-    let hit = enemies.find(e => {
-        let sx = p.x, sy = p.y;
-        if (swordDir === 'up') sy--;
-        if (swordDir === 'down') sy++;
-        if (swordDir === 'left') sx--;
-        if (swordDir === 'right') sx++;
-        return e.x === sx && e.y === sy;
-    });
-    if (hit) {
-        hit.hp -= p.atk;
-        if (hit.hp <= 0) {
-            kills[hit.type.name]++;
-            let dropPlaced = false;
-            if (map[hit.y][hit.x] === 0) {
-                map[hit.y][hit.x] = 3;
-                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                dropPlaced = true;
-            } else {
-                const adjacent = [
-                    {x: hit.x, y: hit.y - 1},
-                    {x: hit.x, y: hit.y + 1},
-                    {x: hit.x - 1, y: hit.y},
-                    {x: hit.x + 1, y: hit.y}
-                ];
-                for (const pos of adjacent) {
-                    const nx = pos.x, ny = pos.y;
-                    if (
-                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                        map[ny][nx] === 0 &&
-                        !enemies.some(e => e.x === nx && e.y === ny)
-                    ) {
-                        map[ny][nx] = 3;
-                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                        dropPlaced = true;
-                        console.log(`Placed satoshi drop at adjacent tile (${nx}, ${ny})`);
-                        break;
+    const initialPickaxes = p.pickaxes;
+    
+    // Check for enemy or wall one tile away in swordDir
+    let sx = p.x, sy = p.y;
+    if (swordDir === 'up') sy--;
+    if (swordDir === 'down') sy++;
+    if (swordDir === 'left') sx--;
+    if (swordDir === 'right') sx++;
+    const isEnemyNearby = enemies.some(e => e.x === sx && e.y === sy);
+    const isWallNearby = sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1;
+    
+    if (initialPickaxes > 0 || isEnemyNearby || isWallNearby) {
+        usePickaxeSword = initialPickaxes > 0;
+        let hit = enemies.find(e => e.x === sx && e.y === sy);
+        if (hit) {
+            hit.hp -= p.atk;
+            if (hit.hp <= 0) {
+                kills[hit.type.name]++;
+                let dropPlaced = false;
+                if (map[hit.y][hit.x] === 0) {
+                    map[hit.y][hit.x] = 3;
+                    satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                    dropPlaced = true;
+                } else {
+                    const adjacent = [
+                        {x: hit.x, y: hit.y - 1},
+                        {x: hit.x, y: hit.y + 1},
+                        {x: hit.x - 1, y: hit.y},
+                        {x: hit.x + 1, y: hit.y}
+                    ];
+                    for (const pos of adjacent) {
+                        const nx = pos.x, ny = pos.y;
+                        if (
+                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                            map[ny][nx] === 0 &&
+                            !enemies.some(e => e.x === nx && e.y === ny)
+                        ) {
+                            map[ny][nx] = 3;
+                            satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                            dropPlaced = true;
+                            break;
+                        }
                     }
                 }
+                if (!dropPlaced) {
+                    // No space for drop
+                }
+                enemies = enemies.filter(e => e !== hit);
+                if (exit && enemies.length === 0) {
+                    updateSatsDisplay();
+                }
             }
-            if (!dropPlaced) {
-                console.log(`No empty adjacent tile found for satoshi drop at (${hit.x}, ${hit.y})`);
-            }
-            enemies = enemies.filter(e => e !== hit);
-            if (exit && enemies.length === 0) {
-                updateSatsDisplay(); // Update only when all enemies are cleared
-            }
-        }
-    } else if (initialPickaxes > 0) {
-        // Check for wall hit
-        let sx = p.x, sy = p.y;
-        if (swordDir === 'up') sy--;
-        if (swordDir === 'down') sy++;
-        if (swordDir === 'left') sx--;
-        if (swordDir === 'right') sx++;
-        if (sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1) {
-            usePickaxeSword = true; // Ensure pickaxe-sword animation
-            p.pickaxes--; // Consume pickaxe
+        } else if (initialPickaxes > 0 && isWallNearby) {
+            p.pickaxes--;
             sounds.secret.play().catch(e => console.error('Secret sound error:', e));
             logBattleEvent(`Floor ${floor} - Wall Broken!`);
             createSecretRoom(sx, sy, p.x, p.y, swordDir);
-        } else {
-            usePickaxeSword = true; // Show pickaxe-sword for air swings
+        }
+    } else if (p.hp >= 24 && projectiles.length === 0) {
+        let sx = p.x, sy = p.y; // Start at player's position
+        if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
+            projectiles.push({ x: sx, y: sy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
+            sounds.shoot_sword.pause();
+            sounds.shoot_sword.currentTime = 0;
+            sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
         }
     }
     moveEnemies();
     needsRedraw = true;
     setTimeout(() => {
         swordActive = false;
-        usePickaxeSword = false; // Clear flag after animation
+        usePickaxeSword = false;
         needsRedraw = true;
     }, 200);
 }
@@ -2136,7 +2308,8 @@ function restart() {
     swordActive = false;
     swordStart = 0;
     fogMap = [];
-    scoreSubmitted = false; // Reset submission flag
+    scoreSubmitted = false;
+    projectiles = []; // Reset projectiles
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = '';
@@ -2153,8 +2326,8 @@ function restart() {
     document.getElementById('username-input').value = '';
     document.getElementById('leaderboard-output').textContent = '';
     document.getElementById('leaderboard-output').style.display = 'none';
-    document.getElementById('submit-score').disabled = false; // Re-enable button
-    document.getElementById('submit-score').style.background = '#ff8c00'; // Restore button color
+    document.getElementById('submit-score').disabled = false;
+    document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
     const battleEvents = document.getElementById('battle-events');
     battleEvents.style.transform = 'translateX(-100%)';
@@ -2184,21 +2357,21 @@ function draw() {
     }
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
-if (gameOver) {
-    const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
-    gameOverCanvas.clearRect(0, 0, 320, 320);
-    gameOverCanvas.fillStyle = '#000';
-    gameOverCanvas.fillRect(0, 0, 320, 320);
-    const scale = window.innerWidth <= 700 ? 1.5 : 2;
-    const gw = 128 * scale, gh = 32 * scale;
-    const offsetY = (Math.sin(Date.now() / 500) * 10);
-    gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh) / 2 + offsetY, gw, gh);
-    document.getElementById('game-over').style.display = 'block';
-    document.getElementById('submit-score').style.display = 'block';
-    document.getElementById('view-leaderboard').style.display = 'block';
-    document.getElementById('restart-game').style.display = 'block';
-    return;
-}
+    if (gameOver) {
+        const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
+        gameOverCanvas.clearRect(0, 0, 320, 320);
+        gameOverCanvas.fillStyle = '#000';
+        gameOverCanvas.fillRect(0, 0, 320, 320);
+        const scale = window.innerWidth <= 700 ? 1.5 : 2;
+        const gw = 128 * scale, gh = 32 * scale;
+        const offsetY = (Math.sin(Date.now() / 500) * 10);
+        gameOverCanvas.drawImage(assets.gameOver, (320 - gw) / 2, (320 - gh) / 2 + offsetY, gw, gh);
+        document.getElementById('game-over').style.display = 'block';
+        document.getElementById('submit-score').style.display = 'block';
+        document.getElementById('view-leaderboard').style.display = 'block';
+        document.getElementById('restart-game').style.display = 'block';
+        return;
+    }
     if (splashActive) { needsRedraw = false; return; }
 
     const radius = 4;
@@ -2219,27 +2392,40 @@ if (gameOver) {
             if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
-// Draw player
-if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
-    const now = performance.now();
-    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2; // Cycle frames
-        p.anim.lastFrameTime = now;
+    // Draw projectiles, skipping player's position
+    projectiles.forEach(proj => {
+        if (proj.x >= 0 && proj.x < W && proj.y >= 0 && proj.y < H && 
+            (proj.x !== p.x || proj.y !== p.y)) {
+            c.save();
+            c.translate(proj.x * S + S / 2, proj.y * S + S / 2);
+            if (proj.dir === 'up') c.rotate(-Math.PI / 2);
+            if (proj.dir === 'down') c.rotate(Math.PI / 2);
+            if (proj.dir === 'left') c.rotate(Math.PI);
+            c.drawImage(assets.shoot_sword, -S / 2, -S / 2, S, S);
+            c.restore();
+        }
+    });
+    // Draw player
+    if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
+        const now = performance.now();
+        if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+            p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+            p.anim.lastFrameTime = now;
+        }
+        const direction = p.anim.direction;
+        const baseDirection = direction === 'left' ? 'right' : direction;
+        const frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
+        const frame = p.anim.frames[frameKey][p.anim.frameIndex];
+        c.save();
+        if (direction === 'left') {
+            c.translate((p.x + 1) * S, p.y * S);
+            c.scale(-1, 1);
+            c.drawImage(frame, 0, 0, S, S);
+        } else {
+            c.drawImage(frame, p.x * S, p.y * S, S, S);
+        }
+        c.restore();
     }
-    const direction = p.anim.direction;
-    const baseDirection = direction === 'left' ? 'right' : direction; // Use right frames for left
-    const frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
-    const frame = p.anim.frames[frameKey][p.anim.frameIndex];
-    c.save();
-    if (direction === 'left') {
-        c.translate((p.x + 1) * S, p.y * S);
-        c.scale(-1, 1); // Mirror horizontally
-        c.drawImage(frame, 0, 0, S, S);
-    } else {
-        c.drawImage(frame, p.x * S, p.y * S, S, S);
-    }
-    c.restore();
-}
     // Draw sword or pickaxe-sword
     if (swordActive && Date.now() - swordStart < 200) {
         let sx = p.x, sy = p.y;
@@ -2270,6 +2456,41 @@ if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
             c.drawImage(e.type.img, e.x * S, e.y * S, S, S);
         }
     });
+// Draw low-health warning border
+if (p.hp <= 4 && !gameOver && !splashActive) {
+    const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Smoother pulse
+    c.strokeStyle = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
+    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
+    c.beginPath();
+    // Top border
+    c.moveTo(0, 0);
+    c.lineTo(W * S, 0);
+    // Right border
+    c.moveTo(W * S, 0);
+    c.lineTo(W * S, H * S);
+    // Bottom border
+    c.moveTo(W * S, H * S);
+    c.lineTo(0, H * S);
+    // Left border
+    c.moveTo(0, H * S);
+    c.lineTo(0, 0);
+    c.stroke();
+} else if (p.hp > 4 && p.hp < 9 && !gameOver && !splashActive) {
+    const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Same pulsing effect
+    c.strokeStyle = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 13
+    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5);
+    c.beginPath();
+    // Draw the same border as above
+    c.moveTo(0, 0);
+    c.lineTo(W * S, 0);
+    c.moveTo(W * S, 0);
+    c.lineTo(W * S, H * S);
+    c.moveTo(W * S, H * S);
+    c.lineTo(0, H * S);
+    c.moveTo(0, H * S);
+    c.lineTo(0, 0);
+    c.stroke();
+}
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
@@ -2287,12 +2508,13 @@ function gameLoop(timestamp) {
         sounds.music.currentTime = 0;
         if (!gameOverSoundPlayed) {
             sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
-            gameOverSoundPlayed = true; // Mark sound as played
+            gameOverSoundPlayed = true;
         }
         document.getElementById('health').textContent = 0;
         needsRedraw = true;
     }
-    if (needsRedraw && !splashActive) draw();
+    updateProjectiles();
+    if ((needsRedraw || p.hp <= 8) && !splashActive) draw();
     if (p.hp <= 0 && !gameOver) {
         p.hp = 0;
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
@@ -2377,3 +2599,4 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
+
