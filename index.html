@@ -1909,7 +1909,7 @@ if (
     currentTheme === 'paradise' || 
     specialPositions.length < 2
 ) {
-    if (Math.random() < 1) { // 10% chance to spawn a gnome
+    if (Math.random() < 0.1) { // 10% chance to spawn a gnome
         gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
         if (gnomePositions.length > 0) {
             console.log(`Garden gnome placed at:`, gnomePositions);
