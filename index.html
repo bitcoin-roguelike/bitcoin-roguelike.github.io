@@ -3098,16 +3098,21 @@ function gameLoop(timestamp) {
         initMap();
         needsRedraw = true;
     }
-    if (gameOver) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
-        if (!gameOverSoundPlayed) {
-            sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
-            gameOverSoundPlayed = true;
-        }
-        document.getElementById('health').textContent = 0;
-        needsRedraw = true;
+if (gameOver) {
+    sounds.music.pause();
+    sounds.music.currentTime = 0;
+    if (!gameOverSoundPlayed) {
+        sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
+        gameOverSoundPlayed = true;
     }
+    document.getElementById('health').textContent = 0;
+    // Reset text color to Bitcoin orange for game-over screen
+    document.documentElement.style.setProperty('--text-color', '#ff8c00');
+    document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input').forEach(el => {
+        el.style.color = '#ff8c00';
+    });
+    needsRedraw = true;
+}
     updateProjectiles();
     if ((needsRedraw || p.hp <= 8) && !splashActive) draw();
     if (p.hp <= 0 && !gameOver) {
