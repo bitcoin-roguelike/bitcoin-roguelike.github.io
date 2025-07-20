@@ -1019,14 +1019,98 @@ let gameOverSoundPlayed = false;
 let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
-        const types = [
-            {name: 'Shrimp', min: 0, max: 0.01, img: new Image(), hp: 1, atk: 1, reward: 0, move: 1},
-            {name: 'Crab', min: 0.01, max: 0.1, img: new Image(), hp: 2, atk: 2, reward: 0, move: 1},
-            {name: 'Squid', min: 0.1, max: 1, img: new Image(), hp: 3, atk: 2, reward: 0, move: 2},
-            {name: 'Dolphin', min: 1, max: 10, img: new Image(), hp: 4, atk: 3, reward: 0, move: 2},
-            {name: 'Shark', min: 10, max: 100, img: new Image(), hp: 5, atk: 5, reward: 0, move: 2},
-            {name: 'Whale', min: 100, max: Infinity, img: new Image(), hp: 6, atk: 4, reward: 0, move: 2}
-        ];
+    const types = [
+        {
+            name: 'Shrimp',
+            min: 0,
+            max: 0.01,
+            anim: {
+                frames: [new Image(), new Image(), new Image()],
+                frameIndex: 0,
+                lastFrameTime: 0,
+                frameDuration: 200
+            },
+            hp: 1,
+            atk: 1,
+            reward: 0,
+            move: 1
+        },
+        {
+            name: 'Crab',
+            min: 0.01,
+            max: 0.1,
+            anim: {
+                frames: [new Image(), new Image(), new Image()],
+                frameIndex: 0,
+                lastFrameTime: 0,
+                frameDuration: 200
+            },
+            hp: 2,
+            atk: 2,
+            reward: 0,
+            move: 1
+        },
+        {
+            name: 'Squid',
+            min: 0.1,
+            max: 1,
+            anim: {
+                frames: [new Image(), new Image(), new Image()],
+                frameIndex: 0,
+                lastFrameTime: 0,
+                frameDuration: 200
+            },
+            hp: 3,
+            atk: 2,
+            reward: 0,
+            move: 2
+        },
+        {
+            name: 'Dolphin',
+            min: 1,
+            max: 10,
+            anim: {
+                frames: [new Image(), new Image(), new Image()],
+                frameIndex: 0,
+                lastFrameTime: 0,
+                frameDuration: 200
+            },
+            hp: 4,
+            atk: 3,
+            reward: 0,
+            move: 2
+        },
+        {
+            name: 'Shark',
+            min: 10,
+            max: 100,
+            anim: {
+                frames: [new Image(), new Image(), new Image()],
+                frameIndex: 0,
+                lastFrameTime: 0,
+                frameDuration: 200
+            },
+            hp: 5,
+            atk: 5,
+            reward: 0,
+            move: 2
+        },
+        {
+            name: 'Whale',
+            min: 100,
+            max: Infinity,
+            anim: {
+                frames: [new Image(), new Image(), new Image()],
+                frameIndex: 0,
+                lastFrameTime: 0,
+                frameDuration: 200
+            },
+            hp: 6,
+            atk: 4,
+            reward: 0,
+            move: 2
+        }
+    ];
 const assets = {
     themes: {
         dungeon: { floor: new Image(), wall: new Image() },
@@ -1047,12 +1131,39 @@ const assets = {
     shoot_sword: new Image(),
     gnome: new Image()
 };
-        types[0].img.src = 'shrimp.png';
-        types[1].img.src = 'crab.png';
-        types[2].img.src = 'squid.png';
-        types[3].img.src = 'dolphin.png';
-        types[4].img.src = 'shark.png';
-        types[5].img.src = 'whale.png';
+        types[0].anim.frames[0].src = 'shrimp_1.png';
+	types[0].anim.frames[1].src = 'shrimp_2.png';
+	types[0].anim.frames[2].src = 'shrimp_3.png';
+    	types[1].anim.frames[0].src = 'crab_1.png';
+    	types[1].anim.frames[1].src = 'crab_2.png';
+    	types[1].anim.frames[2].src = 'crab_3.png';
+    	types[2].anim.frames[0].src = 'squid_1.png';
+    	types[2].anim.frames[1].src = 'squid_2.png';
+    	types[2].anim.frames[2].src = 'squid_3.png';
+    	types[3].anim.frames[0].src = 'dolphin_1.png';
+    	types[3].anim.frames[1].src = 'dolphin_2.png';
+    	types[3].anim.frames[2].src = 'dolphin_3.png';
+    	types[4].anim.frames[0].src = 'shark_1.png';
+    	types[4].anim.frames[1].src = 'shark_2.png';
+    	types[4].anim.frames[2].src = 'shark_3.png';
+    	types[5].anim.frames[0].src = 'whale_1.png';
+    	types[5].anim.frames[1].src = 'whale_2.png';
+    	types[5].anim.frames[2].src = 'whale_3.png';
+
+    Object.values(assets).forEach(asset => {
+        if (asset instanceof Image) {
+            asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
+        } else if (typeof asset === 'object') {
+            Object.values(asset).forEach(subAsset => {
+                subAsset.onerror = () => console.error(`Failed to load asset: ${subAsset.src}`);
+            });
+        }
+    });
+    types.forEach(t => {
+        t.anim.frames.forEach((frame, i) => {
+            frame.onerror = () => console.error(`Failed to load sprite frame ${i} for ${t.name}: ${frame.src}`);
+        });
+    });
         assets.themes.dungeon.floor.src = 'floor.png';
         assets.themes.dungeon.wall.src = 'wall.png';
         assets.themes.desert.floor.src = 'sand_floor.png';
@@ -1075,16 +1186,24 @@ const assets = {
         assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
         assets.pickaxe_sword.src = 'pickaxe-sword.png';
         assets.shoot_sword.src = 'shoot_sword.png';
-        Object.values(assets).forEach(asset => {
-            if (asset instanceof Image) {
-                asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
-            } else if (typeof asset === 'object') {
-                Object.values(asset).forEach(subAsset => {
-                    subAsset.onerror = () => console.error(`Failed to load asset: ${subAsset.src}`);
-                });
-            }
+Object.values(assets).forEach(asset => {
+    if (asset instanceof Image) {
+        asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
+    } else if (typeof asset === 'object') {
+        Object.values(asset).forEach(subAsset => {
+            subAsset.onerror = () => console.error(`Failed to load asset: ${subAsset.src}`);
         });
-        types.forEach(t => { t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`); });
+    }
+});
+types.forEach(t => {
+    if (t.img) {
+        t.img.onerror = () => console.error(`Failed to load sprite: ${t.img.src}`);
+    } else if (t.anim) {
+        t.anim.frames.forEach((frame, i) => {
+            frame.onerror = () => console.error(`Failed to load sprite frame ${i} for ${t.name}: ${frame.src}`);
+        });
+    }
+});
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioContext();
@@ -2596,41 +2715,55 @@ function draw() {
             c.fillRect(x * S, y * S, S, S);
         }
     }
-    // Draw enemies with theme-based color overlays, preserving transparent backgrounds
-    enemies.forEach(e => {
-        if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
-            const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
-            const isVisible = fogMap[e.y][e.x] === 1 || dist <= radius;
-            c.save();
-            // Create a temporary canvas to handle tinting without affecting transparent areas
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = S;
-            tempCanvas.height = S;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(e.type.img, 0, 0, S, S);
-            if (isVisible && currentTheme !== 'dungeon') {
-                // Apply tint only to non-transparent pixels
-                let tintColor;
-                switch (currentTheme) {
-                    case 'hell':
-                        tintColor = 'rgba(255, 0, 0, 0.3)'; // Transparent red
-                        break;
-                    case 'desert':
-                        tintColor = 'rgba(245, 245, 220, 0.3)'; // Transparent bone
-                        break;
-                    case 'paradise':
-                        tintColor = 'rgba(128, 0, 128, 0.3)'; // Transparent poison purple
-                        break;
-                }
-                tempCtx.globalCompositeOperation = 'source-atop';
-                tempCtx.fillStyle = tintColor;
-                tempCtx.fillRect(0, 0, S, S);
+// Draw enemies with theme-based color overlays, preserving transparent backgrounds
+enemies.forEach(e => {
+    if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
+        const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
+        const isVisible = fogMap[e.y][e.x] === 1 || dist <= radius;
+        c.save();
+        // Create a temporary canvas to handle tinting without affecting transparent areas
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = S;
+        tempCanvas.height = S;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Handle animation for enemies with anim property (e.g., Shrimp)
+        let img;
+        if (e.type.anim) {
+            const now = performance.now();
+            if (now - e.type.anim.lastFrameTime >= e.type.anim.frameDuration) {
+                e.type.anim.frameIndex = (e.type.anim.frameIndex + 1) % e.type.anim.frames.length;
+                e.type.anim.lastFrameTime = now;
             }
-            // Draw the enemy (tinted if visible, normal if in fog)
-            c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
-            c.restore();
+            img = e.type.anim.frames[e.type.anim.frameIndex];
+        } else {
+            img = e.type.img;
         }
-    });
+        
+        tempCtx.drawImage(img, 0, 0, S, S);
+        if (isVisible && currentTheme !== 'dungeon') {
+            // Apply tint only to non-transparent pixels
+            let tintColor;
+            switch (currentTheme) {
+                case 'hell':
+                    tintColor = 'rgba(255, 0, 0, 0.3)'; // Transparent red
+                    break;
+                case 'desert':
+                    tintColor = 'rgba(245, 245, 220, 0.3)'; // Transparent bone
+                    break;
+                case 'paradise':
+                    tintColor = 'rgba(128, 0, 128, 0.3)'; // Transparent poison purple
+                    break;
+            }
+            tempCtx.globalCompositeOperation = 'source-atop';
+            tempCtx.fillStyle = tintColor;
+            tempCtx.fillRect(0, 0, S, S);
+        }
+        // Draw the enemy (tinted if visible, normal if in fog)
+        c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
+        c.restore();
+    }
+});
 // Draw low-health warning border
 if (p.hp <= 4 && !gameOver && !splashActive) {
     const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Smoother pulse
