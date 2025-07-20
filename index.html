@@ -438,7 +438,7 @@
         width: 160px; /* Doubled from 80px */
     }
 #username-input {
-    width: 150px;
+    width: 200px; /* Match main style */
     font-size: 14px;
 }
     #leaderboard-output {
@@ -606,7 +606,7 @@
         width: 200px; /* Doubled from 100px */
     }
 #username-input {
-    width: 180px;
+    width: 200px; /* Match main style */
     font-size: 16px;
 }
     #leaderboard-output {
@@ -639,7 +639,8 @@
     <pre id="leaderboard-output"></pre>
     <canvas id="game-over-canvas" width="320" height="320"></canvas>
     <div style="position: absolute; top: 60%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px;"> <!-- Increased gap from 10px to 15px -->
-        <input id="username-input" type="text" placeholder="Enter Username" maxlength="20" style="background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 8px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; width: 200px;">
+        <input id="username-input" type="text" placeholder="Enter Username" maxlength="20" list="name-list" style="background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 8px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; width: 200px;">
+<datalist id="name-list"></datalist>
         <button id="submit-score" onclick="submitScore()">Submit Score</button>
         <button id="view-leaderboard" onclick="fetchLeaderboard()">Leaderboard</button>
         <button id="restart-game" onclick="restart()">Restart</button>
@@ -675,6 +676,22 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
 
+const names = [
+    "Zelda", "Blaise", "Azeroth", "Chuck Norris", "Gerden", "Alex",
+    "Satoshi Nakamoto", "Solan", "Rambo", "Ponyo", "Rocky", "Patrich",
+    "Brother", "Sister", "Mother", "Father", "King", "Mario", "Link"
+];
+
+function populateNameList() {
+    const datalist = document.getElementById('name-list');
+    datalist.innerHTML = ''; // Clear existing options
+    names.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        datalist.appendChild(option);
+    });
+}
+
 const SUPABASE_URL = 'https://noexxibndcooqjquhqzk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vZXh4aWJuZGNvb3FqcXVocXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyNzY3NDgsImV4cCI6MjA2NDg1Mjc0OH0.LvN81angnwKM5IS1lCrr-dUESgeJfvO6VjkC0lMB0y4';
 const headers = {
@@ -699,6 +716,11 @@ async function submitScore() {
         return;
     }
     const username = document.getElementById('username-input').value.trim();
+    if (!names.includes(username)) {
+        document.getElementById('leaderboard-output').textContent = 'Please select a valid username from the list!';
+        document.getElementById('leaderboard-output').style.display = 'block';
+        return;
+    }
     if (!username) {
         document.getElementById('leaderboard-output').textContent = 'Please enter a username!';
         document.getElementById('leaderboard-output').style.display = 'block';
@@ -2572,6 +2594,7 @@ function restart() {
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
+    populateNameList();
     projectiles = []; // Reset projectiles
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
@@ -2874,6 +2897,7 @@ document.getElementById('game-over').addEventListener('click', (event) => {
 
         initMap();
         updateSatsDisplay();
+        populateNameList();
         requestAnimationFrame(gameLoop);
         
 document.querySelectorAll('#dpad button').forEach(button => {
@@ -2907,4 +2931,5 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
+
 
