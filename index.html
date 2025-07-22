@@ -1324,6 +1324,13 @@ let gameOverSoundPlayed = false;
 let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
+
+const specialSoundsPlayedThisFloor = {
+    lava: false,
+    quicksand: false,
+    pond: false
+};
+
     const types = [
         {
             name: 'Shrimp',
@@ -1512,18 +1519,22 @@ types.forEach(t => {
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioContext();
+
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
-    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
-    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
+    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 }, // Adjust duration as needed
+    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 }, // Adjust duration as needed
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
     secret: new Audio('secret.wav'),
     shoot_sword: new Audio('shoot_sword.wav'),
     heads: { buffer: null, url: 'heads.wav', isPlaying: false, duration: 650 }, // Adjust duration as needed
-    tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 }  // Adjust duration as needed
+    tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 }, // Adjust duration as needed
+    lava: { buffer: null, url: 'lava.wav', isPlaying: false, duration: 900 }, // Adjust duration as needed
+    quicksand: { buffer: null, url: 'quicksand.wav', isPlaying: false, duration: 250 }, // Adjust duration as needed
+    pond: { buffer: null, url: 'pond.wav', isPlaying: false, duration: 500 } // Adjust duration as needed
 };
 
 sounds.music.loop = true;
@@ -1543,6 +1554,9 @@ loadSoundBuffer('hit.wav', 'hit');
 loadSoundBuffer('pickup.wav', 'pickup');
 loadSoundBuffer('heads.wav', 'heads');
 loadSoundBuffer('tails.wav', 'tails');
+loadSoundBuffer('lava.wav', 'lava');
+loadSoundBuffer('quicksand.wav', 'quicksand');
+loadSoundBuffer('pond.wav', 'pond');
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -1560,7 +1574,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -1578,7 +1592,7 @@ function preloadSounds() {
     } else {
         // Non-iOS: Existing preload logic
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     instance.volume = 0; // Mute for preloading
@@ -2513,16 +2527,16 @@ function move(dir) {
             map[ny][nx] = 0; 
             playWebAudioSound(sounds.pickup);
         }
-if (map[ny][nx] === 6) {
-    if (currentTheme === 'paradise') {
-        if (p.hp <= 36) {
-            const oldHP = p.hp;
-            p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
-            logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
-            playWebAudioSound(sounds.pickup);
-        }
-        // If p.hp > 36, do nothing and continue
-    } else if (currentTheme === 'desert') {
+        if (map[ny][nx] === 6) {
+            if (currentTheme === 'paradise') {
+                if (p.hp <= 36) {
+                    const oldHP = p.hp;
+                    p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
+                    logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
+                    playWebAudioSound(sounds.pickup);
+                }
+                // If p.hp > 36, do nothing and continue
+            } else if (currentTheme === 'desert') {
                 p.hp = Math.max(0, p.hp - 2);
                 logBattleEvent(`Floor ${floor} - Quicksand: -2 HP (now ${p.hp})`);
                 playWebAudioSound(sounds.hit);
@@ -2545,31 +2559,31 @@ if (map[ny][nx] === 6) {
             }
             updatePlayerState();
         }
-if (map[ny][nx] === 7) {
-    const coinToss = Math.random() < 0.5; // 50/50 chance
-    if (coinToss) {
-        // Grant max health (original behavior)
-        const healthGain = p.potions * 12;
-        p.maxHP += healthGain;
-        p.hp += healthGain;
-        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
-        playWebAudioSound(sounds.heads); // Play heads.wav
-    } else {
-        // Remove excess health
-        const currentMaxHP = p.hasArmor ? 36 : 24;
-        if (p.hp > currentMaxHP) {
-            const healthLost = p.hp - currentMaxHP;
-            p.hp = currentMaxHP;
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin .. Tails! The gnome giggles as ${healthLost} excess HP is whisked away! (HP now: ${p.hp})`);
-        } else {
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin .. Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
+        if (map[ny][nx] === 7) {
+            const coinToss = Math.random() < 0.5; // 50/50 chance
+            if (coinToss) {
+                // Grant max health (original behavior)
+                const healthGain = p.potions * 12;
+                p.maxHP += healthGain;
+                p.hp += healthGain;
+                logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
+                playWebAudioSound(sounds.heads); // Play heads.wav
+            } else {
+                // Remove excess health
+                const currentMaxHP = p.hasArmor ? 36 : 24;
+                if (p.hp > currentMaxHP) {
+                    const healthLost = p.hp - currentMaxHP;
+                    p.hp = currentMaxHP;
+                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! (HP now: ${p.hp})`);
+                } else {
+                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
+                }
+                playWebAudioSound(sounds.tails); // Play tails.wav
+            }
+            p.potions = 0;
+            map[ny][nx] = 0;
+            updatePlayerState();
         }
-        playWebAudioSound(sounds.tails); // Play tails.wav
-    }
-    p.potions = 0;
-    map[ny][nx] = 0;
-    updatePlayerState();
-}
         if (map[ny][nx] === 3) {
             const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
             if (drop) {
@@ -2598,32 +2612,66 @@ if (map[ny][nx] === 7) {
             logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
             updatePlayerState();
         }
-        if (exit && p.x === exit.x && p.y === exit.y) {
-            sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-            enemiesSpawnedThisFloor = 0;
-            initialSpawnDoneThisFloor = false;
-            enemies = [];
-            floor++;
-            initialWaveSpawned = false;
-            waveActive = false;
-            exit = null;
-            killsLog = [];
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-            document.getElementById('wave').textContent = wave;
-            console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
-            initMap();
-            nextApiCallTime = null;
-            const battleEvents = document.getElementById('battle-events');
-            battleEvents.value = '';
-            battleEvents.style.transform = 'translateX(-100%)';
-            battleEvents.style.opacity = '0';
-            setTimeout(() => {
-                if (!gameOver && !splashActive && floor > 0) {
-                    fetchTxs();
-                    console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
-                }
-            }, 1000);
+        // Check for adjacent special tiles (type 6) and play ambient sound with cooldown
+// Check for adjacent special tiles (type 6) and play ambient sound once per floor
+if (currentTheme !== 'dungeon') {
+    const adjacent = [
+        {x: p.x, y: p.y - 1}, // Up
+        {x: p.x, y: p.y + 1}, // Down
+        {x: p.x - 1, y: p.y}, // Left
+        {x: p.x + 1, y: p.y}  // Right
+    ].filter(pos => pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 6);
+    if (adjacent.length > 0) {
+        let soundKey;
+        switch (currentTheme) {
+            case 'hell':
+                soundKey = 'lava';
+                break;
+            case 'desert':
+                soundKey = 'quicksand';
+                break;
+            case 'paradise':
+                soundKey = 'pond';
+                break;
         }
+        if (soundKey && !specialSoundsPlayedThisFloor[soundKey]) {
+            playWebAudioSound(sounds[soundKey]);
+            specialSoundsPlayedThisFloor[soundKey] = true;
+            logBattleEvent(`Floor ${floor} - Heard ${soundKey} nearby!`);
+            console.log(`Played ambient sound: ${soundKey}, position=(${adjacent[0].x}, ${adjacent[0].y})`);
+        }
+    }
+}
+if (exit && p.x === exit.x && p.y === exit.y) {
+    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+    enemiesSpawnedThisFloor = 0;
+    initialSpawnDoneThisFloor = false;
+    enemies = [];
+    floor++;
+    initialWaveSpawned = false;
+    waveActive = false;
+    exit = null;
+    killsLog = [];
+    // Reset special sound tracking for the new floor
+    specialSoundsPlayedThisFloor.lava = false;
+    specialSoundsPlayedThisFloor.quicksand = false;
+    specialSoundsPlayedThisFloor.pond = false;
+    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+    document.getElementById('wave').textContent = wave;
+    console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
+    initMap();
+    nextApiCallTime = null;
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value = '';
+    battleEvents.style.transform = 'translateX(-100%)';
+    battleEvents.style.opacity = '0';
+    setTimeout(() => {
+        if (!gameOver && !splashActive && floor > 0) {
+            fetchTxs();
+            console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+        }
+    }, 1000);
+}
         updateFogMap(p.x, p.y);
     }
     moveEnemies();
