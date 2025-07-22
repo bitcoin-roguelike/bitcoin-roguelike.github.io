@@ -942,25 +942,17 @@ function populateNameList() {
     });
 }
 
-function levenshtein(a, b) {
-    const matrix = Array(b.length + 1).fill().map(() => Array(a.length + 1).fill(0));
-    for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
-    for (let j = 1; j <= b.length; j++) {
-        for (let i = 1; i <= a.length; i++) {
-            matrix[j][i] = Math.min(
-                matrix[j-1][i] + 1,
-                matrix[j][i-1] + 1,
-                matrix[j-1][i-1] + (a[i-1].toLowerCase() === b[j-1].toLowerCase() ? 0 : 1)
-            );
-        }
-    }
-    return matrix[b.length][a.length];
-}
+const SUPABASE_URL = 'https://noexxibndcooqjquhqzk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vZXh4aWJuZGNvb3FqcXVocXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyNzY3NDgsImV4cCI6MjA2NDg1Mjc0OH0.LvN81angnwKM5IS1lCrr-dUESgeJfvO6VjkC0lMB0y4';
+const headers = {
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'apikey': SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+};
 
-// Modified submitScore function with nearest name matching and random fallback
 async function submitScore() {
-    if (!gameOver) return;
+    if (!gameOver) return; // Only allow submission on game-over
     if (scoreSubmitted) {
         document.getElementById('leaderboard-output').textContent = 'Score already submitted for this game!';
         document.getElementById('leaderboard-output').style.display = 'block';
@@ -973,31 +965,16 @@ async function submitScore() {
         console.log('Score submission blocked: floor=', floor, '< 3');
         return;
     }
-    let username = document.getElementById('username-input').value.trim();
+    const username = document.getElementById('username-input').value.trim();
+    if (!names.includes(username)) {
+        document.getElementById('leaderboard-output').textContent = 'Please select a valid username from the list!';
+        document.getElementById('leaderboard-output').style.display = 'block';
+        return;
+    }
     if (!username) {
-        // Select random name if input is empty
-        username = names[Math.floor(Math.random() * names.length)];
-        console.log(`Empty username, selected random name: '${username}'`);
-    } else if (!names.includes(username)) {
-        // Find the closest matching name (case-insensitive)
-        let minDistance = Infinity;
-        let closestName = username;
-        for (const name of names) {
-            const distance = levenshtein(username.toLowerCase(), name.toLowerCase());
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestName = name;
-            }
-        }
-        // Use closest name if distance is small enough (threshold: 3 edits)
-        if (minDistance <= 3) {
-            console.log(`Username '${username}' matched to '${closestName}' (distance=${minDistance})`);
-            username = closestName;
-        } else {
-            // Select random name if no close match
-            username = names[Math.floor(Math.random() * names.length)];
-            console.log(`Username '${username}' not matched (distance=${minDistance}), selected random name: '${username}'`);
-        }
+        document.getElementById('leaderboard-output').textContent = 'Please enter a username!';
+        document.getElementById('leaderboard-output').style.display = 'block';
+        return;
     }
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
     try {
@@ -1015,11 +992,12 @@ async function submitScore() {
             data = { raw: text };
         }
         if (response.ok) {
-            scoreSubmitted = true;
-            document.getElementById('submit-score').disabled = true;
-            document.getElementById('submit-score').style.background = '#666';
+            scoreSubmitted = true; // Mark score as submitted
+            document.getElementById('submit-score').disabled = true; // Disable button
+            document.getElementById('submit-score').style.background = '#666'; // Gray out button
             document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${totalSats} sats (Floor ${floor})`;
             document.getElementById('leaderboard-output').style.display = 'block';
+            // Automatically show leaderboard after submission
             await fetchLeaderboard(username, totalSats, floor);
         } else {
             document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
@@ -1033,17 +1011,6 @@ async function submitScore() {
         document.getElementById('leaderboard-output').style.display = 'block';
     }
 }
-
-const SUPABASE_URL = 'https://noexxibndcooqjquhqzk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vZXh4aWJuZGNvb3FqcXVocXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyNzY3NDgsImV4cCI6MjA2NDg1Mjc0OH0.LvN81angnwKM5IS1lCrr-dUESgeJfvO6VjkC0lMB0y4';
-const headers = {
-    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-    'apikey': SUPABASE_ANON_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
-};
-
-
 
 async function fetchLeaderboard(submittedUsername = null, submittedScore = null, submittedFloor = null) {
     try {
@@ -1520,8 +1487,10 @@ const sounds = {
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
-    secret: new Audio('secret.wav'), // New secret sound for wall-breaking
-    shoot_sword: new Audio('shoot_sword.wav')
+    secret: new Audio('secret.wav'),
+    shoot_sword: new Audio('shoot_sword.wav'),
+    heads: { buffer: null, url: 'heads.wav', isPlaying: false, duration: 650 }, // Adjust duration as needed
+    tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 }  // Adjust duration as needed
 };
 
 sounds.music.loop = true;
@@ -1539,6 +1508,8 @@ function loadSoundBuffer(url, key) {
 }
 loadSoundBuffer('hit.wav', 'hit');
 loadSoundBuffer('pickup.wav', 'pickup');
+loadSoundBuffer('heads.wav', 'heads');
+loadSoundBuffer('tails.wav', 'tails');
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -1549,7 +1520,7 @@ Object.values(sounds).forEach(s => {
 
 function preloadSounds() {
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'music' || key === 'hit' || key === 'pickup') return; // Skip music and Web Audio sounds
+        if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 instance.volume = 0; // Mute for preloading
@@ -1942,7 +1913,7 @@ if (
     currentTheme === 'paradise' || 
     specialPositions.length < 2
 ) {
-    if (Math.random() < 0.1) { // 10% chance to spawn a gnome
+    if (Math.random() < 1) { // 10% chance to spawn a gnome
         gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
         if (gnomePositions.length > 0) {
             console.log(`Garden gnome placed at:`, gnomePositions);
@@ -2517,20 +2488,21 @@ if (map[ny][nx] === 7) {
         p.maxHP += healthGain;
         p.hp += healthGain;
         logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
+        playWebAudioSound(sounds.heads); // Play heads sound
     } else {
         // Remove excess health
         const currentMaxHP = p.hasArmor ? 36 : 24;
         if (p.hp > currentMaxHP) {
             const healthLost = p.hp - currentMaxHP;
             p.hp = currentMaxHP;
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! (HP now: ${p.hp})`);
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! Giggles echoes as ${healthLost} excess HP is whisked away! (HP now: ${p.hp})`);
         } else {
             logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
         }
+        playWebAudioSound(sounds.tails); // Play tails sound
     }
     p.potions = 0;
     map[ny][nx] = 0;
-    playWebAudioSound(sounds.pickup);
     updatePlayerState();
 }
         if (map[ny][nx] === 3) {
@@ -3233,3 +3205,5 @@ document.querySelectorAll('#dpad button').forEach(button => {
     </script>
 </body>
 </html>
+
+
