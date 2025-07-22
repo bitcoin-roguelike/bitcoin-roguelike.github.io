@@ -1903,7 +1903,7 @@ function initMap() {
             console.log(`Special tiles (${currentTheme}) placed:`, specialPositions);
         }
 
-// Place garden gnome with X% chance, only if no conflict with special tiles
+// Place gnome with X% chance, only if no conflict with special tiles
 let gnomePositions = [];
 console.log('Attempting gnome spawn: theme=', currentTheme, 'specialPositions=', specialPositions.length);
 if (
@@ -1913,10 +1913,10 @@ if (
     currentTheme === 'paradise' || 
     specialPositions.length < 2
 ) {
-    if (Math.random() < 1) { // 10% chance to spawn a gnome
+    if (Math.random() < 0.1) { // 10% chance to spawn a gnome
         gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
         if (gnomePositions.length > 0) {
-            console.log(`Garden gnome placed at:`, gnomePositions);
+            console.log(`Gnome placed at:`, gnomePositions);
         } else {
             console.log('Gnome spawn failed: no valid positions found');
         }
@@ -1924,7 +1924,7 @@ if (
         console.log('Gnome spawn skipped: failed 10% chance check');
     }
 } else {
-    console.log(`Garden gnome skipped to prioritize ${currentTheme} special tiles`);
+    console.log(`Gnome skipped to prioritize ${currentTheme} special tiles`);
 }
 
         // Place potions (existing code)
