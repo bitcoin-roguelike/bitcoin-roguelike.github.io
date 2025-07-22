@@ -492,7 +492,7 @@
     #battle-log textarea {
         width: 100%;
         margin-left: -60px;
-        height: 146px;
+        height: 156px;
         font-size: 1.2rem;
     }
     #inventory {
@@ -1520,8 +1520,10 @@ const sounds = {
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
-    secret: new Audio('secret.wav'), // New secret sound for wall-breaking
-    shoot_sword: new Audio('shoot_sword.wav')
+    secret: new Audio('secret.wav'),
+    shoot_sword: new Audio('shoot_sword.wav'),
+    heads: { buffer: null, url: 'heads.wav', isPlaying: false, duration: 650 }, // Adjust duration as needed
+    tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 }  // Adjust duration as needed
 };
 
 sounds.music.loop = true;
@@ -1539,6 +1541,8 @@ function loadSoundBuffer(url, key) {
 }
 loadSoundBuffer('hit.wav', 'hit');
 loadSoundBuffer('pickup.wav', 'pickup');
+loadSoundBuffer('heads.wav', 'heads');
+loadSoundBuffer('tails.wav', 'tails');
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -1547,29 +1551,55 @@ Object.values(sounds).forEach(s => {
     }
 });
 
+function isIOSorSafari() {
+    const ua = navigator.userAgent;
+    return /iPad|iPhone|iPod/.test(ua) || /Safari/.test(ua);
+}
+
 function preloadSounds() {
-    Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'music' || key === 'hit' || key === 'pickup') return; // Skip music and Web Audio sounds
-        if (Array.isArray(sound)) {
-            sound.forEach((instance, idx) => {
-                instance.volume = 0; // Mute for preloading
-                instance.play().then(() => {
-                    instance.pause();
-                    instance.currentTime = 0;
-                    instance.volume = 1.0;
-                    console.log(`Preloaded sound instance ${idx}: ${instance.src}, volume=${instance.volume}`);
-                }).catch(e => console.error(`Preload sound error for ${instance.src} instance ${idx}:`, e));
-            });
-        } else {
-            sound.volume = 0;
-            sound.play().then(() => {
-                sound.pause();
-                sound.currentTime = 0;
-                sound.volume = 1.0;
-                console.log(`Preloaded sound: ${sound.src}, volume=${sound.volume}`);
-            }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
-        }
-    });
+    if (isIOSorSafari()) {
+        // iOS/Safari: Preload by setting src without playing
+        Object.entries(sounds).forEach(([key, sound]) => {
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails') return; // Skip music and Web Audio sounds
+            if (Array.isArray(sound)) {
+                sound.forEach((instance, idx) => {
+                    // Create a new Audio object to trigger caching
+                    const tempAudio = new Audio(instance.src);
+                    tempAudio.volume = 1.0; // Set normal volume for later use
+                    console.log(`Preloaded sound instance ${idx} for iOS: ${instance.src}, volume=${tempAudio.volume}`);
+                });
+            } else {
+                // Create a new Audio object to trigger caching
+                const tempAudio = new Audio(sound.src);
+                tempAudio.volume = 1.0;
+                console.log(`Preloaded sound for iOS: ${sound.src}, volume=${tempAudio.volume}`);
+            }
+        });
+    } else {
+        // Non-iOS: Existing preload logic
+        Object.entries(sounds).forEach(([key, sound]) => {
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails') return; // Skip music and Web Audio sounds
+            if (Array.isArray(sound)) {
+                sound.forEach((instance, idx) => {
+                    instance.volume = 0; // Mute for preloading
+                    instance.play().then(() => {
+                        instance.pause();
+                        instance.currentTime = 0;
+                        instance.volume = 1.0;
+                        console.log(`Preloaded sound instance ${idx}: ${instance.src}, volume=${instance.volume}`);
+                    }).catch(e => console.error(`Preload sound error for ${instance.src} instance ${idx}:`, e));
+                });
+            } else {
+                sound.volume = 0;
+                sound.play().then(() => {
+                    sound.pause();
+                    sound.currentTime = 0;
+                    sound.volume = 1.0;
+                    console.log(`Preloaded sound: ${sound.src}, volume=${sound.volume}`);
+                }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
+            }
+        });
+    }
 }
 
 function playWebAudioSound(soundObj) {
@@ -1654,6 +1684,12 @@ document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
         console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted, 'wave=', wave);
         preloadSounds();
+        // Ensure AudioContext is resumed for iOS
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('AudioContext resumed for START button');
+            }).catch(e => console.error('Failed to resume AudioContext:', e));
+        }
         // Preload player animation frames
         const imagesToLoad = [
             p.anim.frames.front[0], p.anim.frames.front[1],
@@ -1942,7 +1978,7 @@ if (
     currentTheme === 'paradise' || 
     specialPositions.length < 2
 ) {
-    if (Math.random() < 0.1) { // 10% chance to spawn a gnome
+    if (Math.random() < 1) { // 10% chance to spawn a gnome
         gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
         if (gnomePositions.length > 0) {
             console.log(`Garden gnome placed at:`, gnomePositions);
@@ -2517,6 +2553,7 @@ if (map[ny][nx] === 7) {
         p.maxHP += healthGain;
         p.hp += healthGain;
         logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
+        playWebAudioSound(sounds.heads); // Play heads.wav
     } else {
         // Remove excess health
         const currentMaxHP = p.hasArmor ? 36 : 24;
@@ -2527,10 +2564,10 @@ if (map[ny][nx] === 7) {
         } else {
             logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
         }
+        playWebAudioSound(sounds.tails); // Play tails.wav
     }
     p.potions = 0;
     map[ny][nx] = 0;
-    playWebAudioSound(sounds.pickup);
     updatePlayerState();
 }
         if (map[ny][nx] === 3) {
