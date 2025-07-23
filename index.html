@@ -3185,10 +3185,10 @@ enemies.forEach(e => {
                     tintColor = 'rgba(255, 0, 0, 0.3)'; // Transparent red
                     break;
                 case 'desert':
-                    tintColor = 'rgba(245, 245, 220, 0.3)'; // Transparent bone
+                    tintColor = 'rgba(245, 245, 220, 0.5)'; // Transparent bone
                     break;
                 case 'paradise':
-                    tintColor = 'rgba(140, 0, 255, 0.3)'; // Transparent poison purple
+                    tintColor = 'rgba(255, 165, 0, 0.5)'; // Transparent orange tint
                     break;
             }
             tempCtx.globalCompositeOperation = 'source-atop';
@@ -3247,21 +3247,29 @@ function gameLoop(timestamp) {
         initMap();
         needsRedraw = true;
     }
-if (gameOver) {
-    sounds.music.pause();
-    sounds.music.currentTime = 0;
-    if (!gameOverSoundPlayed) {
-        sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
-        gameOverSoundPlayed = true;
+    if (gameOver) {
+        sounds.music.pause();
+        sounds.music.currentTime = 0;
+        if (!gameOverSoundPlayed) {
+            sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
+            gameOverSoundPlayed = true;
+        }
+        document.getElementById('health').textContent = 0;
+        // Reset text color to Bitcoin orange for game-over screen
+        document.documentElement.style.setProperty('--text-color', '#ff8c00');
+        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input').forEach(el => {
+            el.style.color = '#ff8c00';
+        });
+        // Auto-submit score with "Zelda" username only if gamepad is connected
+        if (!scoreSubmitted && gamepadIndex !== null) {
+            setTimeout(() => {
+                document.getElementById('username-input').value = 'Zelda';
+                console.log('Gamepad detected, auto-setting username to "Zelda" and submitting score');
+                submitScore();
+            }, 100); // delay to ensure UI is rendered
+        }
+        needsRedraw = true;
     }
-    document.getElementById('health').textContent = 0;
-    // Reset text color to Bitcoin orange for game-over screen
-    document.documentElement.style.setProperty('--text-color', '#ff8c00');
-    document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input').forEach(el => {
-        el.style.color = '#ff8c00';
-    });
-    needsRedraw = true;
-}
     updateProjectiles();
     if ((needsRedraw || p.hp <= 8) && !splashActive) draw();
     if (p.hp <= 0 && !gameOver) {
@@ -3328,6 +3336,217 @@ document.querySelectorAll('#dpad button').forEach(button => {
         button.classList.remove('pressed'); // Remove visual feedback
     });
 });
+
+//////////////////////
+// Gamepad support //
+////////////////////
+let gamepadIndex = null; // Track connected gamepad
+let lastButtonsState = []; // Track previous button states
+let lastAxesState = { axis0: 0, axis1: 0 }; // Track previous D-pad axis states
+let lastStartPressTime = 0; // Debounce Start button
+const DEBOUNCE_MS = 200; // Debounce interval
+const GAMEPAD_POLL_INTERVAL = 16; // Poll at ~60fps
+let lastGamepadPollTime = 0; // Throttle polling
+let movementTimer = null; // Timer for continuous movement
+let currentMoveDir = null; // Track current movement direction
+let lastMoveTime = 0; // Track last move to enforce 200ms interval
+let pendingMove = false; // Flag to prevent overlapping moves
+
+// Handle gamepad connection
+window.addEventListener("gamepadconnected", (e) => {
+    gamepadIndex = e.gamepad.index;
+    console.log(`Gamepad connected: ${e.gamepad.id}`);
+    lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
+    lastGamepadPollTime = performance.now();
+    updateGamepad(); // Start polling
+});
+
+// Handle gamepad disconnection
+window.addEventListener("gamepaddisconnected", (e) => {
+    console.log(`Gamepad disconnected: ${e.gamepad.id}`);
+    gamepadIndex = null;
+    lastButtonsState = [];
+    if (movementTimer) {
+        clearInterval(movementTimer);
+        movementTimer = null;
+        currentMoveDir = null;
+        lastMoveTime = 0;
+        pendingMove = false;
+        console.log('Movement timer cleared on gamepad disconnect');
+    }
+});
+
+// Start game function for splash screen
+function startGame() {
+    if (!splashActive) {
+        console.log('Gamepad START ignored: splashActive=false');
+        return;
+    }
+    console.log('Gamepad START pressed: splashActive=true, musicMuted=', musicMuted);
+    const startButton = document.getElementById('start-button');
+    startButton.style.background = '#00b7ef'; // Mimic hover
+    setTimeout(() => {
+        startButton.style.background = '#00e8d8'; // Revert
+    }, 200);
+    preloadSounds();
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('AudioContext resumed for gamepad START');
+        }).catch(e => console.error('Failed to resume AudioContext:', e));
+    }
+    if (!musicMuted) {
+        sounds.music.pause();
+        sounds.music.currentTime = 0;
+        sounds.music.play().catch(e => console.error('Music play failed on gamepad START:', e));
+    }
+    fadeSplash();
+    // Ensure fetchTxs is triggered after splash fade
+    setTimeout(() => {
+        if (!gameOver && !splashActive && floor > 0) {
+            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
+            fetchTxs();
+        } else {
+            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
+        }
+    }, 2000); // Match original start-button delay
+}
+
+// Poll gamepad state
+function updateGamepad(timestamp) {
+    if (gamepadIndex === null) return;
+    const now = performance.now();
+    if (now - lastGamepadPollTime < GAMEPAD_POLL_INTERVAL) {
+        requestAnimationFrame(updateGamepad);
+        return;
+    }
+    lastGamepadPollTime = now;
+    const gamepad = navigator.getGamepads()[gamepadIndex];
+    if (!gamepad) {
+        console.log('Gamepad not found, stopping polling');
+        gamepadIndex = null;
+        if (movementTimer) {
+            clearInterval(movementTimer);
+            movementTimer = null;
+            currentMoveDir = null;
+            lastMoveTime = 0;
+            pendingMove = false;
+            console.log('Movement timer cleared on gamepad not found');
+        }
+        return;
+    }
+
+    // Handle buttons (A=0, B=1, Select=2, Start=3)
+    const buttons = gamepad.buttons;
+    const nowTime = Date.now();
+
+    // A Button (0) - usePotion
+    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
+        usePotion();
+        console.log('Gamepad A pressed: usePotion');
+    }
+
+    // B Button (1) - attack
+    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
+        attack();
+        console.log('Gamepad B pressed: attack');
+    }
+
+    // Select Button (2) - toggleMute
+    if (buttons[2].pressed && !lastButtonsState[2]) {
+        toggleMute();
+        console.log('Gamepad Select pressed: toggleMute');
+    }
+
+    // Start Button (3) - startGame or restart
+    if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
+        if (splashActive) {
+            startGame();
+        } else if (gameOver) {
+            restart();
+            console.log('Gamepad Start pressed: restart');
+        }
+        lastStartPressTime = nowTime;
+    }
+
+    // Update button states
+    lastButtonsState = buttons.map(b => b.pressed);
+
+    // Handle D-pad (Axes 0 and 1)
+    const axis0 = gamepad.axes[0]; // Left/Right
+    const axis1 = gamepad.axes[1]; // Up/Down
+    const deadZone = 0.2; // Ignore small axis movements
+
+    // Determine current direction
+    let newMoveDir = null;
+    if (!splashActive && !gameOver) {
+        if (currentMoveDir && !pendingMove) {
+            // Continue in current direction if still held
+            if (
+                (currentMoveDir === 'left' && axis0 < -deadZone) ||
+                (currentMoveDir === 'right' && axis0 > deadZone) ||
+                (currentMoveDir === 'up' && axis1 < -deadZone) ||
+                (currentMoveDir === 'down' && axis1 > deadZone)
+            ) {
+                newMoveDir = currentMoveDir;
+            }
+        } else if (!pendingMove) {
+            // Select new direction: prioritize axis0 (left/right) if both active
+            if (Math.abs(axis0) > deadZone) {
+                newMoveDir = axis0 > 0 ? 'right' : 'left';
+            } else if (Math.abs(axis1) > deadZone) {
+                newMoveDir = axis1 > 0 ? 'down' : 'up';
+            }
+        }
+    }
+
+    // Handle continuous movement
+    if (newMoveDir && newMoveDir !== currentMoveDir && !pendingMove) {
+        // New direction: clear old timer and start new one
+        if (movementTimer) {
+            clearInterval(movementTimer);
+            movementTimer = null;
+            console.log('Movement timer cleared: direction changed to', newMoveDir);
+        }
+        // Only move if 200ms have passed since last move
+        if (nowTime - lastMoveTime >= 200) {
+            pendingMove = true;
+            move(newMoveDir);
+            lastMoveTime = nowTime;
+            console.log(`Gamepad D-pad initial move: ${newMoveDir}`);
+            pendingMove = false;
+        }
+        movementTimer = setInterval(() => {
+            if (!splashActive && !gameOver && !pendingMove) {
+                const intervalTime = Date.now();
+                if (intervalTime - lastMoveTime >= 200) {
+                    pendingMove = true;
+                    move(newMoveDir);
+                    lastMoveTime = intervalTime;
+                    console.log(`Gamepad D-pad continuous move: ${newMoveDir}`);
+                    pendingMove = false;
+                }
+            }
+        }, 200); // Move every 200ms
+        currentMoveDir = newMoveDir;
+    } else if (!newMoveDir && currentMoveDir) {
+        // D-pad released: clear timer
+        if (movementTimer) {
+            clearInterval(movementTimer);
+            movementTimer = null;
+            console.log('Movement timer cleared: D-pad released');
+        }
+        currentMoveDir = null;
+        lastMoveTime = 0;
+        pendingMove = false;
+    }
+
+    // Update axis states
+    lastAxesState.axis0 = Math.abs(axis0) > deadZone ? axis0 : 0;
+    lastAxesState.axis1 = Math.abs(axis1) > deadZone ? axis1 : 0;
+
+    // Continue polling
+    requestAnimationFrame(updateGamepad);
+}
 
 // go to game-over screen at startup (DEBUG)
 //function initGameOver() {
