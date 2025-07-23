@@ -1332,21 +1332,22 @@ const specialSoundsPlayedThisFloor = {
 };
 
     const types = [
-        {
-            name: 'Shrimp',
-            min: 0,
-            max: 0.01,
-            anim: {
-                frames: [new Image(), new Image(), new Image()],
-                frameIndex: 0,
-                lastFrameTime: 0,
-                frameDuration: 200
-            },
-            hp: 2,
-            atk: 1,
-            reward: 0,
-            move: 1
-        },
+{
+    name: 'Shrimp',
+    min: 0,
+    max: 0.01,
+    anim: {
+        frames: [new Image(), new Image(), new Image()],
+        hellFrames: [new Image(), new Image(), new Image()], // Hell Shrimp frames
+        frameIndex: 0,
+        lastFrameTime: 0,
+        frameDuration: 200
+    },
+    hp: 2,
+    atk: 1,
+    reward: 0,
+    move: 1
+},
         {
             name: 'Crab',
             min: 0.01,
@@ -1446,6 +1447,12 @@ const assets = {
         types[0].anim.frames[0].src = 'shrimp_1.png';
 	types[0].anim.frames[1].src = 'shrimp_2.png';
 	types[0].anim.frames[2].src = 'shrimp_3.png';
+	types[0].anim.hellFrames[0].src = 'hell_shrimp_1.png';
+	types[0].anim.hellFrames[1].src = 'hell_shrimp_2.png';
+	types[0].anim.hellFrames[2].src = 'hell_shrimp_3.png';
+		types[0].anim.hellFrames.forEach((frame, i) => {
+    frame.onerror = () => console.error(`Failed to load Hell Shrimp frame ${i}: ${frame.src}`);
+    });
     	types[1].anim.frames[0].src = 'crab_1.png';
     	types[1].anim.frames[1].src = 'crab_2.png';
     	types[1].anim.frames[2].src = 'crab_3.png';
@@ -2223,10 +2230,8 @@ function updateFogMap(px, py) {
         let err = dx - dy;
 
         while (true) {
-            // Check current tile and adjacent tiles to block diagonal slips
             if (x >= 0 && x < W && y >= 0 && y < H) {
                 if (map[y][x] === 1) return false; // Hit a wall
-                // Check adjacent tiles to prevent corner penetration
                 if (dx === dy) { // 45-degree line, check orthogonally adjacent tiles
                     if (sx === 1 && sy === 1) { // Moving SE
                         if (y - 1 >= 0 && map[y - 1][x] === 1) return false; // Wall above
@@ -2252,19 +2257,32 @@ function updateFogMap(px, py) {
         }
     }
 
+    // Track newly visible Shrimps
+    const newlyVisibleShrimps = [];
     for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
             const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
             if (dist <= radius) {
-                // Check if tile is in the same room or has line-of-sight
                 const tileRoom = rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
                 const inSameRoom = currentRoom && tileRoom && currentRoom === tileRoom;
                 const hasLOS = hasLineOfSight(px, py, x, y);
                 if (inSameRoom || hasLOS) {
-                    fogMap[y][x] = 1; // Mark as explored
+                    if (fogMap[y][x] !== 1) { // Tile was not previously explored
+                        fogMap[y][x] = 1; // Mark as explored
+                        // Check for Shrimp at this position
+                        const shrimp = enemies.find(e => e.x === x && e.y === y && e.type.name === 'Shrimp' && currentTheme === 'hell');
+                        if (shrimp) {
+                            newlyVisibleShrimps.push(shrimp);
+                        }
+                    }
                 }
             }
         }
+    }
+    // Log evolution for newly visible Shrimps
+    if (newlyVisibleShrimps.length > 0) {
+        logBattleEvent(`Floor ${floor} - Shrimp evolves to Hell Shrimp!`);
+        console.log(`Shrimp evolved to Hell Shrimp at positions: ${newlyVisibleShrimps.map(s => `(${s.x}, ${s.y})`).join(', ')}`);
     }
 }
 
@@ -2361,7 +2379,14 @@ async function fetchTxs() {
                     );
                     attempts--;
                 } while (attempts > 0 && !validPosition);
-                const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
+                const newEnemy = { 
+    		    x, 
+    		    y, 
+    		    type, 
+    		    hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp, 
+    		    address, 
+    		    sats: Math.round(btc * 1e8) 
+		};
                 if (!validPosition) {
                     // Fallback: try any floor tile in any room
                     for (let r of rooms) {
@@ -3121,6 +3146,7 @@ function draw() {
         }
     }
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
+// Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
     if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
         const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
@@ -3140,7 +3166,12 @@ enemies.forEach(e => {
                 e.type.anim.frameIndex = (e.type.anim.frameIndex + 1) % e.type.anim.frames.length;
                 e.type.anim.lastFrameTime = now;
             }
-            img = e.type.anim.frames[e.type.anim.frameIndex];
+            // Use Hell Shrimp frames if theme is hell, enemy is Shrimp, and visible
+            if (e.type.name === 'Shrimp' && currentTheme === 'hell' && isVisible && e.type.anim.hellFrames) {
+                img = e.type.anim.hellFrames[e.type.anim.frameIndex];
+            } else {
+                img = e.type.anim.frames[e.type.anim.frameIndex];
+            }
         } else {
             img = e.type.img;
         }
@@ -3157,7 +3188,7 @@ enemies.forEach(e => {
                     tintColor = 'rgba(245, 245, 220, 0.3)'; // Transparent bone
                     break;
                 case 'paradise':
-                    tintColor = 'rgba(128, 0, 128, 0.3)'; // Transparent poison purple
+                    tintColor = 'rgba(140, 0, 255, 0.3)'; // Transparent poison purple
                     break;
             }
             tempCtx.globalCompositeOperation = 'source-atop';
