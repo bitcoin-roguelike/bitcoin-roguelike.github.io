@@ -1324,6 +1324,7 @@ let gameOverSoundPlayed = false;
 let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
+let autoSubmitTriggered = false;
 
 const specialSoundsPlayedThisFloor = {
     lava: false,
@@ -1899,7 +1900,7 @@ function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer
 function initMap() {
     try {
         // Change theme every fourth floor
-        if (floor % 4 === 0 && floor > 1) {
+        if (floor % 3 === 0 && floor > 1) {
             currentTheme = selectNewTheme(currentTheme);
             console.log(`Floor ${floor} - Changed theme to ${currentTheme}`);
         }
@@ -2563,13 +2564,13 @@ function move(dir) {
                 // If p.hp > 36, do nothing and continue
             } else if (currentTheme === 'desert') {
                 p.hp = Math.max(0, p.hp - 2);
-                logBattleEvent(`Floor ${floor} - Quicksand: -2 HP (now ${p.hp})`);
+                logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
                 playWebAudioSound(sounds.hit);
                 if (p.hp <= 0) {
                     p.hp = 0;
                     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
                     gameOver = true;
-                    console.log(`Game Over: p.hp=${p.hp} due to quicksand`);
+                    console.log(`Game Over: p.hp=${p.hp} due to sludge pit`);
                 }
             } else if (currentTheme === 'hell') {
                 p.hp = Math.max(0, p.hp - 8);
@@ -2662,7 +2663,7 @@ if (currentTheme !== 'dungeon') {
         if (soundKey && !specialSoundsPlayedThisFloor[soundKey]) {
             playWebAudioSound(sounds[soundKey]);
             specialSoundsPlayedThisFloor[soundKey] = true;
-            logBattleEvent(`Floor ${floor} - Heard ${soundKey} nearby!`);
+            logBattleEvent(`Floor ${floor} - Heard ${soundKey === 'quicksand' ? 'sludge pit' : soundKey} nearby!`); // Updated to show Sludge Pit
             console.log(`Played ambient sound: ${soundKey}, position=(${adjacent[0].x}, ${adjacent[0].y})`);
         }
     }
@@ -2797,7 +2798,7 @@ function updateProjectiles() {
         // Check for first enemy hit and deal damage
         let hit = enemies.find(e => e.x === nx && e.y === ny);
         if (hit) {
-            const damage = Math.floor(p.atk * 0.5) + (p.hasArmor ? 1 : 0); // Half player attack, +1 with armor
+            const damage = Math.floor(p.atk * 0.5); // Half the damage output for shooting sword
             hit.hp -= damage;
             logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (HP: ${hit.hp})`);
             playWebAudioSound(sounds.hit);
@@ -2879,7 +2880,7 @@ function attack() {
         usePickaxeSword = initialPickaxes > 0;
         let hit = enemies.find(e => e.x === sx && e.y === sy);
         if (hit) {
-            const damage = p.atk + (p.hasArmor ? 1 : 0); // Bonus damage with armor
+            const damage = p.atk; // Remove armor bonus
             hit.hp -= damage;
             logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
             playWebAudioSound(sounds.hit);
@@ -2985,6 +2986,7 @@ function restart() {
     exit = null;
     gameOver = false;
     gameOverSoundPlayed = false;
+    autoSubmitTriggered = false;
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     initialWaveSpawned = false;
@@ -3001,6 +3003,7 @@ function restart() {
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
+    hasPlayedOnce = true; // Ensure Enter key is enabled for splash screen after restart
     populateNameList();
     projectiles = []; // Reset projectiles
 
@@ -3039,7 +3042,7 @@ function restart() {
     initMap();
     updateSatsDisplay();
     needsRedraw = true;
-    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit, 'gameOver=', gameOver, 'scoreSubmitted=', scoreSubmitted);
+    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit, 'gameOver=', gameOver, 'scoreSubmitted=', scoreSubmitted, 'hasPlayedOnce=', hasPlayedOnce);
 }
 
 function draw() {
@@ -3146,13 +3149,12 @@ function draw() {
         }
     }
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
-// Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
     if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
         const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
         const isVisible = fogMap[e.y][e.x] === 1 || dist <= radius;
         c.save();
-        // Create a temporary canvas to handle tinting without affecting transparent areas
+        // Create a temporary canvas for rendering
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = S;
         tempCanvas.height = S;
@@ -3176,26 +3178,30 @@ enemies.forEach(e => {
             img = e.type.img;
         }
         
+        // Draw the sprite on the temporary canvas
         tempCtx.drawImage(img, 0, 0, S, S);
-        if (isVisible && currentTheme !== 'dungeon') {
-            // Apply tint only to non-transparent pixels
-            let tintColor;
-            switch (currentTheme) {
-                case 'hell':
-                    tintColor = 'rgba(255, 0, 0, 0.3)'; // Transparent red
-                    break;
-                case 'desert':
-                    tintColor = 'rgba(245, 245, 220, 0.5)'; // Transparent bone
-                    break;
-                case 'paradise':
-                    tintColor = 'rgba(255, 165, 0, 0.5)'; // Transparent orange tint
-                    break;
+        
+        // Apply theme-based effects
+        if (isVisible) {
+            if (currentTheme === 'desert') {
+                // Invert colors for desert theme
+                tempCtx.globalCompositeOperation = 'source-over';
+                tempCtx.filter = 'invert(97%)';
+                tempCtx.drawImage(img, 0, 0, S, S);
+            } else if (currentTheme === 'hell') {
+                // Apply red tint for hell theme
+                tempCtx.globalCompositeOperation = 'source-atop';
+                tempCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                tempCtx.fillRect(0, 0, S, S);
+            } else if (currentTheme === 'paradise') {
+                // Apply purple tint for paradise theme
+                tempCtx.globalCompositeOperation = 'source-atop';
+                tempCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
+                tempCtx.fillRect(0, 0, S, S);
             }
-            tempCtx.globalCompositeOperation = 'source-atop';
-            tempCtx.fillStyle = tintColor;
-            tempCtx.fillRect(0, 0, S, S);
         }
-        // Draw the enemy (tinted if visible, normal if in fog)
+        
+        // Draw the processed sprite to the main canvas
         c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
         c.restore();
     }
@@ -3260,13 +3266,14 @@ function gameLoop(timestamp) {
         document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input').forEach(el => {
             el.style.color = '#ff8c00';
         });
-        // Auto-submit score with "Zelda" username only if gamepad is connected
-        if (!scoreSubmitted && gamepadIndex !== null) {
+        // Auto-submit score with random name from names array only if gamepad is connected
+        if (!scoreSubmitted && gamepadIndex !== null && !autoSubmitTriggered) {
+            autoSubmitTriggered = true;
             setTimeout(() => {
-                document.getElementById('username-input').value = 'Zelda';
-                console.log('Gamepad detected, auto-setting username to "Zelda" and submitting score');
+                document.getElementById('username-input').value = names[Math.floor(Math.random() * names.length)];
+                console.log('Gamepad detected, auto-setting username to random name and submitting score');
                 submitScore();
-            }, 100); // delay to ensure UI is rendered
+            }, 1000); // delay to ensure UI is rendered
         }
         needsRedraw = true;
     }
@@ -3281,23 +3288,41 @@ function gameLoop(timestamp) {
 }
 
 document.addEventListener('keydown', e => {
-    if (splashActive && e.key === 'Enter') {
-        console.log('Enter key pressed on splash: splashActive=', splashActive, 'musicMuted=', musicMuted);
-        const startButton = document.getElementById('start-button');
-        startButton.style.background = '#00b7ef'; // Mimic :hover color
-        setTimeout(() => {
-            startButton.style.background = '#00e8d8'; // Revert to original color
-        }, 200); // Short duration to simulate tap
-        preloadSounds(); // Initialize all sounds except music
-        if (!musicMuted) {
-            sounds.music.pause(); // Ensure clean state
-            sounds.music.currentTime = 0;
-            sounds.music.play().then(() => {
-                console.log('Music started successfully on Enter');
-            }).catch(e => console.error('Music play failed on Enter:', e));
+    if (e.key === 'Enter') {
+        if (splashActive && !hasPlayedOnce) {
+            console.log('Enter key ignored on initial splash: hasPlayedOnce=false');
+            return; // Block Enter on initial splash screen
         }
-        fadeSplash();
-        return; // Prevent other key actions during splash
+        if (splashActive && hasPlayedOnce) {
+            console.log('Enter key pressed on splash after session: splashActive=true, hasPlayedOnce=true, musicMuted=', musicMuted);
+            const startButton = document.getElementById('start-button');
+            startButton.style.background = '#00b7ef'; // Mimic :hover color
+            setTimeout(() => {
+                startButton.style.background = '#00e8d8'; // Revert to original color
+            }, 200); // Short duration to simulate tap
+            preloadSounds(); // Initialize all sounds except music
+            if (!musicMuted) {
+                sounds.music.pause(); // Ensure clean state
+                sounds.music.currentTime = 0;
+                sounds.music.play().then(() => {
+                    console.log('Music started successfully on Enter');
+                }).catch(e => console.error('Music play failed on Enter:', e));
+            }
+            fadeSplash();
+            setTimeout(() => {
+                if (!gameOver && !splashActive) {
+                    fetchTxs();
+                    lastUpdate = Date.now();
+                    console.log('Initial fetchTxs triggered after splash via Enter, wave=', wave);
+                }
+            }, 2000); // Match delay in start-button and startGame
+            return;
+        }
+        if (gameOver && hasPlayedOnce) {
+            console.log('Enter key pressed on game-over: triggering restart');
+            restart();
+            return;
+        }
     }
     if (gameOver || splashActive) return;
     if (e.key === 'ArrowUp') move('up');
@@ -3351,6 +3376,8 @@ let movementTimer = null; // Timer for continuous movement
 let currentMoveDir = null; // Track current movement direction
 let lastMoveTime = 0; // Track last move to enforce 200ms interval
 let pendingMove = false; // Flag to prevent overlapping moves
+let gamepadPollingActive = false; // Track if gamepad polling is enabled
+let hasPlayedOnce = false; // Track if player has played at least one game
 
 // Handle gamepad connection
 window.addEventListener("gamepadconnected", (e) => {
@@ -3358,7 +3385,13 @@ window.addEventListener("gamepadconnected", (e) => {
     console.log(`Gamepad connected: ${e.gamepad.id}`);
     lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
     lastGamepadPollTime = performance.now();
-    updateGamepad(); // Start polling
+    // Only start polling after user interaction (start button)
+    if (!splashActive) {
+        gamepadPollingActive = true;
+        updateGamepad(); // Start polling
+    } else {
+        console.log('Gamepad polling delayed until after start button');
+    }
 });
 
 // Handle gamepad disconnection
@@ -3366,6 +3399,7 @@ window.addEventListener("gamepaddisconnected", (e) => {
     console.log(`Gamepad disconnected: ${e.gamepad.id}`);
     gamepadIndex = null;
     lastButtonsState = [];
+    gamepadPollingActive = false;
     if (movementTimer) {
         clearInterval(movementTimer);
         movementTimer = null;
@@ -3388,18 +3422,26 @@ function startGame() {
     setTimeout(() => {
         startButton.style.background = '#00e8d8'; // Revert
     }, 200);
-    preloadSounds();
+    // Resume AudioContext
     if (audioContext.state === 'suspended') {
         audioContext.resume().then(() => {
             console.log('AudioContext resumed for gamepad START');
         }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
+    preloadSounds(); // Preload sounds after user interaction
     if (!musicMuted) {
         sounds.music.pause();
         sounds.music.currentTime = 0;
         sounds.music.play().catch(e => console.error('Music play failed on gamepad START:', e));
     }
     fadeSplash();
+    // Start gamepad polling if gamepad is connected
+    if (gamepadIndex !== null) {
+        gamepadPollingActive = true;
+        updateGamepad();
+        console.log('Started gamepad polling after START');
+    }
+    hasPlayedOnce = true; // Mark that the player has started a game
     // Ensure fetchTxs is triggered after splash fade
     setTimeout(() => {
         if (!gameOver && !splashActive && floor > 0) {
@@ -3411,9 +3453,73 @@ function startGame() {
     }, 2000); // Match original start-button delay
 }
 
+// Modify start-button click handler to enable gamepad polling
+document.getElementById('start-button').addEventListener('click', () => {
+    if (splashActive) {
+        console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted, 'wave=', wave);
+        // Resume AudioContext
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('AudioContext resumed for START button');
+            }).catch(e => console.error('Failed to resume AudioContext:', e));
+        }
+        preloadSounds();
+        // Preload player animation frames
+        const imagesToLoad = [
+            p.anim.frames.front[0], p.anim.frames.front[1],
+            p.anim.frames.back[0], p.anim.frames.back[1],
+            p.anim.frames.right[0], p.anim.frames.right[1],
+            p.anim.frames.armor_front[0], p.anim.frames.armor_front[1],
+            p.anim.frames.armor_back[0], p.anim.frames.armor_back[1],
+            p.anim.frames.armor_right[0], p.anim.frames.armor_right[1]
+        ];
+        let loadedCount = 0;
+        imagesToLoad.forEach(img => {
+            if (img.complete) {
+                loadedCount++;
+                if (loadedCount === imagesToLoad.length) {
+                    console.log('All player animation frames loaded');
+                }
+            } else {
+                img.onload = () => {
+                    loadedCount++;
+                    if (loadedCount === imagesToLoad.length) {
+                        console.log('All player animation frames loaded');
+                    }
+                };
+                img.onerror = () => console.error(`Failed to load image: ${img.src}`);
+            }
+        });
+        if (!musicMuted) {
+            sounds.music.pause();
+            sounds.music.currentTime = 0;
+            sounds.music.play().then(() => {
+                console.log('Music started successfully');
+            }).catch(e => console.error('Music play failed on START:', e));
+        }
+        fadeSplash();
+        // Start gamepad polling if gamepad is connected
+        if (gamepadIndex !== null) {
+            gamepadPollingActive = true;
+            updateGamepad();
+            console.log('Started gamepad polling after START button');
+        }
+        hasPlayedOnce = true; // Mark that the player has started a game
+        setTimeout(() => {
+            if (!gameOver && !splashActive) {
+                fetchTxs();
+                lastUpdate = Date.now();
+                console.log('Initial fetchTxs triggered after splash, wave=', wave);
+            }
+        }, 2000);
+    }
+});
+
 // Poll gamepad state
 function updateGamepad(timestamp) {
-    if (gamepadIndex === null) return;
+    if (gamepadIndex === null || !gamepadPollingActive) {
+        return; // Stop polling if no gamepad or not active
+    }
     const now = performance.now();
     if (now - lastGamepadPollTime < GAMEPAD_POLL_INTERVAL) {
         requestAnimationFrame(updateGamepad);
@@ -3424,6 +3530,7 @@ function updateGamepad(timestamp) {
     if (!gamepad) {
         console.log('Gamepad not found, stopping polling');
         gamepadIndex = null;
+        gamepadPollingActive = false;
         if (movementTimer) {
             clearInterval(movementTimer);
             movementTimer = null;
