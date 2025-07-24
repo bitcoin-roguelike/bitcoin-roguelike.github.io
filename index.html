@@ -654,6 +654,7 @@
     Potions: <span id="potions">0</span><br>
     Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
     Bag: <span id="sats">0</span><br>
+    Runes: <span id="runes">None</span><br>
 </div>
         </div>
 <div id="battle-log">
@@ -1279,6 +1280,9 @@ let map = [],
         atk: 2,
         pickaxes: 0,
         hasArmor: false,
+        runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
+	runewords: [], // Array to store activated runewords (e.g., ['bitcoin', 'hodl'])
+	immortal: false, // Flag for HODL runeword immortality
         anim: {
             frames: {
                 front: [new Image(), new Image()],
@@ -1316,6 +1320,7 @@ let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let satoshiDrops = [];
+let runeDrops = []; // Array to store rune drops with positions and letters
 let splashActive = true;
 let waveActive = false;
 let musicMuted = false;        
@@ -1443,7 +1448,15 @@ const assets = {
     player_armor: new Image(),
     pickaxe_sword: new Image(),
     shoot_sword: new Image(),
-    gnome: new Image()
+    gnome: new Image(),
+    runes: {
+        on_floor: new Image(),
+        a: new Image(), b: new Image(), c: new Image(), d: new Image(), e: new Image(),
+        f: new Image(), g: new Image(), h: new Image(), i: new Image(), k: new Image(),
+        l: new Image(), m: new Image(), n: new Image(), o: new Image(), p: new Image(),
+        q: new Image(), r: new Image(), s: new Image(), t: new Image(), u: new Image(),
+        v: new Image(), y: new Image(), z: new Image(), æ: new Image(), ø: new Image()
+    }
 };
         types[0].anim.frames[0].src = 'shrimp_1.png';
 	types[0].anim.frames[1].src = 'shrimp_2.png';
@@ -1505,7 +1518,36 @@ const assets = {
         assets.bitcoin.src = 'bitcoin.png';
         assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
         assets.pickaxe_sword.src = 'pickaxe-sword.png';
-        assets.shoot_sword.src = 'shoot_sword.png';
+        assets.shoot_sword.src = 'shoot_sword.png';        
+        assets.runes.on_floor.src = 'rune_on_floor.png';
+	assets.runes.a.src = 'rune-a.png';
+	assets.runes.b.src = 'rune-b.png';
+	assets.runes.c.src = 'rune-c.png';
+	assets.runes.d.src = 'rune-d.png';
+	assets.runes.e.src = 'rune-e.png';
+	assets.runes.f.src = 'rune-f.png';
+	assets.runes.g.src = 'rune-g.png';
+	assets.runes.h.src = 'rune-h.png';
+	assets.runes.i.src = 'rune-i.png';
+	assets.runes.k.src = 'rune-k.png';
+	assets.runes.l.src = 'rune-l.png';
+	assets.runes.m.src = 'rune-m.png';
+	assets.runes.n.src = 'rune-n.png';
+	assets.runes.o.src = 'rune-o.png';
+	assets.runes.p.src = 'rune-p.png';
+	assets.runes.q.src = 'rune-q.png';
+	assets.runes.r.src = 'rune-r.png';
+	assets.runes.s.src = 'rune-s.png';
+	assets.runes.t.src = 'rune-t.png';
+	assets.runes.u.src = 'rune-u.png';
+	assets.runes.v.src = 'rune-v.png';
+	assets.runes.y.src = 'rune-y.png';
+	assets.runes.z.src = 'rune-z.png';
+	assets.runes.æ.src = 'rune-æ.png';
+	assets.runes.ø.src = 'rune-ø.png';
+Object.values(assets.runes).forEach(rune => {
+    rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
+});
 Object.values(assets).forEach(asset => {
     if (asset instanceof Image) {
         asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
@@ -1931,6 +1973,7 @@ function initMap() {
         fogMap = Array(H).fill().map(() => Array(W).fill(0));
         rooms = [];
         satoshiDrops = [];
+        runeDrops = []; // Clear rune drops on map, but keep p.runes, p.runewords, p.immortal
         
         // Generate rooms (existing code unchanged)
         let maxAttempts = 100;
@@ -1990,29 +2033,29 @@ function initMap() {
             console.log(`Special tiles (${currentTheme}) placed:`, specialPositions);
         }
 
-// Place Gnome with X% chance, only if no conflict with special tiles
-let gnomePositions = [];
-console.log('Attempting gnome spawn: theme=', currentTheme, 'specialPositions=', specialPositions.length);
-if (
-    currentTheme === 'dungeon' || 
-    currentTheme === 'desert' || 
-    currentTheme === 'hell' || 
-    currentTheme === 'paradise' || 
-    specialPositions.length < 2
-) {
-    if (Math.random() < 0.1) { // 10% chance to spawn a gnome
-        gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
-        if (gnomePositions.length > 0) {
-            console.log(`Gnome placed at:`, gnomePositions);
+        // Place Gnome with X% chance, only if no conflict with special tiles
+        let gnomePositions = [];
+        console.log('Attempting gnome spawn: theme=', currentTheme, 'specialPositions=', specialPositions.length);
+        if (
+            currentTheme === 'dungeon' || 
+            currentTheme === 'desert' || 
+            currentTheme === 'hell' || 
+            currentTheme === 'paradise' || 
+            specialPositions.length < 2
+        ) {
+            if (Math.random() < 0.1) { // 10% chance to spawn a gnome
+                gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
+                if (gnomePositions.length > 0) {
+                    console.log(`Gnome placed at:`, gnomePositions);
+                } else {
+                    console.log('Gnome spawn failed: no valid positions found');
+                }
+            } else {
+                console.log('Gnome spawn skipped: failed 10% chance check');
+            }
         } else {
-            console.log('Gnome spawn failed: no valid positions found');
+            console.log(`Gnome skipped to prioritize ${currentTheme} special tiles`);
         }
-    } else {
-        console.log('Gnome spawn skipped: failed 10% chance check');
-    }
-} else {
-    console.log(`Gnome skipped to prioritize ${currentTheme} special tiles`);
-}
 
         // Place potions (existing code)
         let potionPositions = [];
@@ -2041,12 +2084,12 @@ if (
         // Place pickaxe (chance to drop a pickaxe)
         let pickaxePositions = [];
         if (Math.random() < 0.2) { // 20% chance to spawn a pickaxe
-        pickaxePositions = spawnItemWithChance(4, 1.0, 1, 5, true);
-        if (pickaxePositions.length > 0) {
-            console.log(`Pickaxe placed at:`, pickaxePositions);
-        } else {
-            console.log('Pickaxe spawn failed: no valid positions found');
-        }
+            pickaxePositions = spawnItemWithChance(4, 1.0, 1, 5, true);
+            if (pickaxePositions.length > 0) {
+                console.log(`Pickaxe placed at:`, pickaxePositions);
+            } else {
+                console.log('Pickaxe spawn failed: no valid positions found');
+            }
         }    
         
         console.log('Rooms generated:', rooms.length, 'Potions placed:', potionPositions, 'Pickaxes placed:', pickaxePositions);
@@ -2214,6 +2257,12 @@ function updatePlayerState() {
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
         console.log(`Armor boost lost: p.hp=${p.hp}, p.hasArmor=${p.hasArmor}`);
     }
+    
+    if (p.immortal && p.hp <= 0) {
+    p.hp = 1; // Keep player alive
+    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+}
+    
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
     needsRedraw = true;
@@ -2698,6 +2747,20 @@ if (exit && p.x === exit.x && p.y === exit.y) {
         }
     }, 1000);
 }
+
+	if (map[ny][nx] === 8) {
+    const rune = runeDrops.find(r => r.x === nx && r.y === ny);
+    if (rune) {
+        p.runes.push(rune.letter);
+        map[ny][nx] = 9; // Specific rune image
+        runeDrops = runeDrops.filter(r => r !== rune);
+        runeDrops.push({ x: nx, y: ny, letter: rune.letter, specific: true }); // Mark as specific rune for drawing
+        playWebAudioSound(sounds.pickup);
+        logBattleEvent(`Floor ${floor} - Picked up Rune ${rune.letter.toUpperCase()}!`);
+        checkRunewords();
+    }
+}
+
         updateFogMap(p.x, p.y);
     }
     moveEnemies();
@@ -2808,6 +2871,45 @@ function updateProjectiles() {
                 if (map[hit.y][hit.x] === 0) {
                     map[hit.y][hit.x] = 3;
                     satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                    
+                    // Rune drop logic (10% chance)
+if (Math.random() < 0.1) {
+    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+    const runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+    let runePlaced = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 8; // Generic rune on floor
+        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
+        runePlaced = true;
+    } else {
+        const adjacent = [
+            { x: hit.x, y: hit.y - 1 },
+            { x: hit.x, y: hit.y + 1 },
+            { x: hit.x - 1, y: hit.y },
+            { x: hit.x + 1, y: hit.y }
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny)
+            ) {
+                map[ny][nx] = 8; // Generic rune on floor
+                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                runePlaced = true;
+                break;
+            }
+        }
+    }
+    if (runePlaced) {
+        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+        console.log(`Rune dropped: ${runeLetter} at (${runeDrops[runeDrops.length - 1].x}, ${runeDrops[runeDrops.length - 1].y})`);
+    } else {
+        console.log(`No space to place rune for ${hit.type.name} at (${hit.x}, ${hit.y})`);
+    }
+}
+                    
                     dropPlaced = true;
                 } else {
                     const adjacent = [
@@ -2852,6 +2954,46 @@ function updateProjectiles() {
 }
 
 let usePickaxeSword = false; // Global flag for draw
+
+function checkRunewords() {
+    const runeString = p.runes.join('');
+    // Check for 'bitcoin' runeword
+    if (runeString.includes('bitcoin') && !p.runewords.includes('bitcoin')) {
+        p.hp += 444;
+        p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
+        p.runewords.push('bitcoin');
+        document.getElementById('whale-log').textContent = 'Runeword BITCOIN was found!';
+        logBattleEvent(`Floor ${floor} - Runeword BITCOIN activated! +444 HP (now ${p.hp})`);
+        setTimeout(() => {
+            document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
+            document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
+        }, 5000);
+        updatePlayerState();
+    }
+    // Check for 'hodl' runeword
+    if (runeString.includes('hodl') && !p.runewords.includes('hodl')) {
+        p.immortal = true;
+        p.runewords.push('hodl');
+        document.getElementById('whale-log').textContent = 'Runeword HODL was found!';
+        logBattleEvent(`Floor ${floor} - Runeword HODL activated! Immortal for this floor!`);
+        setTimeout(() => {
+            document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
+            document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
+        }, 5000);
+        updatePlayerState();
+    }
+    // Update inventory display with 5x5 grid and five spaces before colon
+    if (p.runes.length > 0) {
+        let displayText = '';
+        for (let i = 0; i < p.runes.length; i += 5) {
+            const chunk = p.runes.slice(i, i + 5).join(',').toUpperCase();
+            displayText += chunk + (i + 5 <= p.runes.length ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ' : '');
+        }
+        document.getElementById('runes').innerHTML = displayText;
+    } else {
+        document.getElementById('runes').textContent = 'None';
+    }
+}
 
 function attack() {
     if (gameOver || splashActive) return;
@@ -2915,6 +3057,45 @@ function attack() {
                 if (!dropPlaced) {
                     console.log(`No space to place drop for ${hit.type.name} at (${hit.x}, ${hit.y})`);
                 }
+                
+                // Rune drop logic (10% chance)
+if (Math.random() < 0.1) {
+    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+    const runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+    let runePlaced = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 8; // Generic rune on floor
+        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
+        runePlaced = true;
+    } else {
+        const adjacent = [
+            { x: hit.x, y: hit.y - 1 },
+            { x: hit.x, y: hit.y + 1 },
+            { x: hit.x - 1, y: hit.y },
+            { x: hit.x + 1, y: hit.y }
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny)
+            ) {
+                map[ny][nx] = 8; // Generic rune on floor
+                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                runePlaced = true;
+                break;
+            }
+        }
+    }
+    if (runePlaced) {
+        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+        console.log(`Rune dropped: ${runeLetter} at (${runeDrops[runeDrops.length - 1].x}, ${runeDrops[runeDrops.length - 1].y})`);
+    } else {
+        console.log(`No space to place rune for ${hit.type.name} at (${hit.x}, ${hit.y})`);
+    }
+}
+                
                 enemies = enemies.filter(e => e !== hit);
                 if (exit && enemies.length === 0) {
                     updateSatsDisplay();
@@ -3006,6 +3187,11 @@ function restart() {
     hasPlayedOnce = true; // Ensure Enter key is enabled for splash screen after restart
     populateNameList();
     projectiles = []; // Reset projectiles
+    runeDrops = [];
+    p.runes = [];
+    p.runewords = [];
+    p.immortal = false;
+    document.getElementById('runes').textContent = 'None';
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = '';
@@ -3075,7 +3261,7 @@ function draw() {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 1) c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
     }
-    // Draw floors, items, and stairs
+    // Draw floors, items, stairs, and runes
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
         const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
@@ -3087,6 +3273,15 @@ function draw() {
             if (map[y][x] === 5) c.drawImage(assets.armor, x * S, y * S, S, S);
             if (map[y][x] === 6 && currentTheme !== 'dungeon') c.drawImage(assets.themes[currentTheme].special, x * S, y * S, S, S);
             if (map[y][x] === 7) c.drawImage(assets.gnome, x * S, y * S, S, S);
+            if (map[y][x] === 8) c.drawImage(assets.runes.on_floor, x * S, y * S, S, S);
+            if (map[y][x] === 9) {
+                const rune = runeDrops.find(r => r.x === x && r.y === y && r.specific);
+                if (rune && assets.runes[rune.letter]) {
+                    c.globalAlpha = 0.6; // Apply 40% transparency
+                    c.drawImage(assets.runes[rune.letter], x * S, y * S, S, S);
+                    c.globalAlpha = 1; // Restore full opacity
+                }
+            }
             if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
@@ -3184,10 +3379,18 @@ enemies.forEach(e => {
         // Apply theme-based effects
         if (isVisible) {
             if (currentTheme === 'desert') {
-                // Invert colors for desert theme
-                tempCtx.globalCompositeOperation = 'source-over';
-                tempCtx.filter = 'invert(97%)';
-                tempCtx.drawImage(img, 0, 0, S, S);
+                // Create a white silhouette with slight transparency for desert theme
+                const imageData = tempCtx.getImageData(0, 0, S, S);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] > 0) { // Non-transparent pixel
+                        data[i] = 255;     // Red
+                        data[i + 1] = 255; // Green
+                        data[i + 2] = 255; // Blue
+                        data[i + 3] = Math.round(0.9 * 255); // 90% opacity
+                    }
+                }
+                tempCtx.putImageData(imageData, 0, 0);
             } else if (currentTheme === 'hell') {
                 // Apply red tint for hell theme
                 tempCtx.globalCompositeOperation = 'source-atop';
@@ -3199,6 +3402,10 @@ enemies.forEach(e => {
                 tempCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
                 tempCtx.fillRect(0, 0, S, S);
             }
+        } else {
+            // Outside fog of war, draw original sprite to show red eyes
+            tempCtx.clearRect(0, 0, S, S);
+            tempCtx.drawImage(img, 0, 0, S, S);
         }
         
         // Draw the processed sprite to the main canvas
@@ -3206,41 +3413,41 @@ enemies.forEach(e => {
         c.restore();
     }
 });
-// Draw low-health warning border
-if (p.hp <= 4 && !gameOver && !splashActive) {
-    const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Smoother pulse
-    c.strokeStyle = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
-    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
-    c.beginPath();
-    // Top border
-    c.moveTo(0, 0);
-    c.lineTo(W * S, 0);
-    // Right border
-    c.moveTo(W * S, 0);
-    c.lineTo(W * S, H * S);
-    // Bottom border
-    c.moveTo(W * S, H * S);
-    c.lineTo(0, H * S);
-    // Left border
-    c.moveTo(0, H * S);
-    c.lineTo(0, 0);
-    c.stroke();
-} else if (p.hp > 4 && p.hp < 9 && !gameOver && !splashActive) {
-    const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Same pulsing effect
-    c.strokeStyle = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 13
-    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5);
-    c.beginPath();
-    // Draw the same border as above
-    c.moveTo(0, 0);
-    c.lineTo(W * S, 0);
-    c.moveTo(W * S, 0);
-    c.lineTo(W * S, H * S);
-    c.moveTo(W * S, H * S);
-    c.lineTo(0, H * S);
-    c.moveTo(0, H * S);
-    c.lineTo(0, 0);
-    c.stroke();
-}
+    // Draw low-health warning border
+    if (p.hp <= 4 && !gameOver && !splashActive) {
+        const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Smoother pulse
+        c.strokeStyle = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
+        c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
+        c.beginPath();
+        // Top border
+        c.moveTo(0, 0);
+        c.lineTo(W * S, 0);
+        // Right border
+        c.moveTo(W * S, 0);
+        c.lineTo(W * S, H * S);
+        // Bottom border
+        c.moveTo(W * S, H * S);
+        c.lineTo(0, H * S);
+        // Left border
+        c.moveTo(0, H * S);
+        c.lineTo(0, 0);
+        c.stroke();
+    } else if (p.hp > 4 && p.hp < 9 && !gameOver && !splashActive) {
+        const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Same pulsing effect
+        c.strokeStyle = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 13
+        c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5);
+        c.beginPath();
+        // Draw the same border as above
+        c.moveTo(0, 0);
+        c.lineTo(W * S, 0);
+        c.moveTo(W * S, 0);
+        c.lineTo(W * S, H * S);
+        c.moveTo(W * S, H * S);
+        c.lineTo(0, H * S);
+        c.moveTo(0, H * S);
+        c.lineTo(0, 0);
+        c.stroke();
+    }
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
