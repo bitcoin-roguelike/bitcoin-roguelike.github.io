@@ -3458,14 +3458,14 @@ enemies.forEach(e => {
         // Apply theme-based effects
         if (isVisible) {
             if (currentTheme === 'desert') {
-                // Create a white silhouette with slight transparency for desert theme
+                // Create a white-ish silhouette with slight transparency for desert theme
                 const imageData = tempCtx.getImageData(0, 0, S, S);
                 const data = imageData.data;
                 for (let i = 0; i < data.length; i += 4) {
                     if (data[i + 3] > 0) { // Non-transparent pixel
-                        data[i] = 255;     // Red
-                        data[i + 1] = 255; // Green
-                        data[i + 2] = 255; // Blue
+                        data[i] = 245;     // Red
+                        data[i + 1] = 245; // Green
+                        data[i + 2] = 214; // Blue
                         data[i + 3] = Math.round(0.9 * 255); // 90% opacity
                     }
                 }
