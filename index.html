@@ -3463,10 +3463,10 @@ enemies.forEach(e => {
                 const data = imageData.data;
                 for (let i = 0; i < data.length; i += 4) {
                     if (data[i + 3] > 0) { // Non-transparent pixel
-                        data[i] = 245;     // Red
-                        data[i + 1] = 245; // Green
-                        data[i + 2] = 214; // Blue
-                        data[i + 3] = Math.round(0.9 * 255); // 90% opacity
+                        data[i] = 255;     // Red
+                        data[i + 1] = 242; // Green
+                        data[i + 2] = 230; // Blue
+                        data[i + 3] = Math.round(0.95 * 255); // 95% opacity
                     }
                 }
                 tempCtx.putImageData(imageData, 0, 0);
