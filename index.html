@@ -3065,7 +3065,7 @@ function checkRunewords() {
         let displayText = '';
         for (let i = 0; i < p.runes.length; i += 5) {
             const chunk = p.runes.slice(i, i + 5).join(',').toUpperCase();
-            displayText += chunk + (i + 5 <= p.runes.length ? '<br>     | ' : '');
+            displayText += chunk + (i + 5 <= p.runes.length ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ' : '');
         }
         document.getElementById('runes').innerHTML = displayText;
     } else {
