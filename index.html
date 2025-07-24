@@ -1334,7 +1334,8 @@ let autoSubmitTriggered = false;
 const specialSoundsPlayedThisFloor = {
     lava: false,
     quicksand: false,
-    pond: false
+    pond: false,
+    rune: false
 };
 
     const types = [
@@ -1573,18 +1574,19 @@ const audioContext = new AudioContext();
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
-    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 }, // Adjust duration as needed
-    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 }, // Adjust duration as needed
+    hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
+    pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
     music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
     secret: new Audio('secret.wav'),
     shoot_sword: new Audio('shoot_sword.wav'),
-    heads: { buffer: null, url: 'heads.wav', isPlaying: false, duration: 650 }, // Adjust duration as needed
-    tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 }, // Adjust duration as needed
-    lava: { buffer: null, url: 'lava.wav', isPlaying: false, duration: 900 }, // Adjust duration as needed
-    quicksand: { buffer: null, url: 'quicksand.wav', isPlaying: false, duration: 250 }, // Adjust duration as needed
-    pond: { buffer: null, url: 'pond.wav', isPlaying: false, duration: 500 } // Adjust duration as needed
+    heads: { buffer: null, url: 'heads.wav', isPlaying: false, duration: 650 },
+    tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 },
+    lava: { buffer: null, url: 'lava.wav', isPlaying: false, duration: 900 },
+    quicksand: { buffer: null, url: 'quicksand.wav', isPlaying: false, duration: 250 },
+    pond: { buffer: null, url: 'pond.wav', isPlaying: false, duration: 500 },
+    rune: { buffer: null, url: 'rune.wav', isPlaying: false, duration: 2000 }
 };
 
 sounds.music.loop = true;
@@ -1607,6 +1609,7 @@ loadSoundBuffer('tails.wav', 'tails');
 loadSoundBuffer('lava.wav', 'lava');
 loadSoundBuffer('quicksand.wav', 'quicksand');
 loadSoundBuffer('pond.wav', 'pond');
+loadSoundBuffer('rune.wav', 'rune');
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -1624,7 +1627,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -1642,7 +1645,7 @@ function preloadSounds() {
     } else {
         // Non-iOS: Existing preload logic
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     instance.volume = 0; // Mute for preloading
@@ -2251,18 +2254,21 @@ function createSecretRoom(wx, wy, px, py, dir) {
     needsRedraw = true;
 }
 
+// Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
     if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
         console.log(`Armor boost lost: p.hp=${p.hp}, p.hasArmor=${p.hasArmor}`);
     }
-    
+
+    // Prevent HP from going below 1 if immortal
     if (p.immortal && p.hp <= 0) {
-    p.hp = 1; // Keep player alive
-    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-}
-    
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        console.log(`Immortality triggered: p.hp set to 1, p.immortal=${p.immortal}`);
+    }
+
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
     needsRedraw = true;
@@ -2611,27 +2617,35 @@ function move(dir) {
                     playWebAudioSound(sounds.pickup);
                 }
                 // If p.hp > 36, do nothing and continue
-            } else if (currentTheme === 'desert') {
-                p.hp = Math.max(0, p.hp - 2);
-                logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0) {
-                    p.hp = 0;
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
-                    console.log(`Game Over: p.hp=${p.hp} due to sludge pit`);
-                }
-            } else if (currentTheme === 'hell') {
-                p.hp = Math.max(0, p.hp - 8);
-                logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0) {
-                    p.hp = 0;
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
-                    console.log(`Game Over: p.hp=${p.hp} due to lava`);
-                }
-            }
+} else if (currentTheme === 'desert') {
+    p.hp = Math.max(0, p.hp - 2);
+    logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
+    playWebAudioSound(sounds.hit);
+    if (p.hp <= 0 && p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        console.log(`Immortality triggered in sludge pit: p.hp set to 1, p.immortal=${p.immortal}`);
+    } else if (p.hp <= 0) {
+        p.hp = 0;
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+        console.log(`Game Over: p.hp=${p.hp} due to sludge pit`);
+    }
+} else if (currentTheme === 'hell') {
+    p.hp = Math.max(0, p.hp - 8);
+    logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
+    playWebAudioSound(sounds.hit);
+    if (p.hp <= 0 && p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        console.log(`Immortality triggered in lava: p.hp set to 1, p.immortal=${p.immortal}`);
+    } else if (p.hp <= 0) {
+        p.hp = 0;
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+        console.log(`Game Over: p.hp=${p.hp} due to lava`);
+    }
+}
             updatePlayerState();
         }
         if (map[ny][nx] === 7) {
@@ -2719,6 +2733,11 @@ if (currentTheme !== 'dungeon') {
 }
 if (exit && p.x === exit.x && p.y === exit.y) {
     sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+    if (p.immortal) {
+        p.immortal = false;
+        logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
+        console.log(`Immortality reset on floor transition: p.immortal=${p.immortal}`);
+    }
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     enemies = [];
@@ -2727,10 +2746,13 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     waveActive = false;
     exit = null;
     killsLog = [];
+    
     // Reset special sound tracking for the new floor
     specialSoundsPlayedThisFloor.lava = false;
     specialSoundsPlayedThisFloor.quicksand = false;
     specialSoundsPlayedThisFloor.pond = false;
+    specialSoundsPlayedThisFloor.rune = false;
+
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
     console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
@@ -2800,16 +2822,20 @@ function moveEnemies() {
                 (Math.abs(e.x - p.x) === 1 && e.y === p.y) || (Math.abs(e.y - p.y) === 1 && e.x === p.x) :
                 Math.abs(e.x - p.x) <= 1 && Math.abs(e.y - p.y) <= 1
             ) {
-                p.hp -= e.type.atk;
-                logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${e.type.atk} DMG`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0) {
-                    p.hp = 0;
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
-                    console.log(`Game Over: p.hp=${p.hp}`);
-                }
-                updatePlayerState(); // Check HP and armor state after damage
+p.hp -= e.type.atk;
+logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${e.type.atk} DMG`);
+playWebAudioSound(sounds.hit);
+if (p.hp <= 0 && p.immortal) {
+    p.hp = 1;
+    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+    console.log(`Immortality triggered in enemy attack: p.hp set to 1, p.immortal=${p.immortal}`);
+} else if (p.hp <= 0) {
+    p.hp = 0;
+    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+    gameOver = true;
+    console.log(`Game Over: p.hp=${p.hp} due to ${e.type.name} attack`);
+}
+updatePlayerState(); // Check HP and armor state after damage
             }
         }
     });
@@ -2955,39 +2981,91 @@ if (Math.random() < 0.1) {
 
 let usePickaxeSword = false; // Global flag for draw
 
+// Modified checkRunewords function to handle rune shuffling and ensure immortality
 function checkRunewords() {
-    const runeString = p.runes.join('');
-    // Check for 'bitcoin' runeword
-    if (runeString.includes('bitcoin') && !p.runewords.includes('bitcoin')) {
-        p.hp += 444;
-        p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
-        p.runewords.push('bitcoin');
-        document.getElementById('whale-log').textContent = 'Runeword BITCOIN was found!';
-        logBattleEvent(`Floor ${floor} - Runeword BITCOIN activated! +444 HP (now ${p.hp})`);
-        setTimeout(() => {
-            document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
-            document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
-        }, 5000);
-        updatePlayerState();
+    // Try all permutations of runes to find valid runewords
+    function getPermutations(arr) {
+        let results = [];
+        if (arr.length === 0) return [[]];
+        for (let i = 0; i < arr.length; i++) {
+            let rest = arr.slice(0, i).concat(arr.slice(i + 1));
+            let perms = getPermutations(rest);
+            for (let perm of perms) {
+                results.push([arr[i], ...perm]);
+            }
+        }
+        return results;
     }
-    // Check for 'hodl' runeword
-    if (runeString.includes('hodl') && !p.runewords.includes('hodl')) {
-        p.immortal = true;
-        p.runewords.push('hodl');
-        document.getElementById('whale-log').textContent = 'Runeword HODL was found!';
-        logBattleEvent(`Floor ${floor} - Runeword HODL activated! Immortal for this floor!`);
-        setTimeout(() => {
-            document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
-            document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
-        }, 5000);
-        updatePlayerState();
+
+    let runeString = p.runes.join('');
+    let runewordFound = false;
+    let usedRunes = [];
+
+    // Check all permutations for valid runewords
+    const permutations = getPermutations(p.runes);
+    for (let perm of permutations) {
+        let permString = perm.join('');
+        if (permString.includes('bitcoin') && !p.runewords.includes('bitcoin')) {
+            p.hp += 444;
+            p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
+            p.runewords.push('bitcoin');
+            usedRunes = perm.slice(0, permString.indexOf('bitcoin') + 7); // Mark runes used
+            document.getElementById('whale-log').textContent = 'Runeword BITCOIN was found!';
+            logBattleEvent(`Floor ${floor} - Runeword BITCOIN activated! +444 HP (now ${p.hp})`);
+            if (!specialSoundsPlayedThisFloor.rune) {
+                playWebAudioSound(sounds.rune);
+                specialSoundsPlayedThisFloor.rune = true;
+                console.log('Played rune.wav for BITCOIN runeword');
+            }
+            setTimeout(() => {
+                document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
+                document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
+            }, 5000);
+            runewordFound = true;
+            updatePlayerState();
+            break; // Stop after finding a valid runeword
+        }
+        if (permString.includes('hodl') && !p.runewords.includes('hodl')) {
+            p.immortal = true;
+            p.runewords.push('hodl');
+            usedRunes = perm.slice(0, permString.indexOf('hodl') + 4); // Mark runes used
+            document.getElementById('whale-log').textContent = 'Runeword HODL was found!';
+            logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
+            if (!specialSoundsPlayedThisFloor.rune) {
+                playWebAudioSound(sounds.rune);
+                specialSoundsPlayedThisFloor.rune = true;
+                console.log('Played rune.wav for HODL runeword');
+            }
+            setTimeout(() => {
+                document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
+                document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
+            }, 5000);
+            runewordFound = true;
+            updatePlayerState();
+            break; // Stop after finding a valid runeword
+        }
     }
-    // Update inventory display with 5x5 grid and five spaces before colon
+
+    // Remove used runes and update inventory
+    if (runewordFound) {
+        p.runes = p.runes.filter(r => !usedRunes.includes(r)); // Keep unused runes
+        runeDrops = runeDrops.filter(r => !r.specific); // Clear specific rune drops
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                if (map[y][x] === 9) {
+                    map[y][x] = 0; // Clear specific rune tiles
+                }
+            }
+        }
+        needsRedraw = true;
+    }
+
+    // Update runes display in inventory with 5x5 grid
     if (p.runes.length > 0) {
         let displayText = '';
         for (let i = 0; i < p.runes.length; i += 5) {
             const chunk = p.runes.slice(i, i + 5).join(',').toUpperCase();
-            displayText += chunk + (i + 5 <= p.runes.length ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ' : '');
+            displayText += chunk + (i + 5 <= p.runes.length ? '<br>     | ' : '');
         }
         document.getElementById('runes').innerHTML = displayText;
     } else {
@@ -3191,6 +3269,7 @@ function restart() {
     p.runes = [];
     p.runewords = [];
     p.immortal = false;
+    console.log('Immortality reset in restart: p.immortal=false');
     document.getElementById('runes').textContent = 'None';
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
@@ -3277,7 +3356,7 @@ function draw() {
             if (map[y][x] === 9) {
                 const rune = runeDrops.find(r => r.x === x && r.y === y && r.specific);
                 if (rune && assets.runes[rune.letter]) {
-                    c.globalAlpha = 0.6; // Apply 40% transparency
+                    c.globalAlpha = 0.7; // Apply 30% transparency
                     c.drawImage(assets.runes[rune.letter], x * S, y * S, S, S);
                     c.globalAlpha = 1; // Restore full opacity
                 }
@@ -3486,11 +3565,18 @@ function gameLoop(timestamp) {
     }
     updateProjectiles();
     if ((needsRedraw || p.hp <= 8) && !splashActive) draw();
-    if (p.hp <= 0 && !gameOver) {
+if (p.hp <= 0 && !gameOver) {
+    if (p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        console.log(`Immortality triggered in gameLoop: p.hp set to 1, p.immortal=${p.immortal}`);
+        updatePlayerState();
+    } else {
         p.hp = 0;
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
         gameOver = true;
     }
+}
     requestAnimationFrame(gameLoop);
 }
 
