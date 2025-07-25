@@ -1165,36 +1165,30 @@ document.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Blocked multi-touchstart');
-    }
+            }
 }, { passive: false });
 document.addEventListener('touchmove', (e) => {
     if (e.scale !== 1 || e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Blocked multi-touchmove or pinch');
-    }
+            }
 }, { passive: false });
 document.addEventListener('gesturestart', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Blocked gesturestart');
-}, { passive: false });
+    }, { passive: false });
 document.addEventListener('gesturechange', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Blocked gesturechange');
-}, { passive: false });
+    }, { passive: false });
 document.addEventListener('gestureend', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Blocked gestureend');
-}, { passive: false });
+    }, { passive: false });
 document.addEventListener('dblclick', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Blocked dblclick');
-}, { passive: false });
+    }, { passive: false });
 
 // Block canvas touch interference
 const canvas = document.getElementById('game');
@@ -1202,18 +1196,15 @@ canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Canvas blocked multi-touchstart');
-    } else if (!e.target.closest('#dpad, #actions')) {
+            } else if (!e.target.closest('#dpad, #actions')) {
         e.preventDefault();
-        console.log(`Canvas single-touchstart blocked at ${e.touches[0].clientX}, ${e.touches[0].clientY}`);
-    }
+            }
 }, { passive: false });
 canvas.addEventListener('touchmove', (e) => {
     if (e.scale !== 1 || e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Canvas blocked multi-touchmove or pinch');
-    }
+            }
 }, { passive: false });
 
 // Touch handlers for #dpad buttons
@@ -1222,18 +1213,15 @@ document.querySelectorAll('#dpad button').forEach(button => {
         e.preventDefault(); // Prevent scrolling
         e.stopPropagation(); // Stop event bubbling
         button.classList.add('pressed'); // Add visual feedback
-        console.log(`Touchstart on ${button.id}, relying on onclick`);
-    }, { passive: false });
+            }, { passive: false });
     button.addEventListener('touchend', (e) => {
         e.preventDefault();
         e.stopPropagation();
         button.classList.remove('pressed'); // Remove visual feedback
-        console.log(`Touchend on ${button.id}`);
-    }, { passive: false });
+            }, { passive: false });
     button.addEventListener('click', (e) => {
         e.preventDefault(); // Prevent default click behavior after onclick
-        console.log(`Click processed on ${button.id}`);
-    }, { passive: false });
+            }, { passive: false });
 });
 
 // Touch handlers for #actions buttons
@@ -1245,18 +1233,15 @@ document.querySelectorAll('#actions button').forEach(button => {
         if (button.id === 'mute') toggleMute();
         else if (button.id === 'attack') attack();
         else if (button.id === 'potion') usePotion();
-        console.log(`Touchstart triggered on ${button.id}`);
-    }, { passive: false });
+            }, { passive: false });
     button.addEventListener('touchend', (e) => {
         e.preventDefault();
         e.stopPropagation();
         button.classList.remove('pressed'); // Remove visual feedback
-        console.log(`Touchend on ${button.id}`);
-    }, { passive: false });
+            }, { passive: false });
     button.addEventListener('click', (e) => {
         e.preventDefault(); // Prevent default click behavior
-        console.log(`Click processed on ${button.id}`);
-    }, { passive: false });
+            }, { passive: false });
 });
         
 
@@ -1281,7 +1266,7 @@ let map = [],
         pickaxes: 0,
         hasArmor: false,
         runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
-	runewords: [], // Array to store activated runewords (e.g., ['bitcoin', 'hodl'])
+	runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
 	immortal: false, // Flag for HODL runeword immortality
         anim: {
             frames: {
@@ -1586,7 +1571,8 @@ const sounds = {
     lava: { buffer: null, url: 'lava.wav', isPlaying: false, duration: 900 },
     quicksand: { buffer: null, url: 'quicksand.wav', isPlaying: false, duration: 250 },
     pond: { buffer: null, url: 'pond.wav', isPlaying: false, duration: 500 },
-    rune: { buffer: null, url: 'rune.wav', isPlaying: false, duration: 2000 }
+    rune: { buffer: null, url: 'rune.wav', isPlaying: false, duration: 2000 },
+    rune_drop: { buffer: null, url: 'rune_drop.wav', isPlaying: false, duration: 1000 }
 };
 
 sounds.music.loop = true;
@@ -1598,8 +1584,7 @@ function loadSoundBuffer(url, key) {
         .then(data => audioContext.decodeAudioData(data))
         .then(buffer => {
             sounds[key].buffer = buffer;
-            console.log(`Loaded Web Audio buffer for ${key}: ${url}`);
-        })
+                    })
         .catch(e => console.error(`Failed to load Web Audio buffer for ${key}: ${url}`, e));
 }
 loadSoundBuffer('hit.wav', 'hit');
@@ -1610,6 +1595,7 @@ loadSoundBuffer('lava.wav', 'lava');
 loadSoundBuffer('quicksand.wav', 'quicksand');
 loadSoundBuffer('pond.wav', 'pond');
 loadSoundBuffer('rune.wav', 'rune');
+loadSoundBuffer('rune_drop.wav', 'rune_drop');
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -1627,25 +1613,23 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
                     const tempAudio = new Audio(instance.src);
                     tempAudio.volume = 1.0; // Set normal volume for later use
-                    console.log(`Preloaded sound instance ${idx} for iOS: ${instance.src}, volume=${tempAudio.volume}`);
-                });
+                                    });
             } else {
                 // Create a new Audio object to trigger caching
                 const tempAudio = new Audio(sound.src);
                 tempAudio.volume = 1.0;
-                console.log(`Preloaded sound for iOS: ${sound.src}, volume=${tempAudio.volume}`);
-            }
+                            }
         });
     } else {
         // Non-iOS: Existing preload logic
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     instance.volume = 0; // Mute for preloading
@@ -1653,8 +1637,7 @@ function preloadSounds() {
                         instance.pause();
                         instance.currentTime = 0;
                         instance.volume = 1.0;
-                        console.log(`Preloaded sound instance ${idx}: ${instance.src}, volume=${instance.volume}`);
-                    }).catch(e => console.error(`Preload sound error for ${instance.src} instance ${idx}:`, e));
+                                            }).catch(e => console.error(`Preload sound error for ${instance.src} instance ${idx}:`, e));
                 });
             } else {
                 sound.volume = 0;
@@ -1662,8 +1645,7 @@ function preloadSounds() {
                     sound.pause();
                     sound.currentTime = 0;
                     sound.volume = 1.0;
-                    console.log(`Preloaded sound: ${sound.src}, volume=${sound.volume}`);
-                }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
+                                    }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
             }
         });
     }
@@ -1675,13 +1657,11 @@ function playWebAudioSound(soundObj) {
         return;
     }
     if (soundObj.isPlaying) {
-        console.log(`Skipping playback of ${soundObj.url}: already playing`);
-        return;
+                return;
     }
     if (audioContext.state === 'suspended') {
         audioContext.resume().then(() => {
-            console.log('AudioContext resumed');
-        }).catch(e => console.error('Failed to resume AudioContext:', e));
+                    }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
     soundObj.isPlaying = true; // Set flag
     const source = audioContext.createBufferSource();
@@ -1691,17 +1671,14 @@ function playWebAudioSound(soundObj) {
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
-    console.log(`Playing Web Audio sound: ${soundObj.url}, volume=${gainNode.gain.value}`);
-    source.onended = () => {
+        source.onended = () => {
         soundObj.isPlaying = false; // Clear flag
-        console.log(`Web Audio sound ended: ${soundObj.url}`);
-    };
+            };
     // Fallback timeout to clear flag if onended fails
     setTimeout(() => {
         if (soundObj.isPlaying) {
             soundObj.isPlaying = false;
-            console.log(`Cleared isPlaying flag for ${soundObj.url} via timeout`);
-        }
+                    }
     }, soundObj.duration);
 }
 
@@ -1710,8 +1687,7 @@ const splashImg = new Image();
 splashImg.src = 'splash.png';
 splashImg.onload = () => {
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-    console.log('Splash started: active=', splashActive, 'bg=#F7931A');
-};
+    };
 
 function fadeSplash() {
     setTimeout(() => {
@@ -1731,8 +1707,7 @@ function fadeSplash() {
                 clearInterval(fadeInterval);
                 splashActive = false;
                 document.getElementById('splash-screen').style.display = 'none'; // Hide instead of remove
-                console.log('Splash ended: active=', splashActive);
-            }
+                            }
         }, 75);
     }, 25);
 }
@@ -1744,18 +1719,15 @@ function resetSplashScreen() {
     // Redraw splash image
     splashCanvas.clearRect(0, 0, 320, 320);
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-    console.log('Splash screen reset: active=', splashActive);
-}
+    }
 
 document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
-        console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted, 'wave=', wave);
-        preloadSounds();
+                preloadSounds();
         // Ensure AudioContext is resumed for iOS
         if (audioContext.state === 'suspended') {
             audioContext.resume().then(() => {
-                console.log('AudioContext resumed for START button');
-            }).catch(e => console.error('Failed to resume AudioContext:', e));
+                            }).catch(e => console.error('Failed to resume AudioContext:', e));
         }
         // Preload player animation frames
         const imagesToLoad = [
@@ -1771,14 +1743,12 @@ document.getElementById('start-button').addEventListener('click', () => {
             if (img.complete) {
                 loadedCount++;
                 if (loadedCount === imagesToLoad.length) {
-                    console.log('All player animation frames loaded');
-                }
+                                    }
             } else {
                 img.onload = () => {
                     loadedCount++;
                     if (loadedCount === imagesToLoad.length) {
-                        console.log('All player animation frames loaded');
-                    }
+                                            }
                 };
                 img.onerror = () => console.error(`Failed to load image: ${img.src}`);
             }
@@ -1787,8 +1757,7 @@ document.getElementById('start-button').addEventListener('click', () => {
             sounds.music.pause();
             sounds.music.currentTime = 0;
             sounds.music.play().then(() => {
-                console.log('Music started successfully');
-            }).catch(e => console.error('Music play failed on START:', e));
+                            }).catch(e => console.error('Music play failed on START:', e));
         }
         fadeSplash();
         setTimeout(() => {
@@ -1841,8 +1810,7 @@ function logBattleEvent(event) {
                 clearTimeout(battleLogTimeout);
                 battleLogTimeout = null;
             }
-            console.log('Kills display updated: persistent, lines=', killsLog.length, killsLog);
-            return;
+                        return;
         }
     }
     // Keep last 3 messages for regular events (reverse waterfall)
@@ -1866,8 +1834,7 @@ function logBattleEvent(event) {
             if (computedStyle.opacity === '0') {
                 battleLog = [];
                 battleEvents.value = '';
-                console.log('Battle log cleared after fade-out');
-                // Restore kills display if still valid
+                                // Restore kills display if still valid
                 if (exit && enemies.length === 0) {
                     killsLog = [
                         'Kills:',
@@ -1883,8 +1850,7 @@ function logBattleEvent(event) {
                     battleEvents.style.transform = 'translateX(0)';
                     battleEvents.style.opacity = '1';
                     battleEvents.scrollTop = battleEvents.scrollHeight;
-                    console.log('Kills display restored after fade-out, lines=', killsLog.length, killsLog);
-                }
+                                    }
             }
         }, 300); // Wait for transition (0.3s)
         battleLogTimeout = null;
@@ -1947,7 +1913,6 @@ function initMap() {
         // Change theme every fourth floor
         if (floor % 3 === 0 && floor > 1) {
             currentTheme = selectNewTheme(currentTheme);
-            console.log(`Floor ${floor} - Changed theme to ${currentTheme}`);
         }
         // Update text color based on theme
         let textColor;
@@ -1978,7 +1943,7 @@ function initMap() {
         satoshiDrops = [];
         runeDrops = []; // Clear rune drops on map, but keep p.runes, p.runewords, p.immortal
         
-        // Generate rooms (existing code unchanged)
+        // Generate rooms
         let maxAttempts = 100;
         while (rooms.length < 3 && maxAttempts > 0) {
             let rw = 4 + Math.floor(Math.random() * 4);
@@ -2008,7 +1973,7 @@ function initMap() {
             return initMap();
         }
         
-        // Connect rooms with corridors (existing code unchanged)
+        // Connect rooms with corridors
         for (let i = 1; i < rooms.length; i++) {
             let r1 = rooms[i - 1], r2 = rooms[i];
             let x1 = r1.x + Math.floor(r1.w / 2), y1 = r1.y + Math.floor(r1.h / 2);
@@ -2033,12 +1998,10 @@ function initMap() {
         let specialPositions = [];
         if (currentTheme !== 'dungeon') {
             specialPositions = spawnItemWithChance(6, 0.5, 2, 5, true); // 50% chance, max 2 tiles
-            console.log(`Special tiles (${currentTheme}) placed:`, specialPositions);
         }
 
         // Place Gnome with X% chance, only if no conflict with special tiles
         let gnomePositions = [];
-        console.log('Attempting gnome spawn: theme=', currentTheme, 'specialPositions=', specialPositions.length);
         if (
             currentTheme === 'dungeon' || 
             currentTheme === 'desert' || 
@@ -2049,18 +2012,14 @@ function initMap() {
             if (Math.random() < 0.1) { // 10% chance to spawn a gnome
                 gnomePositions = spawnItemWithChance(7, 1.0, 1, 5, true);
                 if (gnomePositions.length > 0) {
-                    console.log(`Gnome placed at:`, gnomePositions);
                 } else {
-                    console.log('Gnome spawn failed: no valid positions found');
                 }
             } else {
-                console.log('Gnome spawn skipped: failed 10% chance check');
             }
         } else {
-            console.log(`Gnome skipped to prioritize ${currentTheme} special tiles`);
         }
 
-        // Place potions (existing code)
+        // Place potions
         let potionPositions = [];
         let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, rooms.length));
         let proximityRange = 5;
@@ -2089,16 +2048,18 @@ function initMap() {
         if (Math.random() < 0.2) { // 20% chance to spawn a pickaxe
             pickaxePositions = spawnItemWithChance(4, 1.0, 1, 5, true);
             if (pickaxePositions.length > 0) {
-                console.log(`Pickaxe placed at:`, pickaxePositions);
             } else {
-                console.log('Pickaxe spawn failed: no valid positions found');
             }
         }    
         
-        console.log('Rooms generated:', rooms.length, 'Potions placed:', potionPositions, 'Pickaxes placed:', pickaxePositions);
         exit = null;
         initialWaveSpawned = false;
         needsRedraw = true;
+
+        // Check runewords at floor start
+        checkRunewordsAtFloorStart();
+        // Update rune display
+        checkRunewords();
     } catch (e) {
         console.error('initMap Error:', e, e.stack);
         throw e;
@@ -2204,8 +2165,7 @@ function createSecretRoom(wx, wy, px, py, dir) {
     if (adjacent.length > 0) {
         const hole = adjacent[Math.floor(Math.random() * adjacent.length)];
         map[hole.y][hole.x] = 0;
-        console.log(`Punched hole at (${hole.x}, ${hole.y}) for access`);
-    }
+            }
     // Carve a corridor to a nearby floor tile
     let floorTiles = [];
     for (let y = 0; y < H; y++) {
@@ -2233,8 +2193,7 @@ function createSecretRoom(wx, wy, px, py, dir) {
                 map[y][x] = 0;
             }
         }
-        console.log(`Carved corridor from (${wx}, ${wy}) to (${target.x}, ${target.y})`);
-    } else {
+            } else {
         console.warn(`No floor tile found to connect secret room at (${wx}, ${wy})`);
     }
     // Place armor in the center
@@ -2250,8 +2209,7 @@ function createSecretRoom(wx, wy, px, py, dir) {
         floorIndicator.textContent = `Floor ${floor}`;
     }, 5000);
     updateFogMap(px, py);
-    console.log(`Secret room (3x3) created at (${rx}, ${ry}), armor at (${armorX}, ${armorY}), entry at (${wx}, ${wy}), dir=${dir}`);
-    needsRedraw = true;
+        needsRedraw = true;
 }
 
 // Modified updatePlayerState to ensure immortality works correctly
@@ -2259,15 +2217,13 @@ function updatePlayerState() {
     if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
-        console.log(`Armor boost lost: p.hp=${p.hp}, p.hasArmor=${p.hasArmor}`);
-    }
+            }
 
     // Prevent HP from going below 1 if immortal
     if (p.immortal && p.hp <= 0) {
         p.hp = 1;
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        console.log(`Immortality triggered: p.hp set to 1, p.immortal=${p.immortal}`);
-    }
+            }
 
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
@@ -2338,8 +2294,7 @@ function updateFogMap(px, py) {
     // Log evolution for newly visible Shrimps
     if (newlyVisibleShrimps.length > 0) {
         logBattleEvent(`Floor ${floor} - Shrimp evolves to Hell Shrimp!`);
-        console.log(`Shrimp evolved to Hell Shrimp at positions: ${newlyVisibleShrimps.map(s => `(${s.x}, ${s.y})`).join(', ')}`);
-    }
+            }
 }
 
 let enemiesSpawnedThisFloor = 0;
@@ -2355,8 +2310,7 @@ async function fetchTxs() {
     }
     const now = Date.now();
     if (nextApiCallTime && now < nextApiCallTime) {
-        console.log(`Skipping API call, next call in ${(nextApiCallTime - now) / 1000} seconds`);
-        return;
+                return;
     }
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
@@ -2365,14 +2319,11 @@ async function fetchTxs() {
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
         if (initialSpawnDoneThisFloor) {
-            console.log(`Initial spawn done for floor ${floor}, checking for Whales`);
-        } else {
-            console.log(`Spawning enemies for floor ${floor}, ${enemiesSpawnedThisFloor}/10 spawned`);
-        }
+                    } else {
+                    }
         await new Promise(resolve => setTimeout(resolve, 25));
         const res = await axios.get('https://mempool.space/api/mempool/recent');
-        console.log('Mempool response:', res.data);
-        if (!res.data || res.data.length === 0) {
+                if (!res.data || res.data.length === 0) {
             console.warn(`Empty mempool response, scheduling retry in ${API_INTERVAL / 1000}s`);
             nextApiCallTime = now + API_INTERVAL;
             apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
@@ -2393,30 +2344,24 @@ async function fetchTxs() {
                     value = txRes.data.vout.reduce((sum, out) => sum + (Number.isFinite(out.value) ? out.value : 0), 0);
                     address = txRes.data.vout?.map(v => v.scriptpubkey_address).filter(Boolean)[0] || 'Invalid address';
                 } else {
-                    console.log(`Invalid tx data from api/tx/${tx.txid}:`, txRes.data);
-                    continue;
+                                        continue;
                 }
             } catch (e) {
-                console.log(`Skipping tx ${tx.txid} due to fetch error:`, e.message);
-                continue;
+                                continue;
             }
             if (value <= 0) {
-                console.log(`Skipping tx ${tx.txid}: Zero/negative value`, value);
-                continue;
+                                continue;
             }
             const btc = value / 1e8;
             const type = types.find(t => btc > t.min && btc <= t.max);
-            console.log(`Tx ${tx.txid}: BTC=${btc.toFixed(8)}, Type=${type ? type.name : 'None'}, Value=${value}`);
-            if (!type) {
-                console.log(`No type for BTC: ${btc}, Tx: ${tx.txid}`);
-                continue;
+                        if (!type) {
+                                continue;
             }
 
             // Handle initial spawn (up to 10 enemies, including Whales)
             if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10 && enemies.length < 10) {
                 if (type.name !== 'Whale' && exit) {
-                    console.log(`Exit exists at (${exit.x}, ${exit.y}), skipping non-Whale spawn for tx ${tx.txid}`);
-                    continue;
+                                        continue;
                 }
                 console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
@@ -2624,13 +2569,11 @@ function move(dir) {
     if (p.hp <= 0 && p.immortal) {
         p.hp = 1;
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        console.log(`Immortality triggered in sludge pit: p.hp set to 1, p.immortal=${p.immortal}`);
-    } else if (p.hp <= 0) {
+            } else if (p.hp <= 0) {
         p.hp = 0;
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
         gameOver = true;
-        console.log(`Game Over: p.hp=${p.hp} due to sludge pit`);
-    }
+            }
 } else if (currentTheme === 'hell') {
     p.hp = Math.max(0, p.hp - 8);
     logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
@@ -2638,13 +2581,11 @@ function move(dir) {
     if (p.hp <= 0 && p.immortal) {
         p.hp = 1;
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        console.log(`Immortality triggered in lava: p.hp set to 1, p.immortal=${p.immortal}`);
-    } else if (p.hp <= 0) {
+            } else if (p.hp <= 0) {
         p.hp = 0;
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
         gameOver = true;
-        console.log(`Game Over: p.hp=${p.hp} due to lava`);
-    }
+            }
 }
             updatePlayerState();
         }
@@ -2727,8 +2668,7 @@ if (currentTheme !== 'dungeon') {
             playWebAudioSound(sounds[soundKey]);
             specialSoundsPlayedThisFloor[soundKey] = true;
             logBattleEvent(`Floor ${floor} - Heard ${soundKey === 'quicksand' ? 'sludge pit' : soundKey} nearby!`); // Updated to show Sludge Pit
-            console.log(`Played ambient sound: ${soundKey}, position=(${adjacent[0].x}, ${adjacent[0].y})`);
-        }
+                    }
     }
 }
 if (exit && p.x === exit.x && p.y === exit.y) {
@@ -2736,8 +2676,7 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     if (p.immortal) {
         p.immortal = false;
         logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
-        console.log(`Immortality reset on floor transition: p.immortal=${p.immortal}`);
-    }
+            }
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     enemies = [];
@@ -2755,8 +2694,7 @@ if (exit && p.x === exit.x && p.y === exit.y) {
 
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
-    console.log(`Moved to floor ${floor}, wave=${wave}, reset enemy spawns, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}`);
-    initMap();
+        initMap();
     nextApiCallTime = null;
     const battleEvents = document.getElementById('battle-events');
     battleEvents.value = '';
@@ -2828,13 +2766,11 @@ playWebAudioSound(sounds.hit);
 if (p.hp <= 0 && p.immortal) {
     p.hp = 1;
     logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-    console.log(`Immortality triggered in enemy attack: p.hp set to 1, p.immortal=${p.immortal}`);
-} else if (p.hp <= 0) {
+    } else if (p.hp <= 0) {
     p.hp = 0;
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
     gameOver = true;
-    console.log(`Game Over: p.hp=${p.hp} due to ${e.type.name} attack`);
-}
+    }
 updatePlayerState(); // Check HP and armor state after damage
             }
         }
@@ -2845,20 +2781,19 @@ updatePlayerState(); // Check HP and armor state after damage
         do { x = r.x + Math.floor(Math.random() * r.w); y = r.y + Math.floor(Math.random() * r.h); }
         while (map[y][x] !== 0 || (x === p.x && y === p.y));
         exit = {x, y};
-        console.log(`Stairs spawned at (${x}, ${y}) on floor ${floor}, wave=${wave}`);
-        updateSatsDisplay();
+                updateSatsDisplay();
         needsRedraw = true;
     }
     if (enemies.length === 0 && waveActive) {
         waveActive = false;
         logBattleEvent(`Floor ${floor} - Wave ${wave} Completed!`);
         initialWaveSpawned = false;
-        console.log(`Wave ${wave} completed, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
-        needsRedraw = true;
+                needsRedraw = true;
     }
     needsRedraw = true;
 }
 
+// Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
 function updateProjectiles() {
     if (gameOver || splashActive) return;
     projectiles = projectiles.filter(proj => {
@@ -2897,45 +2832,6 @@ function updateProjectiles() {
                 if (map[hit.y][hit.x] === 0) {
                     map[hit.y][hit.x] = 3;
                     satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                    
-                    // Rune drop logic (10% chance)
-if (Math.random() < 0.1) {
-    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
-    const runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
-    let runePlaced = false;
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 8; // Generic rune on floor
-        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
-        runePlaced = true;
-    } else {
-        const adjacent = [
-            { x: hit.x, y: hit.y - 1 },
-            { x: hit.x, y: hit.y + 1 },
-            { x: hit.x - 1, y: hit.y },
-            { x: hit.x + 1, y: hit.y }
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny)
-            ) {
-                map[ny][nx] = 8; // Generic rune on floor
-                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
-                runePlaced = true;
-                break;
-            }
-        }
-    }
-    if (runePlaced) {
-        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
-        console.log(`Rune dropped: ${runeLetter} at (${runeDrops[runeDrops.length - 1].x}, ${runeDrops[runeDrops.length - 1].y})`);
-    } else {
-        console.log(`No space to place rune for ${hit.type.name} at (${hit.x}, ${hit.y})`);
-    }
-}
-                    
                     dropPlaced = true;
                 } else {
                     const adjacent = [
@@ -2949,7 +2845,7 @@ if (Math.random() < 0.1) {
                         if (
                             nx >= 0 && nx < W && ny >= 0 && ny < H &&
                             map[ny][nx] === 0 &&
-                            !enemies.some(en => en.x === nx && en.y === ny)
+                            !enemies.some(e => e.x === nx && e.y === ny)
                         ) {
                             map[ny][nx] = 3;
                             satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
@@ -2959,9 +2855,54 @@ if (Math.random() < 0.1) {
                     }
                 }
                 if (!dropPlaced) {
-                    console.log(`No space to place drop for ${hit.type.name} at (${hit.x}, ${hit.y})`);
+                    // No space for satoshi drop
                 }
-                enemies = enemies.filter(en => en !== hit);
+                
+                // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
+                if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                    let runeLetter;
+                    if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
+                        // Hell Shrimp: Use specific rune letters
+                        const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
+                        runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                    } else {
+                        // Regular rune drop
+                        const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                        runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                    }
+                    let runePlaced = false;
+                    if (map[hit.y][hit.x] === 0) {
+                        map[hit.y][hit.x] = 8; // Generic rune on floor
+                        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
+                        runePlaced = true;
+                    } else {
+                        const adjacent = [
+                            { x: hit.x, y: hit.y - 1 },
+                            { x: hit.x, y: hit.y + 1 },
+                            { x: hit.x - 1, y: hit.y },
+                            { x: hit.x + 1, y: hit.y }
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 8; // Generic rune on floor
+                                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                                runePlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (runePlaced) {
+                        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+                        playWebAudioSound(sounds.rune_drop);
+                    }
+                }
+                
+                enemies = enemies.filter(e => e !== hit);
                 if (exit && enemies.length === 0) {
                     updateSatsDisplay();
                 }
@@ -2983,39 +2924,55 @@ let usePickaxeSword = false; // Global flag for draw
 
 // Modified checkRunewords function to handle rune shuffling and ensure immortality
 function checkRunewords() {
-    // Try all permutations of runes to find valid runewords
-    function getPermutations(arr) {
-        let results = [];
-        if (arr.length === 0) return [[]];
-        for (let i = 0; i < arr.length; i++) {
-            let rest = arr.slice(0, i).concat(arr.slice(i + 1));
-            let perms = getPermutations(rest);
-            for (let perm of perms) {
-                results.push([arr[i], ...perm]);
-            }
+    // Update runes display in inventory with 5x5 grid
+    if (p.runes.length > 0) {
+        let displayText = '';
+        for (let i = 0; i < p.runes.length; i += 5) {
+            const chunk = p.runes.slice(i, i + 5).join(',').toUpperCase();
+            displayText += chunk + (i + 5 <= p.runes.length ? '<br>     : ' : '');
         }
-        return results;
+        document.getElementById('runes').innerHTML = displayText;
+    } else {
+        document.getElementById('runes').textContent = 'None';
     }
+}
 
-    let runeString = p.runes.join('');
+// Modified checkRunewordsAtFloorStart function to check for BTC and HODL runes in any order
+function checkRunewordsAtFloorStart() {
+    const btcRunes = ['b', 't', 'c'];
+    const hodlRunes = ['h', 'o', 'd', 'l'];
     let runewordFound = false;
     let usedRunes = [];
 
-    // Check all permutations for valid runewords
-    const permutations = getPermutations(p.runes);
-    for (let perm of permutations) {
-        let permString = perm.join('');
-        if (permString.includes('bitcoin') && !p.runewords.includes('bitcoin')) {
+    // Helper function to check if all required runes exist in p.runes
+    function hasRunes(requiredRunes) {
+        const runeCount = {};
+        p.runes.forEach(r => runeCount[r] = (runeCount[r] || 0) + 1);
+        const indices = [];
+        for (const rune of requiredRunes) {
+            if (!runeCount[rune] || runeCount[rune] === 0) return { found: false };
+            // Find the index of the first occurrence of this rune
+            const index = p.runes.findIndex((r, i) => r === rune && !indices.includes(i));
+            if (index === -1) return { found: false };
+            indices.push(index);
+            runeCount[rune]--;
+        }
+        return { found: true, indices };
+    }
+
+    // Check for BTC runeword
+    if (!p.runewords.includes('btc')) {
+        const result = hasRunes(btcRunes);
+        if (result.found) {
             p.hp += 444;
             p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
-            p.runewords.push('bitcoin');
-            usedRunes = perm.slice(0, permString.indexOf('bitcoin') + 7); // Mark runes used
-            document.getElementById('whale-log').textContent = 'Runeword BITCOIN was found!';
-            logBattleEvent(`Floor ${floor} - Runeword BITCOIN activated! +444 HP (now ${p.hp})`);
+            p.runewords.push('btc');
+            usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
+            document.getElementById('whale-log').textContent = 'Runeword BTC was found!';
+            logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
             if (!specialSoundsPlayedThisFloor.rune) {
                 playWebAudioSound(sounds.rune);
                 specialSoundsPlayedThisFloor.rune = true;
-                console.log('Played rune.wav for BITCOIN runeword');
             }
             setTimeout(() => {
                 document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
@@ -3023,18 +2980,21 @@ function checkRunewords() {
             }, 5000);
             runewordFound = true;
             updatePlayerState();
-            break; // Stop after finding a valid runeword
         }
-        if (permString.includes('hodl') && !p.runewords.includes('hodl')) {
+    }
+
+    // Check for HODL runeword
+    if (!p.runewords.includes('hodl')) {
+        const result = hasRunes(hodlRunes);
+        if (result.found) {
             p.immortal = true;
             p.runewords.push('hodl');
-            usedRunes = perm.slice(0, permString.indexOf('hodl') + 4); // Mark runes used
+            usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
             document.getElementById('whale-log').textContent = 'Runeword HODL was found!';
             logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
             if (!specialSoundsPlayedThisFloor.rune) {
                 playWebAudioSound(sounds.rune);
                 specialSoundsPlayedThisFloor.rune = true;
-                console.log('Played rune.wav for HODL runeword');
             }
             setTimeout(() => {
                 document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
@@ -3042,13 +3002,16 @@ function checkRunewords() {
             }, 5000);
             runewordFound = true;
             updatePlayerState();
-            break; // Stop after finding a valid runeword
         }
     }
 
     // Remove used runes and update inventory
     if (runewordFound) {
-        p.runes = p.runes.filter(r => !usedRunes.includes(r)); // Keep unused runes
+        // Sort indices in descending order to avoid issues when removing
+        const indicesToRemove = usedRunes.map(r => p.runes.indexOf(r)).sort((a, b) => b - a);
+        for (const index of indicesToRemove) {
+            if (index !== -1) p.runes.splice(index, 1);
+        }
         runeDrops = runeDrops.filter(r => !r.specific); // Clear specific rune drops
         for (let y = 0; y < H; y++) {
             for (let x = 0; x < W; x++) {
@@ -3059,20 +3022,9 @@ function checkRunewords() {
         }
         needsRedraw = true;
     }
-
-    // Update runes display in inventory with 5x5 grid
-    if (p.runes.length > 0) {
-        let displayText = '';
-        for (let i = 0; i < p.runes.length; i += 5) {
-            const chunk = p.runes.slice(i, i + 5).join(',').toUpperCase();
-            displayText += chunk + (i + 5 <= p.runes.length ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ' : '');
-        }
-        document.getElementById('runes').innerHTML = displayText;
-    } else {
-        document.getElementById('runes').textContent = 'None';
-    }
 }
 
+// Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
     if (gameOver || splashActive) return;
     swordActive = true;
@@ -3133,48 +3085,54 @@ function attack() {
                     }
                 }
                 if (!dropPlaced) {
-                    console.log(`No space to place drop for ${hit.type.name} at (${hit.x}, ${hit.y})`);
+                    // No space for satoshi drop
                 }
                 
-                // Rune drop logic (10% chance)
-if (Math.random() < 0.1) {
-    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
-    const runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
-    let runePlaced = false;
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 8; // Generic rune on floor
-        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
-        runePlaced = true;
-    } else {
-        const adjacent = [
-            { x: hit.x, y: hit.y - 1 },
-            { x: hit.x, y: hit.y + 1 },
-            { x: hit.x - 1, y: hit.y },
-            { x: hit.x + 1, y: hit.y }
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny)
-            ) {
-                map[ny][nx] = 8; // Generic rune on floor
-                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
-                runePlaced = true;
-                break;
-            }
-        }
-    }
-    if (runePlaced) {
-        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
-        console.log(`Rune dropped: ${runeLetter} at (${runeDrops[runeDrops.length - 1].x}, ${runeDrops[runeDrops.length - 1].y})`);
-    } else {
-        console.log(`No space to place rune for ${hit.type.name} at (${hit.x}, ${hit.y})`);
-    }
-}
+                // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
+                if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                    let runeLetter;
+                    if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
+                        // Hell Shrimp: Use specific rune letters
+                        const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
+                        runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                    } else {
+                        // Regular rune drop
+                        const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                        runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                    }
+                    let runePlaced = false;
+                    if (map[hit.y][hit.x] === 0) {
+                        map[hit.y][hit.x] = 8; // Generic rune on floor
+                        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
+                        runePlaced = true;
+                    } else {
+                        const adjacent = [
+                            { x: hit.x, y: hit.y - 1 },
+                            { x: hit.x, y: hit.y + 1 },
+                            { x: hit.x - 1, y: hit.y },
+                            { x: hit.x + 1, y: hit.y }
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 8; // Generic rune on floor
+                                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                                runePlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (runePlaced) {
+                        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+                        playWebAudioSound(sounds.rune_drop);
+                    }
+                }
                 
-                enemies = enemies.filter(e => e !== hit);
+                enemies = enemies.filter(en => en !== hit);
                 if (exit && enemies.length === 0) {
                     updateSatsDisplay();
                 }
@@ -3221,8 +3179,7 @@ function usePotion() {
 }
 
 function restart() {
-    console.log('Restarting game');
-    floor = 1;
+        floor = 1;
     currentTheme = 'dungeon'; // Reset to default theme
     p.maxHP = 24; // Reset max HP to default
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
@@ -3269,8 +3226,7 @@ function restart() {
     p.runes = [];
     p.runewords = [];
     p.immortal = false;
-    console.log('Immortality reset in restart: p.immortal=false');
-    document.getElementById('runes').textContent = 'None';
+        document.getElementById('runes').textContent = 'None';
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = '';
@@ -3307,8 +3263,7 @@ function restart() {
     initMap();
     updateSatsDisplay();
     needsRedraw = true;
-    console.log('Restart complete, floor=', floor, 'wave=', wave, 'splashActive=', splashActive, 'enemies=', enemies.length, 'exit=', exit, 'gameOver=', gameOver, 'scoreSubmitted=', scoreSubmitted, 'hasPlayedOnce=', hasPlayedOnce);
-}
+    }
 
 function draw() {
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
@@ -3557,8 +3512,7 @@ function gameLoop(timestamp) {
             autoSubmitTriggered = true;
             setTimeout(() => {
                 document.getElementById('username-input').value = names[Math.floor(Math.random() * names.length)];
-                console.log('Gamepad detected, auto-setting username to random name and submitting score');
-                submitScore();
+                                submitScore();
             }, 1000); // delay to ensure UI is rendered
         }
         needsRedraw = true;
@@ -3569,8 +3523,7 @@ if (p.hp <= 0 && !gameOver) {
     if (p.immortal) {
         p.hp = 1;
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        console.log(`Immortality triggered in gameLoop: p.hp set to 1, p.immortal=${p.immortal}`);
-        updatePlayerState();
+                updatePlayerState();
     } else {
         p.hp = 0;
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
@@ -3583,12 +3536,10 @@ if (p.hp <= 0 && !gameOver) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
         if (splashActive && !hasPlayedOnce) {
-            console.log('Enter key ignored on initial splash: hasPlayedOnce=false');
-            return; // Block Enter on initial splash screen
+                        return; // Block Enter on initial splash screen
         }
         if (splashActive && hasPlayedOnce) {
-            console.log('Enter key pressed on splash after session: splashActive=true, hasPlayedOnce=true, musicMuted=', musicMuted);
-            const startButton = document.getElementById('start-button');
+                        const startButton = document.getElementById('start-button');
             startButton.style.background = '#00b7ef'; // Mimic :hover color
             setTimeout(() => {
                 startButton.style.background = '#00e8d8'; // Revert to original color
@@ -3598,8 +3549,7 @@ document.addEventListener('keydown', e => {
                 sounds.music.pause(); // Ensure clean state
                 sounds.music.currentTime = 0;
                 sounds.music.play().then(() => {
-                    console.log('Music started successfully on Enter');
-                }).catch(e => console.error('Music play failed on Enter:', e));
+                                    }).catch(e => console.error('Music play failed on Enter:', e));
             }
             fadeSplash();
             setTimeout(() => {
@@ -3612,8 +3562,7 @@ document.addEventListener('keydown', e => {
             return;
         }
         if (gameOver && hasPlayedOnce) {
-            console.log('Enter key pressed on game-over: triggering restart');
-            restart();
+                        restart();
             return;
         }
     }
@@ -3675,22 +3624,19 @@ let hasPlayedOnce = false; // Track if player has played at least one game
 // Handle gamepad connection
 window.addEventListener("gamepadconnected", (e) => {
     gamepadIndex = e.gamepad.index;
-    console.log(`Gamepad connected: ${e.gamepad.id}`);
-    lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
+        lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
     lastGamepadPollTime = performance.now();
     // Only start polling after user interaction (start button)
     if (!splashActive) {
         gamepadPollingActive = true;
         updateGamepad(); // Start polling
     } else {
-        console.log('Gamepad polling delayed until after start button');
-    }
+            }
 });
 
 // Handle gamepad disconnection
 window.addEventListener("gamepaddisconnected", (e) => {
-    console.log(`Gamepad disconnected: ${e.gamepad.id}`);
-    gamepadIndex = null;
+        gamepadIndex = null;
     lastButtonsState = [];
     gamepadPollingActive = false;
     if (movementTimer) {
@@ -3699,18 +3645,15 @@ window.addEventListener("gamepaddisconnected", (e) => {
         currentMoveDir = null;
         lastMoveTime = 0;
         pendingMove = false;
-        console.log('Movement timer cleared on gamepad disconnect');
-    }
+            }
 });
 
 // Start game function for splash screen
 function startGame() {
     if (!splashActive) {
-        console.log('Gamepad START ignored: splashActive=false');
-        return;
+                return;
     }
-    console.log('Gamepad START pressed: splashActive=true, musicMuted=', musicMuted);
-    const startButton = document.getElementById('start-button');
+        const startButton = document.getElementById('start-button');
     startButton.style.background = '#00b7ef'; // Mimic hover
     setTimeout(() => {
         startButton.style.background = '#00e8d8'; // Revert
@@ -3718,8 +3661,7 @@ function startGame() {
     // Resume AudioContext
     if (audioContext.state === 'suspended') {
         audioContext.resume().then(() => {
-            console.log('AudioContext resumed for gamepad START');
-        }).catch(e => console.error('Failed to resume AudioContext:', e));
+                    }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
     preloadSounds(); // Preload sounds after user interaction
     if (!musicMuted) {
@@ -3732,8 +3674,7 @@ function startGame() {
     if (gamepadIndex !== null) {
         gamepadPollingActive = true;
         updateGamepad();
-        console.log('Started gamepad polling after START');
-    }
+            }
     hasPlayedOnce = true; // Mark that the player has started a game
     // Ensure fetchTxs is triggered after splash fade
     setTimeout(() => {
@@ -3749,12 +3690,10 @@ function startGame() {
 // Modify start-button click handler to enable gamepad polling
 document.getElementById('start-button').addEventListener('click', () => {
     if (splashActive) {
-        console.log('START button clicked: splashActive=', splashActive, 'musicMuted=', musicMuted, 'wave=', wave);
-        // Resume AudioContext
+                // Resume AudioContext
         if (audioContext.state === 'suspended') {
             audioContext.resume().then(() => {
-                console.log('AudioContext resumed for START button');
-            }).catch(e => console.error('Failed to resume AudioContext:', e));
+                            }).catch(e => console.error('Failed to resume AudioContext:', e));
         }
         preloadSounds();
         // Preload player animation frames
@@ -3771,14 +3710,12 @@ document.getElementById('start-button').addEventListener('click', () => {
             if (img.complete) {
                 loadedCount++;
                 if (loadedCount === imagesToLoad.length) {
-                    console.log('All player animation frames loaded');
-                }
+                                    }
             } else {
                 img.onload = () => {
                     loadedCount++;
                     if (loadedCount === imagesToLoad.length) {
-                        console.log('All player animation frames loaded');
-                    }
+                                            }
                 };
                 img.onerror = () => console.error(`Failed to load image: ${img.src}`);
             }
@@ -3787,16 +3724,14 @@ document.getElementById('start-button').addEventListener('click', () => {
             sounds.music.pause();
             sounds.music.currentTime = 0;
             sounds.music.play().then(() => {
-                console.log('Music started successfully');
-            }).catch(e => console.error('Music play failed on START:', e));
+                            }).catch(e => console.error('Music play failed on START:', e));
         }
         fadeSplash();
         // Start gamepad polling if gamepad is connected
         if (gamepadIndex !== null) {
             gamepadPollingActive = true;
             updateGamepad();
-            console.log('Started gamepad polling after START button');
-        }
+                    }
         hasPlayedOnce = true; // Mark that the player has started a game
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -3821,8 +3756,7 @@ function updateGamepad(timestamp) {
     lastGamepadPollTime = now;
     const gamepad = navigator.getGamepads()[gamepadIndex];
     if (!gamepad) {
-        console.log('Gamepad not found, stopping polling');
-        gamepadIndex = null;
+                gamepadIndex = null;
         gamepadPollingActive = false;
         if (movementTimer) {
             clearInterval(movementTimer);
@@ -3830,8 +3764,7 @@ function updateGamepad(timestamp) {
             currentMoveDir = null;
             lastMoveTime = 0;
             pendingMove = false;
-            console.log('Movement timer cleared on gamepad not found');
-        }
+                    }
         return;
     }
 
@@ -3842,20 +3775,17 @@ function updateGamepad(timestamp) {
     // A Button (0) - usePotion
     if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
         usePotion();
-        console.log('Gamepad A pressed: usePotion');
-    }
+            }
 
     // B Button (1) - attack
     if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
         attack();
-        console.log('Gamepad B pressed: attack');
-    }
+            }
 
     // Select Button (2) - toggleMute
     if (buttons[2].pressed && !lastButtonsState[2]) {
         toggleMute();
-        console.log('Gamepad Select pressed: toggleMute');
-    }
+            }
 
     // Start Button (3) - startGame or restart
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
@@ -3863,8 +3793,7 @@ function updateGamepad(timestamp) {
             startGame();
         } else if (gameOver) {
             restart();
-            console.log('Gamepad Start pressed: restart');
-        }
+                    }
         lastStartPressTime = nowTime;
     }
 
@@ -3905,15 +3834,13 @@ function updateGamepad(timestamp) {
         if (movementTimer) {
             clearInterval(movementTimer);
             movementTimer = null;
-            console.log('Movement timer cleared: direction changed to', newMoveDir);
-        }
+                    }
         // Only move if 200ms have passed since last move
         if (nowTime - lastMoveTime >= 200) {
             pendingMove = true;
             move(newMoveDir);
             lastMoveTime = nowTime;
-            console.log(`Gamepad D-pad initial move: ${newMoveDir}`);
-            pendingMove = false;
+                        pendingMove = false;
         }
         movementTimer = setInterval(() => {
             if (!splashActive && !gameOver && !pendingMove) {
@@ -3922,8 +3849,7 @@ function updateGamepad(timestamp) {
                     pendingMove = true;
                     move(newMoveDir);
                     lastMoveTime = intervalTime;
-                    console.log(`Gamepad D-pad continuous move: ${newMoveDir}`);
-                    pendingMove = false;
+                                        pendingMove = false;
                 }
             }
         }, 200); // Move every 200ms
@@ -3933,8 +3859,7 @@ function updateGamepad(timestamp) {
         if (movementTimer) {
             clearInterval(movementTimer);
             movementTimer = null;
-            console.log('Movement timer cleared: D-pad released');
-        }
+                    }
         currentMoveDir = null;
         lastMoveTime = 0;
         pendingMove = false;
@@ -3960,8 +3885,7 @@ function updateGamepad(timestamp) {
 //    document.getElementById('restart-game').style.display = 'block';
 //    updateSatsDisplay();
 //    needsRedraw = true;
-//    console.log('Initialized to game-over: gameOver=', gameOver, 'floor=', floor);
-//}
+//    //}
 //initGameOver();
 //requestAnimationFrame(gameLoop);
 
