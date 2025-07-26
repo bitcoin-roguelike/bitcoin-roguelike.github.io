@@ -666,10 +666,10 @@
 </div>
         <div id="controller">
             <div id="dpad">
-                <button id="up" onclick="move('up')">↥</button>
-                <button id="left" onclick="move('left')">↤</button>
-                <button id="right" onclick="move('right')">↦</button>
-                <button id="down" onclick="move('down')">↧</button>
+                <button id="up" onclick="move('up')">↑</button>
+                <button id="left" onclick="move('left')">←</button>
+                <button id="right" onclick="move('right')">→</button>
+                <button id="down" onclick="move('down')">↓</button>
             </div>
             <div id="actions">
                 <button id="mute" onclick="toggleMute()">♪</button>
@@ -3094,15 +3094,14 @@ function checkRunewords() {
             }
             return `<span style="opacity: 0;">${display}</span>`;
         }).join('  '); // Two spaces for separation
-        displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;     :&nbsp;' : ''); // Newline except for last row
+        displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;' : ''); // Newline except for last row
     }
     
+    // Wrap displayText in a span with Safari-compatible nbsp styling
+    const wrappedDisplayText = `<span style="-webkit-nbsp-mode: normal;">${displayText}</span>`;
+    
     // Update inventory display
-    if (p.runes.length > 0) {
-        document.getElementById('runes').innerHTML = displayText;
-    } else {
-        document.getElementById('runes').innerHTML = displayText; // Show grid even if no runes
-    }
+    document.getElementById('runes').innerHTML = wrappedDisplayText; // Apply wrapped text to runes element
 }
 
 // Modified checkRunewordsAtFloorStart function to check for BTC, HODL, and RIP runes in any order
@@ -4143,3 +4142,4 @@ function updateGamepad(timestamp) {
     </script>
 </body>
 </html>
+
