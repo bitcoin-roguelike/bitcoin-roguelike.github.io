@@ -653,7 +653,7 @@
 </div>
             <div id="floor-indicator">Floor 1</div>
 <div id="inventory">
-    <span id="wave" style="display: none;">0</span>
+    <span id="wave" style="display: none;">1</span>
     Health: <span id="health">24</span><br>
     Potions: <span id="potions">0</span><br>
     Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
@@ -1305,7 +1305,7 @@ p.anim.frames.armor_back[1].src = 'player_armor-back2.png';
 p.anim.frames.armor_right[0].src = 'player_armor-right1.png';
 p.anim.frames.armor_right[1].src = 'player_armor-right2.png';
 
-let floor = 1, wave = 0, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
+let floor = 1, wave = 1, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
 let scoreSubmitted = false; // Tracks if score has been submitted
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
@@ -2630,19 +2630,18 @@ async function fetchTxs() {
         if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
             console.warn(`Only spawned ${enemiesSpawnedThisFloor} enemies due to insufficient valid blockchain data`);
         }
-        if (enemyCount > 0 && enemies.length > 0 && !exit) {
-            if (!waveActive) {
-                wave++;
-                initialWaveSpawned = true;
-                waveActive = true;
-                document.getElementById('wave').textContent = wave;
-                logBattleEvent(`Floor ${floor} - Wave ${wave} Started!`);
-                console.log(`New wave started: wave=${wave}, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
-            } else {
-                console.log(`Additional enemies added to wave ${wave}, enemies=${enemies.length}, waveActive=${waveActive}`);
-            }
-            needsRedraw = true;
-        } else {
+if (enemyCount > 0 && enemies.length > 0 && !exit) {
+    if (!waveActive) {
+        initialWaveSpawned = true;
+        waveActive = true;
+        document.getElementById('wave').textContent = wave;
+        logBattleEvent(`Floor ${floor} - Wave ${wave} Started!`);
+        console.log(`New wave started: wave=${wave}, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
+    } else {
+        console.log(`Additional enemies added to wave ${wave}, enemies=${enemies.length}, waveActive=${waveActive}`);
+    }
+    needsRedraw = true;
+} else {
             console.log(`No enemies spawned, wave=${wave}, scheduling retry in ${API_INTERVAL / 1000}s`);
         }
     } catch (e) {
@@ -2920,14 +2919,17 @@ updatePlayerState(); // Check HP and armor state after damage
             }
         }
     });
-    if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive) {
-        if (placeStairs()) {
-            logBattleEvent(`Floor ${floor} - Wave ${wave} cleared! Stairs appeared!`);
-        } else {
-            logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
-        }
+if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive) {
+    if (placeStairs()) {
+        wave++;
+        waveActive = false;
+        document.getElementById('wave').textContent = wave;
+        logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
+    } else {
+        logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
     }
-    }
+}
+}
 
 // Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
 function updateProjectiles() {
@@ -3415,6 +3417,7 @@ function restart() {
         el.style.color = '#ff8c00';
     });
     wave = 1;
+    document.getElementById('wave').textContent = wave;
     p.hp = 24;
     p.potions = 0;
     p.pickaxes = 0;
