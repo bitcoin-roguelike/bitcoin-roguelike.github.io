@@ -135,6 +135,12 @@
     font-size: 0.6em; /* Matches ™ size */
     text-shadow: none; /* Remove shadow for clarity */
 }
+/* Tighten line-height for Safari */
+@media not all and (min-resolution: 0.001dpcm) { /* Targets Safari */
+    #inventory {
+        line-height: 1.0; /* Reduce line-height by ~50% */
+    }
+}
         #floor-indicator { 
             position: absolute; 
             top: 11px; 
@@ -3082,20 +3088,20 @@ function checkRunewords() {
         }
     });
     
-    // Build 5x5 grid display
-    let displayText = '';
-    for (let i = 0; i < 5; i++) {
-        const row = allRunes.slice(i * 5, (i + 1) * 5).map(rune => {
-            const count = runeCounts[rune];
-            const letter = rune.toUpperCase();
-            const display = `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
-            if (count > 0) {
-                return display;
-            }
-            return `<span style="opacity: 0;">${display}</span>`;
-        }).join('  '); // Two spaces for separation
-        displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;' : ''); // Newline except for last row
-    }
+// Build 5x5 grid display
+let displayText = '<br>'; // Start with a <br> for the first row
+for (let i = 0; i < 5; i++) {
+    const row = allRunes.slice(i * 5, (i + 1) * 5).map(rune => {
+        const count = runeCounts[rune];
+        const letter = rune.toUpperCase();
+        const display = `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
+        if (count > 0) {
+            return display;
+        }
+        return `<span style="opacity: 0;">${display}</span>`;
+    }).join('  '); // Two spaces for separation
+    displayText += row + (i < 4 ? '<br>' : ''); // Newline except for last row
+}
     
     // Wrap displayText in a span with Safari-compatible nbsp styling
     const wrappedDisplayText = `<span style="-webkit-nbsp-mode: normal;">${displayText}</span>`;
@@ -3109,18 +3115,22 @@ function checkRunewordsAtFloorStart() {
     const btcRunes = ['b', 't', 'c'];
     const hodlRunes = ['h', 'o', 'd', 'l'];
     const ripRunes = ['r', 'i', 'p'];
-    let runewordFound = false;
-    let usedRunes = [];
+    let usedIndices = []; // Track indices of used runes
+    let activatedRunewords = []; // Track activated runewords for display
 
-    // Helper function to check if all required runes exist in p.runes
-    function hasRunes(requiredRunes) {
+    // Helper function to check if all required runes exist in p.runes, excluding used indices
+    function hasRunes(requiredRunes, excludedIndices) {
         const runeCount = {};
-        p.runes.forEach(r => runeCount[r] = (runeCount[r] || 0) + 1);
+        p.runes.forEach((r, i) => {
+            if (!excludedIndices.includes(i)) {
+                runeCount[r] = (runeCount[r] || 0) + 1;
+            }
+        });
         const indices = [];
         for (const rune of requiredRunes) {
             if (!runeCount[rune] || runeCount[rune] === 0) return { found: false };
             // Find the index of the first occurrence of this rune
-            const index = p.runes.findIndex((r, i) => r === rune && !indices.includes(i));
+            const index = p.runes.findIndex((r, i) => r === rune && !excludedIndices.includes(i) && !indices.includes(i));
             if (index === -1) return { found: false };
             indices.push(index);
             runeCount[rune]--;
@@ -3128,16 +3138,43 @@ function checkRunewordsAtFloorStart() {
         return { found: true, indices };
     }
 
-// Check for BTC runeword
-if (!p.runewords.includes('btc')) {
-    const result = hasRunes(btcRunes);
-    if (result.found) {
-        p.hp += 444;
-        p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
-        p.runewords.push('btc');
-        usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
-        document.getElementById('floor-indicator').textContent = `Runeword BTC was found!`;
-        logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
+    // Define runewords
+    const runewords = [
+        { name: 'btc', runes: btcRunes, effect: () => {
+            p.hp += 444;
+            p.maxHP = Math.max(p.maxHP, p.hp);
+            p.runewords.push('btc');
+            logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
+            updatePlayerState();
+        }},
+        { name: 'hodl', runes: hodlRunes, effect: () => {
+            p.immortal = true;
+            p.runewords.push('hodl');
+            logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
+            updatePlayerState();
+        }},
+        { name: 'rip', runes: ripRunes, effect: () => {
+            p.ripBlast = true;
+            p.runewords.push('rip');
+            logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
+        }}
+    ];
+
+    // Check all runewords
+    for (const runeword of runewords) {
+        if (!p.runewords.includes(runeword.name)) {
+            const result = hasRunes(runeword.runes, usedIndices);
+            if (result.found) {
+                runeword.effect();
+                usedIndices.push(...result.indices);
+                activatedRunewords.push(runeword.name.toUpperCase());
+            }
+        }
+    }
+
+    // Display activated runewords and play sound if any were found
+    if (activatedRunewords.length > 0) {
+        document.getElementById('floor-indicator').textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
         if (!specialSoundsPlayedThisFloor.rune) {
             playWebAudioSound(sounds.rune);
             specialSoundsPlayedThisFloor.rune = true;
@@ -3145,60 +3182,15 @@ if (!p.runewords.includes('btc')) {
         setTimeout(() => {
             document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
         }, 5000);
-        runewordFound = true;
-        updatePlayerState();
-    }
-}
 
-// Check for HODL runeword
-if (!p.runewords.includes('hodl')) {
-    const result = hasRunes(hodlRunes);
-    if (result.found) {
-        p.immortal = true;
-        p.runewords.push('hodl');
-        usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
-        document.getElementById('floor-indicator').textContent = `Runeword HODL was found!`;
-        logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
-        if (!specialSoundsPlayedThisFloor.rune) {
-            playWebAudioSound(sounds.rune);
-            specialSoundsPlayedThisFloor.rune = true;
+        // Remove used runes
+        usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
+        for (const index of usedIndices) {
+            p.runes.splice(index, 1);
         }
-        setTimeout(() => {
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-        }, 5000);
-        runewordFound = true;
-        updatePlayerState();
-    }
-}
 
-// Check for RIP runeword
-if (!p.runewords.includes('rip')) {
-    const result = hasRunes(ripRunes);
-    if (result.found) {
-        p.ripBlast = true; // Set flag for RIP blast
-        p.runewords.push('rip');
-        usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
-        document.getElementById('floor-indicator').textContent = `Runeword RIP was found!`;
-        logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
-        if (!specialSoundsPlayedThisFloor.rune) {
-            playWebAudioSound(sounds.rune);
-            specialSoundsPlayedThisFloor.rune = true;
-        }
-        setTimeout(() => {
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-        }, 5000);
-        runewordFound = true;
-    }
-}
-
-    // Remove used runes and update inventory
-    if (runewordFound) {
-        // Sort indices in descending order to avoid issues when removing
-        const indicesToRemove = usedRunes.map(r => p.runes.indexOf(r)).sort((a, b) => b - a);
-        for (const index of indicesToRemove) {
-            if (index !== -1) p.runes.splice(index, 1);
-        }
-        runeDrops = runeDrops.filter(r => !r.specific); // Clear specific rune drops
+        // Clear specific rune drops
+        runeDrops = runeDrops.filter(r => !r.specific);
         for (let y = 0; y < H; y++) {
             for (let x = 0; x < W; x++) {
                 if (map[y][x] === 9) {
@@ -3211,7 +3203,6 @@ if (!p.runewords.includes('rip')) {
     }
 }
 
-/*
 // DEBUG: Runeword testing function - comment out when not needed
 function debugRuneword(runewordKey) {
     const runewordMap = {
@@ -3249,7 +3240,7 @@ function debugRuneword(runewordKey) {
     // Trigger runeword activation
     checkRunewordsAtFloorStart();
 }
-*/
+
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
@@ -3600,34 +3591,44 @@ function draw() {
         }
     }
     
-	// Draw gradient column overlay for RIP blast
-        if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
-            if (columnProgress === 0) {
-                initGradientOverlay(); // Initialize overlay on first draw
-            }
-            c.save();
-            c.globalCompositeOperation = 'screen'; // Subtle glow for visibility
-            const elapsed = Date.now() - ripBlastStartTime;
-            columnProgress = elapsed / 2000; // 0 to 1 over 2 seconds
-            const columnWidth = 20; // Width of each column in pixels
-            const numColumns = Math.ceil(W * S / columnWidth) + 1; // Cover entire width
-            for (let i = 0; i < numColumns; i++) {
-                const x = i * columnWidth + columnProgress * W * S; // Sweep left to right
-                if (x > W * S) continue; // Skip columns off-screen
-                const gradient = c.createLinearGradient(x, 0, x + columnWidth, 0);
-                gradient.addColorStop(0, 'rgba(255, 100, 0, 0)'); // Transparent edge
-                gradient.addColorStop(0.5, 'rgba(255, 150, 0, 0.4)'); // Smudged orange center
-                gradient.addColorStop(1, 'rgba(255, 100, 0, 0)'); // Transparent edge
-                c.fillStyle = gradient;
-                c.fillRect(x, 0, columnWidth, H * S); // Draw full-height column
-            }
-            c.restore();
-            needsRedraw = true; // Ensure continuous redraw during effect
-        } else if (ripBlastActive) {
-            ripBlastActive = false; // End effect after 2 seconds
-            columnProgress = 0;
-            needsRedraw = true;
+// Draw gradient column overlay for RIP blast
+if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
+    if (columnProgress === 0) {
+        initGradientOverlay(); // Initialize overlay on first draw
+    }
+    c.save();
+    c.globalCompositeOperation = 'screen'; // Subtle glow for visibility
+    const elapsed = Date.now() - ripBlastStartTime;
+    columnProgress = elapsed / 2000; // 0 to 1 over 2 seconds
+    const columnWidth = 20; // Width of each column in pixels
+    const numColumns = Math.ceil(W * S / columnWidth) + 1; // Cover entire width
+    for (let i = 0; i < numColumns; i++) {
+        const x = i * columnWidth + columnProgress * W * S; // Sweep left to right
+        if (x > W * S) continue; // Skip columns off-screen
+        const gradient = c.createLinearGradient(x, 0, x + columnWidth, 0);
+        gradient.addColorStop(0, 'rgba(255, 100, 0, 0)'); // Transparent edge
+        gradient.addColorStop(0.5, 'rgba(255, 150, 0, 0.4)'); // Smudged orange center
+        gradient.addColorStop(1, 'rgba(255, 100, 0, 0)'); // Transparent edge
+        c.fillStyle = gradient;
+        c.fillRect(x, 0, columnWidth, H * S); // Draw full-height column
+    }
+    c.restore();
+    needsRedraw = true; // Ensure continuous redraw during effect
+} else if (ripBlastActive) {
+    ripBlastActive = false; // End effect after 3 seconds
+    columnProgress = 0;
+    if (enemies.length === 0 && !exit) {
+        if (placeStairs()) {
+            wave++;
+            waveActive = false;
+            document.getElementById('wave').textContent = wave;
+            logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
+        } else {
+            logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
         }
+    }
+    needsRedraw = true;
+}
 
     // Draw fog overlay
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -3826,14 +3827,14 @@ document.addEventListener('keydown', e => {
         }
     }
     if (gameOver || splashActive) return;
-    /*
+
     // DEBUG: Runeword testing with keys 1-9 - comment out when not needed
     if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
         debugRuneword(e.key);
         needsRedraw = true;
         return;
     }
-    */
+
     if (e.key === 'ArrowUp') move('up');
     if (e.key === 'ArrowDown') move('down');
     if (e.key === 'ArrowLeft') move('left');
