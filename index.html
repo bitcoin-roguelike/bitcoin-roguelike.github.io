@@ -1271,8 +1271,9 @@ let map = [],
         pickaxes: 0,
         hasArmor: false,
         runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
-	runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
-	immortal: false, // Flag for HODL runeword immortality
+        runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
+        immortal: false, // Flag for HODL runeword immortality
+        ripBlast: false, // Flag for RIP runeword blast
         anim: {
             frames: {
                 front: [new Image(), new Image()],
@@ -2315,7 +2316,7 @@ async function fetchTxs() {
     }
     const now = Date.now();
     if (nextApiCallTime && now < nextApiCallTime) {
-                return;
+        return;
     }
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
@@ -2324,11 +2325,11 @@ async function fetchTxs() {
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
         if (initialSpawnDoneThisFloor) {
-                    } else {
-                    }
+        } else {
+        }
         await new Promise(resolve => setTimeout(resolve, 25));
         const res = await axios.get('https://mempool.space/api/mempool/recent');
-                if (!res.data || res.data.length === 0) {
+        if (!res.data || res.data.length === 0) {
             console.warn(`Empty mempool response, scheduling retry in ${API_INTERVAL / 1000}s`);
             nextApiCallTime = now + API_INTERVAL;
             apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
@@ -2337,6 +2338,7 @@ async function fetchTxs() {
         let enemyCount = 0;
         const processedTxids = new Set();
         console.warn(`[WHALE ATTEMPT] Checking ${res.data.length} transactions for Whale spawns (> 100 BTC)`);
+        let initialEnemies = []; // Track enemies for RIP blast
         for (const tx of res.data.slice(0, 10)) {
             if (processedTxids.has(tx.txid)) continue;
             processedTxids.add(tx.txid);
@@ -2349,24 +2351,24 @@ async function fetchTxs() {
                     value = txRes.data.vout.reduce((sum, out) => sum + (Number.isFinite(out.value) ? out.value : 0), 0);
                     address = txRes.data.vout?.map(v => v.scriptpubkey_address).filter(Boolean)[0] || 'Invalid address';
                 } else {
-                                        continue;
+                    continue;
                 }
             } catch (e) {
-                                continue;
+                continue;
             }
             if (value <= 0) {
-                                continue;
+                continue;
             }
             const btc = value / 1e8;
             const type = types.find(t => btc > t.min && btc <= t.max);
-                        if (!type) {
-                                continue;
+            if (!type) {
+                continue;
             }
 
             // Handle initial spawn (up to 10 enemies, including Whales)
             if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10 && enemies.length < 10) {
                 if (type.name !== 'Whale' && exit) {
-                                        continue;
+                    continue;
                 }
                 console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
                 const r = rooms[Math.floor(Math.random() * rooms.length)];
@@ -2386,13 +2388,13 @@ async function fetchTxs() {
                     attempts--;
                 } while (attempts > 0 && !validPosition);
                 const newEnemy = { 
-    		    x, 
-    		    y, 
-    		    type, 
-    		    hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp, 
-    		    address, 
-    		    sats: Math.round(btc * 1e8) 
-		};
+                    x, 
+                    y, 
+                    type, 
+                    hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp, 
+                    address, 
+                    sats: Math.round(btc * 1e8) 
+                };
                 if (!validPosition) {
                     // Fallback: try any floor tile in any room
                     for (let r of rooms) {
@@ -2421,6 +2423,7 @@ async function fetchTxs() {
                     continue;
                 }
                 enemies.push(newEnemy);
+                initialEnemies.push(newEnemy); // Track for RIP blast
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 enemiesSpawnedThisFloor++;
@@ -2489,6 +2492,96 @@ async function fetchTxs() {
                 setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
                 enemyCount++;
             }
+        }
+        // Apply RIP blast to initial enemies after 2-second delay
+        if (p.ripBlast && initialEnemies.length > 0 && !initialSpawnDoneThisFloor) {
+            setTimeout(() => {
+                if (gameOver || splashActive || initialSpawnDoneThisFloor) return; // Skip if state changed
+                const blastDamage = 999; // High damage to ensure instant kill
+                initialEnemies.forEach(enemy => {
+                    if (enemies.includes(enemy)) { // Ensure enemy still exists
+                        enemy.hp -= blastDamage;
+                        logBattleEvent(`Floor ${floor} - RIP Blast hits ${enemy.type.name}! ${blastDamage} DMG`);
+                        playWebAudioSound(sounds.hit);
+                        if (enemy.hp <= 0) {
+                            kills[enemy.type.name]++;
+                            let dropPlaced = false;
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 3;
+                                satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                                dropPlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: enemy.x, y: enemy.y - 1},
+                                    {x: enemy.x, y: enemy.y + 1},
+                                    {x: enemy.x - 1, y: enemy.y},
+                                    {x: enemy.x + 1, y: enemy.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny)
+                                    ) {
+                                        map[ny][nx] = 3;
+                                        satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                                        dropPlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            // Rune drop logic (20% for Hell Shrimp, 10% for others)
+                            if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                                let runeLetter;
+                                if (enemy.type.name === 'Shrimp' && currentTheme === 'hell') {
+                                    const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
+                                    runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                                } else {
+                                    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                                    runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                                }
+                                let runePlaced = false;
+                                if (map[enemy.y][enemy.x] === 0) {
+                                    map[enemy.y][enemy.x] = 8;
+                                    runeDrops.push({ x: enemy.x, y: enemy.y, letter: runeLetter });
+                                    runePlaced = true;
+                                } else {
+                                    const adjacent = [
+                                        { x: enemy.x, y: enemy.y - 1 },
+                                        { x: enemy.x, y: enemy.y + 1 },
+                                        { x: enemy.x - 1, y: enemy.y },
+                                        { x: enemy.x + 1, y: enemy.y }
+                                    ];
+                                    for (const pos of adjacent) {
+                                        const nx = pos.x, ny = pos.y;
+                                        if (
+                                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                            map[ny][nx] === 0 &&
+                                            !enemies.some(e => e.x === nx && e.y === ny)
+                                        ) {
+                                            map[ny][nx] = 8;
+                                            runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                                            runePlaced = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (runePlaced) {
+                                    logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a mysterious rune!`);
+                                    playWebAudioSound(sounds.rune_drop);
+                                }
+                            }
+                        }
+                    }
+                });
+                enemies = enemies.filter(e => e.hp > 0); // Remove dead enemies
+                if (exit && enemies.length === 0) {
+                    updateSatsDisplay();
+                }
+                p.ripBlast = false; // Disable blast after use
+                needsRedraw = true;
+            }, 2000); // 2-second delay
         }
         if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
             console.warn(`Only spawned ${enemiesSpawnedThisFloor} enemies due to insufficient valid blockchain data`);
@@ -2956,7 +3049,7 @@ function checkRunewords() {
             }
             return `<span style="opacity: 0;">${display}</span>`;
         }).join('  '); // Two spaces for separation
-        displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : ''); // Newline except for last row
+        displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;:&nbsp;' : ''); // Newline except for last row
     }
     
     // Update inventory display
@@ -2967,10 +3060,11 @@ function checkRunewords() {
     }
 }
 
-// Modified checkRunewordsAtFloorStart function to check for BTC and HODL runes in any order
+// Modified checkRunewordsAtFloorStart function to check for BTC, HODL, and RIP runes in any order
 function checkRunewordsAtFloorStart() {
     const btcRunes = ['b', 't', 'c'];
     const hodlRunes = ['h', 'o', 'd', 'l'];
+    const ripRunes = ['r', 'i', 'p'];
     let runewordFound = false;
     let usedRunes = [];
 
@@ -3033,6 +3127,26 @@ if (!p.runewords.includes('hodl')) {
     }
 }
 
+// Check for RIP runeword
+if (!p.runewords.includes('rip')) {
+    const result = hasRunes(ripRunes);
+    if (result.found) {
+        p.ripBlast = true; // Set flag for RIP blast
+        p.runewords.push('rip');
+        usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
+        document.getElementById('floor-indicator').textContent = `Runeword RIP was found!`;
+        logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
+        if (!specialSoundsPlayedThisFloor.rune) {
+            playWebAudioSound(sounds.rune);
+            specialSoundsPlayedThisFloor.rune = true;
+        }
+        setTimeout(() => {
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+        }, 5000);
+        runewordFound = true;
+    }
+}
+
     // Remove used runes and update inventory
     if (runewordFound) {
         // Sort indices in descending order to avoid issues when removing
@@ -3048,6 +3162,7 @@ if (!p.runewords.includes('hodl')) {
                 }
             }
         }
+        checkRunewords(); // Update inventory display
         needsRedraw = true;
     }
 }
@@ -3207,7 +3322,7 @@ function usePotion() {
 }
 
 function restart() {
-        floor = 1;
+    floor = 1;
     currentTheme = 'dungeon'; // Reset to default theme
     p.maxHP = 24; // Reset max HP to default
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
@@ -3254,7 +3369,8 @@ function restart() {
     p.runes = [];
     p.runewords = [];
     p.immortal = false;
-        document.getElementById('runes').textContent = 'None';
+    p.ripBlast = false; // Reset RIP blast flag
+    document.getElementById('runes').textContent = 'None';
 
     document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
     document.getElementById('battle-events').value = '';
