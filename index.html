@@ -3203,6 +3203,7 @@ function checkRunewordsAtFloorStart() {
     }
 }
 
+/*
 // DEBUG: Runeword testing function - comment out when not needed
 function debugRuneword(runewordKey) {
     const runewordMap = {
@@ -3240,6 +3241,7 @@ function debugRuneword(runewordKey) {
     // Trigger runeword activation
     checkRunewordsAtFloorStart();
 }
+*/
 
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
@@ -3828,12 +3830,14 @@ document.addEventListener('keydown', e => {
     }
     if (gameOver || splashActive) return;
 
+     /*
     // DEBUG: Runeword testing with keys 1-9 - comment out when not needed
     if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
         debugRuneword(e.key);
         needsRedraw = true;
         return;
     }
+    */
 
     if (e.key === 'ArrowUp') move('up');
     if (e.key === 'ArrowDown') move('down');
@@ -3862,14 +3866,58 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         requestAnimationFrame(gameLoop);
         
 document.querySelectorAll('#dpad button').forEach(button => {
+    let touchMovementTimer = null;
+    let lastTouchMoveTime = 0;
+    let isMoving = false;
+
     button.addEventListener('touchstart', (e) => {
         e.preventDefault(); // Prevent scrolling
+        e.stopPropagation(); // Stop event bubbling
         button.classList.add('pressed'); // Add visual feedback
-        button.click(); // Trigger onclick
+        if (!isMoving && !splashActive && !gameOver) {
+            isMoving = true;
+            const dir = button.id; // 'up', 'left', 'right', 'down'
+            // Immediate move if 200ms have passed since last move
+            if (Date.now() - lastTouchMoveTime >= 200) {
+                move(dir);
+                lastTouchMoveTime = Date.now();
+            }
+            // Start continuous movement
+            touchMovementTimer = setInterval(() => {
+                if (!splashActive && !gameOver && isMoving) {
+                    const now = Date.now();
+                    if (now - lastTouchMoveTime >= 200) {
+                        move(dir);
+                        lastTouchMoveTime = now;
+                    }
+                }
+            }, 200); // Move every 200ms
+        }
     }, { passive: false });
-    button.addEventListener('touchend', () => {
+
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault(); // Prevent scrolling
+        e.stopPropagation(); // Stop event bubbling
         button.classList.remove('pressed'); // Remove visual feedback
-    });
+        if (touchMovementTimer) {
+            clearInterval(touchMovementTimer);
+            touchMovementTimer = null;
+        }
+        isMoving = false;
+        lastTouchMoveTime = 0;
+    }, { passive: false });
+
+    button.addEventListener('touchcancel', (e) => {
+        e.preventDefault(); // Prevent scrolling
+        e.stopPropagation(); // Stop event bubbling
+        button.classList.remove('pressed'); // Remove visual feedback
+        if (touchMovementTimer) {
+            clearInterval(touchMovementTimer);
+            touchMovementTimer = null;
+        }
+        isMoving = false;
+        lastTouchMoveTime = 0;
+    }, { passive: false });
 });
 
 //////////////////////
