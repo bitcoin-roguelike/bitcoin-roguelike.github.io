@@ -116,20 +116,25 @@
     -ms-overflow-style: none; /* IE and Edge */
 }
 #inventory { 
-            position: absolute;
-            top: 10px;
-            right: -24px;
-            background: transparent;
-            color: var(--text-color, #ff8c00) !important;
-            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
-            border: none;
-            padding: 8px;
-            z-index: 10;
-            font-family: 'VT323', monospace;
-            font-size: 20px;
-            line-height: 1.5;
-            width: 160px;
-        }
+    position: absolute;
+    top: 10px;
+    right: -12px;
+    background: transparent;
+    color: var(--text-color, #ff8c00) !important;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    border: none;
+    padding: 8px;
+    z-index: 10;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    line-height: 1.5;
+    width: 160px;
+}
+#inventory sup {
+    vertical-align: super;
+    font-size: 0.6em; /* Matches ™ size */
+    text-shadow: none; /* Remove shadow for clarity */
+}
         #floor-indicator { 
             position: absolute; 
             top: 11px; 
@@ -2686,11 +2691,14 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     exit = null;
     killsLog = [];
     
-    // Reset special sound tracking for the new floor
-    specialSoundsPlayedThisFloor.lava = false;
-    specialSoundsPlayedThisFloor.quicksand = false;
-    specialSoundsPlayedThisFloor.pond = false;
-    specialSoundsPlayedThisFloor.rune = false;
+// Reset special sound tracking for the new floor
+specialSoundsPlayedThisFloor.lava = false;
+specialSoundsPlayedThisFloor.quicksand = false;
+specialSoundsPlayedThisFloor.pond = false;
+specialSoundsPlayedThisFloor.rune = false;
+
+// Reset runewords to allow reactivation on new floor
+p.runewords = [];
 
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
@@ -2922,18 +2930,39 @@ function updateProjectiles() {
 
 let usePickaxeSword = false; // Global flag for draw
 
-// Modified checkRunewords function to handle rune shuffling and ensure immortality
+// Modified checkRunewords function to display 5x5 rune grid with counts
 function checkRunewords() {
-    // Update runes display in inventory with 5x5 grid
-    if (p.runes.length > 0) {
-        let displayText = '';
-        for (let i = 0; i < p.runes.length; i += 5) {
-            const chunk = p.runes.slice(i, i + 5).join(',').toUpperCase();
-            displayText += chunk + (i + 5 <= p.runes.length ? '<br>     : ' : '');
+    // Define all possible runes
+    const allRunes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+    
+    // Count occurrences of each rune, capped at 9
+    const runeCounts = {};
+    allRunes.forEach(rune => runeCounts[rune] = 0);
+    p.runes.forEach(rune => {
+        if (runeCounts[rune] < 9) {
+            runeCounts[rune]++;
         }
+    });
+    
+    // Build 5x5 grid display
+    let displayText = '';
+    for (let i = 0; i < 5; i++) {
+        const row = allRunes.slice(i * 5, (i + 1) * 5).map(rune => {
+            const count = runeCounts[rune];
+            const letter = rune.toUpperCase();
+            if (count > 0) {
+                return `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
+            }
+            return `${letter}<sup style="font-size: 0.6em;">0</sup>`;
+        }).join('  '); // Two spaces for separation
+        displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : ''); // Newline except for last row
+    }
+    
+    // Update inventory display
+    if (p.runes.length > 0) {
         document.getElementById('runes').innerHTML = displayText;
     } else {
-        document.getElementById('runes').textContent = 'None';
+        document.getElementById('runes').innerHTML = displayText; // Show grid even if no runes
     }
 }
 
@@ -2960,50 +2989,48 @@ function checkRunewordsAtFloorStart() {
         return { found: true, indices };
     }
 
-    // Check for BTC runeword
-    if (!p.runewords.includes('btc')) {
-        const result = hasRunes(btcRunes);
-        if (result.found) {
-            p.hp += 444;
-            p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
-            p.runewords.push('btc');
-            usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
-            document.getElementById('whale-log').textContent = 'Runeword BTC was found!';
-            logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
-            if (!specialSoundsPlayedThisFloor.rune) {
-                playWebAudioSound(sounds.rune);
-                specialSoundsPlayedThisFloor.rune = true;
-            }
-            setTimeout(() => {
-                document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
-                document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
-            }, 5000);
-            runewordFound = true;
-            updatePlayerState();
+// Check for BTC runeword
+if (!p.runewords.includes('btc')) {
+    const result = hasRunes(btcRunes);
+    if (result.found) {
+        p.hp += 444;
+        p.maxHP = Math.max(p.maxHP, p.hp); // Update maxHP if needed
+        p.runewords.push('btc');
+        usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
+        document.getElementById('floor-indicator').textContent = `Runeword BTC was found!`;
+        logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
+        if (!specialSoundsPlayedThisFloor.rune) {
+            playWebAudioSound(sounds.rune);
+            specialSoundsPlayedThisFloor.rune = true;
         }
+        setTimeout(() => {
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+        }, 5000);
+        runewordFound = true;
+        updatePlayerState();
     }
+}
 
-    // Check for HODL runeword
-    if (!p.runewords.includes('hodl')) {
-        const result = hasRunes(hodlRunes);
-        if (result.found) {
-            p.immortal = true;
-            p.runewords.push('hodl');
-            usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
-            document.getElementById('whale-log').textContent = 'Runeword HODL was found!';
-            logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
-            if (!specialSoundsPlayedThisFloor.rune) {
-                playWebAudioSound(sounds.rune);
-                specialSoundsPlayedThisFloor.rune = true;
-            }
-            setTimeout(() => {
-                document.getElementById('whale-log').innerHTML = whaleHashIds.join('<br>');
-                document.getElementById('whale-log').scrollTop = document.getElementById('whale-log').scrollHeight;
-            }, 5000);
-            runewordFound = true;
-            updatePlayerState();
+// Check for HODL runeword
+if (!p.runewords.includes('hodl')) {
+    const result = hasRunes(hodlRunes);
+    if (result.found) {
+        p.immortal = true;
+        p.runewords.push('hodl');
+        usedRunes = usedRunes.concat(result.indices.map(i => p.runes[i]));
+        document.getElementById('floor-indicator').textContent = `Runeword HODL was found!`;
+        logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
+        if (!specialSoundsPlayedThisFloor.rune) {
+            playWebAudioSound(sounds.rune);
+            specialSoundsPlayedThisFloor.rune = true;
         }
+        setTimeout(() => {
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+        }, 5000);
+        runewordFound = true;
+        updatePlayerState();
     }
+}
 
     // Remove used runes and update inventory
     if (runewordFound) {
@@ -3311,7 +3338,7 @@ function draw() {
             if (map[y][x] === 9) {
                 const rune = runeDrops.find(r => r.x === x && r.y === y && r.specific);
                 if (rune && assets.runes[rune.letter]) {
-                    c.globalAlpha = 0.7; // Apply 30% transparency
+                    c.globalAlpha = 0.9; // Apply 10% transparency
                     c.drawImage(assets.runes[rune.letter], x * S, y * S, S, S);
                     c.globalAlpha = 1; // Restore full opacity
                 }
