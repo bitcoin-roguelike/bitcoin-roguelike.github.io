@@ -2950,10 +2950,11 @@ function checkRunewords() {
         const row = allRunes.slice(i * 5, (i + 1) * 5).map(rune => {
             const count = runeCounts[rune];
             const letter = rune.toUpperCase();
+            const display = `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
             if (count > 0) {
-                return `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
+                return display;
             }
-            return `${letter}<sup style="font-size: 0.6em;">0</sup>`;
+            return `<span style="opacity: 0;">${display}</span>`;
         }).join('  '); // Two spaces for separation
         displayText += row + (i < 4 ? '<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : ''); // Newline except for last row
     }
