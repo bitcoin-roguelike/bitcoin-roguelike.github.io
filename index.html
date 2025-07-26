@@ -653,8 +653,7 @@
 </div>
             <div id="floor-indicator">Floor 1</div>
 <div id="inventory">
-    Wave: <span id="wave">0</span><br>
-    <br>
+    <span id="wave" style="display: none;">0</span>
     Health: <span id="health">24</span><br>
     Potions: <span id="potions">0</span><br>
     Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
@@ -667,10 +666,10 @@
 </div>
         <div id="controller">
             <div id="dpad">
-                <button id="up" onclick="move('up')">↑</button>
-                <button id="left" onclick="move('left')">←</button>
-                <button id="right" onclick="move('right')">→</button>
-                <button id="down" onclick="move('down')">↓</button>
+                <button id="up" onclick="move('up')">⇧</button>
+                <button id="left" onclick="move('left')">⇦</button>
+                <button id="right" onclick="move('right')">⇨</button>
+                <button id="down" onclick="move('down')">⇩</button>
             </div>
             <div id="actions">
                 <button id="mute" onclick="toggleMute()">♪</button>
@@ -1291,6 +1290,7 @@ let map = [],
     }, 
     enemies = [], 
     rooms = [];
+    
 // Load animation frames
 p.anim.frames.front[0].src = 'player-front1.png';
 p.anim.frames.front[1].src = 'player-front2.png';
@@ -1558,6 +1558,54 @@ types.forEach(t => {
         });
     }
 });
+
+function placeStairs() {
+    if (exit) {
+        logBattleEvent(`Floor ${floor} - Stairs placement skipped: exit already exists at (${exit.x}, ${exit.y})`);
+        return true;
+    }
+    let x, y, placed = false;
+    // Try room-based placement first
+    if (rooms && rooms.length > 0) {
+        let r = rooms[Math.floor(Math.random() * rooms.length)];
+        let attempts = 0;
+        const maxAttempts = 100;
+        do {
+            x = r.x + Math.floor(Math.random() * r.w);
+            y = r.y + Math.floor(Math.random() * r.h);
+            attempts++;
+        } while ((map[y][x] !== 0 || (x === p.x && y === p.y)) && attempts < maxAttempts);
+        if (attempts < maxAttempts) {
+            placed = true;
+        }
+    }
+    // Fallback to any valid floor tile
+    if (!placed) {
+        let attempts = 0;
+        const maxAttempts = 100;
+        do {
+            x = Math.floor(Math.random() * W);
+            y = Math.floor(Math.random() * H);
+            attempts++;
+        } while ((map[y][x] !== 0 || (x === p.x && y === p.y)) && attempts < maxAttempts);
+        if (attempts < maxAttempts) {
+            placed = true;
+        }
+    }
+    if (placed) {
+        exit = {x, y};
+        map[y][x] = 2; // Stairs tile
+        updateSatsDisplay();
+        logBattleEvent(`Floor ${floor} - Stairs appeared at (${x}, ${y})!`);
+        needsRedraw = true;
+        return true;
+    } else {
+        logBattleEvent(`Floor ${floor} - Failed to place stairs: no valid position found!`);
+        console.warn(`Stairs placement failed: rooms=${rooms.length}, map valid=${map.every(row => row.length === W)}`);
+        needsRedraw = true;
+        return false;
+    }
+}
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioContext = new AudioContext();
@@ -2324,9 +2372,6 @@ async function fetchTxs() {
     }
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
-        if (initialSpawnDoneThisFloor) {
-        } else {
-        }
         await new Promise(resolve => setTimeout(resolve, 25));
         const res = await axios.get('https://mempool.space/api/mempool/recent');
         if (!res.data || res.data.length === 0) {
@@ -2338,7 +2383,6 @@ async function fetchTxs() {
         let enemyCount = 0;
         const processedTxids = new Set();
         console.warn(`[WHALE ATTEMPT] Checking ${res.data.length} transactions for Whale spawns (> 100 BTC)`);
-        let initialEnemies = []; // Track enemies for RIP blast
         for (const tx of res.data.slice(0, 10)) {
             if (processedTxids.has(tx.txid)) continue;
             processedTxids.add(tx.txid);
@@ -2423,7 +2467,6 @@ async function fetchTxs() {
                     continue;
                 }
                 enemies.push(newEnemy);
-                initialEnemies.push(newEnemy); // Track for RIP blast
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 enemiesSpawnedThisFloor++;
@@ -2493,95 +2536,96 @@ async function fetchTxs() {
                 enemyCount++;
             }
         }
-        // Apply RIP blast to initial enemies after 2-second delay
-        if (p.ripBlast && initialEnemies.length > 0 && !initialSpawnDoneThisFloor) {
-            setTimeout(() => {
-                if (gameOver || splashActive || initialSpawnDoneThisFloor) return; // Skip if state changed
-                const blastDamage = 999; // High damage to ensure instant kill
-                initialEnemies.forEach(enemy => {
-                    if (enemies.includes(enemy)) { // Ensure enemy still exists
-                        enemy.hp -= blastDamage;
-                        logBattleEvent(`Floor ${floor} - RIP Blast hits ${enemy.type.name}! ${blastDamage} DMG`);
-                        playWebAudioSound(sounds.hit);
-                        if (enemy.hp <= 0) {
-                            kills[enemy.type.name]++;
-                            let dropPlaced = false;
-                            if (map[enemy.y][enemy.x] === 0) {
-                                map[enemy.y][enemy.x] = 3;
-                                satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                                dropPlaced = true;
-                            } else {
-                                const adjacent = [
-                                    {x: enemy.x, y: enemy.y - 1},
-                                    {x: enemy.x, y: enemy.y + 1},
-                                    {x: enemy.x - 1, y: enemy.y},
-                                    {x: enemy.x + 1, y: enemy.y}
-                                ];
-                                for (const pos of adjacent) {
-                                    const nx = pos.x, ny = pos.y;
-                                    if (
-                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                        map[ny][nx] === 0 &&
-                                        !enemies.some(e => e.x === nx && e.y === ny)
-                                    ) {
-                                        map[ny][nx] = 3;
-                                        satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
-                                        dropPlaced = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            // Rune drop logic (20% for Hell Shrimp, 10% for others)
-                            if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
-                                let runeLetter;
-                                if (enemy.type.name === 'Shrimp' && currentTheme === 'hell') {
-                                    const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
-                                    runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
-                                } else {
-                                    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
-                                    runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
-                                }
-                                let runePlaced = false;
-                                if (map[enemy.y][enemy.x] === 0) {
-                                    map[enemy.y][enemy.x] = 8;
-                                    runeDrops.push({ x: enemy.x, y: enemy.y, letter: runeLetter });
-                                    runePlaced = true;
-                                } else {
-                                    const adjacent = [
-                                        { x: enemy.x, y: enemy.y - 1 },
-                                        { x: enemy.x, y: enemy.y + 1 },
-                                        { x: enemy.x - 1, y: enemy.y },
-                                        { x: enemy.x + 1, y: enemy.y }
-                                    ];
-                                    for (const pos of adjacent) {
-                                        const nx = pos.x, ny = pos.y;
-                                        if (
-                                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                            map[ny][nx] === 0 &&
-                                            !enemies.some(e => e.x === nx && e.y === ny)
-                                        ) {
-                                            map[ny][nx] = 8;
-                                            runeDrops.push({ x: nx, y: ny, letter: runeLetter });
-                                            runePlaced = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (runePlaced) {
-                                    logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a mysterious rune!`);
-                                    playWebAudioSound(sounds.rune_drop);
-                                }
+        // Apply RIP blast to all on-screen enemies if active
+        if (p.ripBlast && enemies.length > 0) {
+            logBattleEvent(`Floor ${floor} - RIP Blast annihilates all enemies!`);
+            playWebAudioSound(sounds.hit);
+            ripBlastActive = true; // Set flag for firestorm effect
+            ripBlastStartTime = Date.now();
+            enemies.forEach(enemy => {
+                enemy.hp = 0; // Instant kill
+                kills[enemy.type.name]++;
+                logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
+                let dropPlaced = false;
+                if (map[enemy.y][enemy.x] === 0) {
+                    map[enemy.y][enemy.x] = 3;
+                    satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                    dropPlaced = true;
+                } else {
+                    const adjacent = [
+                        {x: enemy.x, y: enemy.y - 1},
+                        {x: enemy.x, y: enemy.y + 1},
+                        {x: enemy.x - 1, y: enemy.y},
+                        {x: enemy.x + 1, y: enemy.y}
+                    ];
+                    for (const pos of adjacent) {
+                        const nx = pos.x, ny = pos.y;
+                        if (
+                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                            map[ny][nx] === 0 &&
+                            !enemies.some(e => e.x === nx && e.y === ny)
+                        ) {
+                            map[ny][nx] = 3;
+                            satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                            dropPlaced = true;
+                            break;
+                        }
+                    }
+                }
+                // Rune drop logic (20% for Hell Shrimp, 10% for others)
+                if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                    let runeLetter;
+                    if (enemy.type.name === 'Shrimp' && currentTheme === 'hell') {
+                        const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
+                        runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                    } else {
+                        const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                        runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                    }
+                    let runePlaced = false;
+                    if (map[enemy.y][enemy.x] === 0) {
+                        map[enemy.y][enemy.x] = 8;
+                        runeDrops.push({ x: enemy.x, y: enemy.y, letter: runeLetter });
+                        runePlaced = true;
+                    } else {
+                        const adjacent = [
+                            { x: enemy.x, y: enemy.y - 1 },
+                            { x: enemy.x, y: enemy.y + 1 },
+                            { x: enemy.x - 1, y: enemy.y },
+                            { x: enemy.x + 1, y: enemy.y }
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 8;
+                                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                                runePlaced = true;
+                                break;
                             }
                         }
                     }
-                });
-                enemies = enemies.filter(e => e.hp > 0); // Remove dead enemies
-                if (exit && enemies.length === 0) {
-                    updateSatsDisplay();
+                    if (runePlaced) {
+                        logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a mysterious rune!`);
+                        playWebAudioSound(sounds.rune_drop);
+                    }
                 }
-                p.ripBlast = false; // Disable blast after use
-                needsRedraw = true;
-            }, 2000); // 2-second delay
+            });
+            enemies = enemies.filter(e => e.hp > 0); // Remove dead enemies
+            // Delay stairs placement until fire wave animation completes
+            if (enemies.length === 0 && !exit && waveActive) {
+                // Stairs will be placed in draw() after animation completes
+            }
+            p.ripBlast = false; // Disable blast after use
+            needsRedraw = true;
+        } else if (p.ripBlast && enemies.length === 0) {
+            logBattleEvent(`Floor ${floor} - RIP Blast activated but no enemies to destroy!`);
+            // Delay stairs placement until fire wave animation completes
+            p.ripBlast = false; // Consume RIP even if no enemies
+            needsRedraw = true;
         }
         if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
             console.warn(`Only spawned ${enemiesSpawnedThisFloor} enemies due to insufficient valid blockchain data`);
@@ -2876,23 +2920,14 @@ updatePlayerState(); // Check HP and armor state after damage
             }
         }
     });
-    if (enemies.length === 0 && !exit && waveActive) {
-        let r = rooms[Math.floor(Math.random() * rooms.length)];
-        let x, y;
-        do { x = r.x + Math.floor(Math.random() * r.w); y = r.y + Math.floor(Math.random() * r.h); }
-        while (map[y][x] !== 0 || (x === p.x && y === p.y));
-        exit = {x, y};
-                updateSatsDisplay();
-        needsRedraw = true;
+    if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive) {
+        if (placeStairs()) {
+            logBattleEvent(`Floor ${floor} - Wave ${wave} cleared! Stairs appeared!`);
+        } else {
+            logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
+        }
     }
-    if (enemies.length === 0 && waveActive) {
-        waveActive = false;
-        logBattleEvent(`Floor ${floor} - Wave ${wave} Completed!`);
-        initialWaveSpawned = false;
-                needsRedraw = true;
     }
-    needsRedraw = true;
-}
 
 // Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
 function updateProjectiles() {
@@ -3022,6 +3057,14 @@ function updateProjectiles() {
 }
 
 let usePickaxeSword = false; // Global flag for draw
+let ripBlastActive = false; // Flag for RIP blast gradient overlay effect
+let ripBlastStartTime = 0; // Timestamp for RIP blast start
+let columnProgress = 0; // Progress of gradient columns (0 to 1)
+
+// Initialize gradient column overlay for RIP blast effect
+function initGradientOverlay() {
+    columnProgress = 0; // Start at beginning of animation
+}
 
 // Modified checkRunewords function to display 5x5 rune grid with counts
 function checkRunewords() {
@@ -3166,6 +3209,46 @@ if (!p.runewords.includes('rip')) {
         needsRedraw = true;
     }
 }
+
+/*
+// DEBUG: Runeword testing function - comment out when not needed
+function debugRuneword(runewordKey) {
+    const runewordMap = {
+        '1': { name: 'btc', runes: ['b', 't', 'c'] },
+        '2': { name: 'hodl', runes: ['h', 'o', 'd', 'l'] },
+        '3': { name: 'rip', runes: ['r', 'i', 'p'] },
+        '4': { name: 'placeholder1', runes: [] },
+        '5': { name: 'placeholder2', runes: [] },
+        '6': { name: 'placeholder3', runes: [] },
+        '7': { name: 'placeholder4', runes: [] },
+        '8': { name: 'placeholder5', runes: [] },
+        '9': { name: 'placeholder6', runes: [] }
+    };
+
+    const runeword = runewordMap[runewordKey];
+    if (!runeword) {
+        console.log(`No runeword mapped to key ${runewordKey}`);
+        return;
+    }
+
+    if (runeword.runes.length === 0) {
+        console.log(`Runeword ${runeword.name} is a placeholder and has no effect`);
+        logBattleEvent(`Debug: Runeword ${runeword.name} is a placeholder and has no effect`);
+        return;
+    }
+
+    // Add required runes to player's inventory
+    p.runes = p.runes.concat(runeword.runes);
+    console.log(`Debug: Added runes ${runeword.runes} for ${runeword.name}. Current runes: ${p.runes}`);
+    logBattleEvent(`Debug: Added runes ${runeword.runes.join('')} for ${runeword.name}`);
+
+    // Update inventory display
+    checkRunewords();
+
+    // Trigger runeword activation
+    checkRunewordsAtFloorStart();
+}
+*/
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
@@ -3514,6 +3597,36 @@ function draw() {
             c.restore();
         }
     }
+    
+	// Draw gradient column overlay for RIP blast
+        if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
+            if (columnProgress === 0) {
+                initGradientOverlay(); // Initialize overlay on first draw
+            }
+            c.save();
+            c.globalCompositeOperation = 'screen'; // Subtle glow for visibility
+            const elapsed = Date.now() - ripBlastStartTime;
+            columnProgress = elapsed / 2000; // 0 to 1 over 2 seconds
+            const columnWidth = 20; // Width of each column in pixels
+            const numColumns = Math.ceil(W * S / columnWidth) + 1; // Cover entire width
+            for (let i = 0; i < numColumns; i++) {
+                const x = i * columnWidth + columnProgress * W * S; // Sweep left to right
+                if (x > W * S) continue; // Skip columns off-screen
+                const gradient = c.createLinearGradient(x, 0, x + columnWidth, 0);
+                gradient.addColorStop(0, 'rgba(255, 100, 0, 0)'); // Transparent edge
+                gradient.addColorStop(0.5, 'rgba(255, 150, 0, 0.4)'); // Smudged orange center
+                gradient.addColorStop(1, 'rgba(255, 100, 0, 0)'); // Transparent edge
+                c.fillStyle = gradient;
+                c.fillRect(x, 0, columnWidth, H * S); // Draw full-height column
+            }
+            c.restore();
+            needsRedraw = true; // Ensure continuous redraw during effect
+        } else if (ripBlastActive) {
+            ripBlastActive = false; // End effect after 2 seconds
+            columnProgress = 0;
+            needsRedraw = true;
+        }
+
     // Draw fog overlay
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] !== 1 && !fogMap[y][x]) {
@@ -3711,6 +3824,14 @@ document.addEventListener('keydown', e => {
         }
     }
     if (gameOver || splashActive) return;
+    /*
+    // DEBUG: Runeword testing with keys 1-9 - comment out when not needed
+    if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
+        debugRuneword(e.key);
+        needsRedraw = true;
+        return;
+    }
+    */
     if (e.key === 'ArrowUp') move('up');
     if (e.key === 'ArrowDown') move('down');
     if (e.key === 'ArrowLeft') move('left');
@@ -4016,23 +4137,6 @@ function updateGamepad(timestamp) {
     // Continue polling
     requestAnimationFrame(updateGamepad);
 }
-
-// go to game-over screen at startup (DEBUG)
-//function initGameOver() {
-//    gameOver = true;
-//    floor = 3;
-//    satsEarned = {Shrimp: 2349, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-//    kills = {Shrimp: 1, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-//    document.getElementById('game-over').style.display = 'block';
-//    document.getElementById('submit-score').style.display = 'block';
-//    document.getElementById('view-leaderboard').style.display = 'block';
-//    document.getElementById('restart-game').style.display = 'block';
-//    updateSatsDisplay();
-//    needsRedraw = true;
-//    //}
-//initGameOver();
-//requestAnimationFrame(gameLoop);
-
     </script>
 </body>
 </html>
