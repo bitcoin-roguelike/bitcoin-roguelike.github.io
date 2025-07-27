@@ -1014,11 +1014,13 @@ async function submitScore() {
     }
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
     try {
-const response = await fetch(`${API_URL}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ action: 'submit', username, score: totalSats, floor })
-});
+    const response = await fetch(`${API_URL}?action=submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, score: totalSats, floor })
+    });
         const text = await response.text();
         console.log(`POST Status: ${response.status}, Response: ${text}`);
         let data;
