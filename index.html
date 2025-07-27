@@ -1994,8 +1994,9 @@ function initMap() {
         });
         // Reset enemy spawning variables
         enemies = [];
-        enemiesSpawnedThisFloor = 0;
-        initialSpawnDoneThisFloor = false;
+	enemiesSpawnedThisFloor = 0;
+	whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
+	initialSpawnDoneThisFloor = false;
         initialWaveSpawned = false;
         map = Array(H).fill().map(() => Array(W).fill(1));
         fogMap = Array(H).fill().map(() => Array(W).fill(0));
@@ -2357,6 +2358,9 @@ function updateFogMap(px, py) {
             }
 }
 
+let lastKeyMoveTime = 0; // Track last keyboard move time
+let pendingKeyDir = null; // Track latest keyboard direction
+let isKeyHeld = false; // Track if a key is held
 let enemiesSpawnedThisFloor = 0;
 let nextApiCallTime = null;
 let initialSpawnDoneThisFloor = false;
@@ -2527,12 +2531,19 @@ async function fetchTxs() {
                         if (validPosition) break;
                     }
                 }
-                if (!validPosition) {
-                    console.log(`No valid spawn position found for Whale tx ${tx.txid}, skipping`);
-                    continue;
-                }
+		if (!validPosition) {
+		    console.log(`No valid spawn position found for Whale tx ${tx.txid}, skipping`);
+		    continue;
+		}
+		if (type.name === 'Whale' && whalesSpawnedThisFloor >= 10) {
+		    console.log(`Whale spawn skipped: reached cap of 10 Whales on floor ${floor}`);
+		    continue;
+		}
                 const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
                 enemies.push(newEnemy);
+		if (type.name === 'Whale') {
+		    whalesSpawnedThisFloor++; // Increment Whale counter
+		}
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
                 console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
@@ -3840,12 +3851,47 @@ document.addEventListener('keydown', e => {
     }
     */
 
-    if (e.key === 'ArrowUp') move('up');
-    if (e.key === 'ArrowDown') move('down');
-    if (e.key === 'ArrowLeft') move('left');
-    if (e.key === 'ArrowRight') move('right');
-    if (e.key === 'a') attack();
-    if (e.key === 'd') usePotion();
+    // Handle movement and actions
+    let moveDir = null;
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveDir = 'up';
+        pendingKeyDir = 'up';
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveDir = 'down';
+        pendingKeyDir = 'down';
+    } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        moveDir = 'left';
+        pendingKeyDir = 'left';
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        moveDir = 'right';
+        pendingKeyDir = 'right';
+    } else if (e.key === 'a') {
+        attack();
+    } else if (e.key === 'd') {
+        usePotion();
+    }
+
+    // Process movement: instant on first press, 50ms cap for all subsequent moves
+    if (moveDir) {
+        const now = Date.now();
+        if (!isKeyHeld || now - lastKeyMoveTime >= 50) {
+            move(moveDir);
+            lastKeyMoveTime = now;
+            isKeyHeld = true;
+        }
+    }
+});
+
+// Clear pending direction and key held state on release
+document.addEventListener('keyup', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        pendingKeyDir = null;
+        isKeyHeld = false;
+    }
 });
 
 document.getElementById('game-over').addEventListener('click', (event) => {
