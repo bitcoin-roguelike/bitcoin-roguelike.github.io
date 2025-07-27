@@ -58,6 +58,8 @@
         #whale-hash-ids a:hover { 
             text-decoration: underline; 
         }
+        #whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator {color: var(--text-color, #ff8c00) !important;
+        }
         #game-container { 
             position: relative; 
             width: 640px; 
@@ -1614,7 +1616,14 @@ function placeStairs() {
 }
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
-const audioContext = new AudioContext();
+let audioContext = null;
+function getAudioContext() {
+    if (!audioContext) {
+        audioContext = new AudioContext();
+    }
+    return audioContext;
+}
+audioContext = getAudioContext();
 
 const sounds = {
     attack: new Audio('attack.wav'),
@@ -1840,24 +1849,37 @@ function toggleMute() {
     }
 }
 
-        function logWhaleHashId(txid) {
-            whaleHashIds.push(`Floor ${floor} - <a href="https://www.blockchain.com/explorer/transactions/btc/${txid}" target="_blank">${txid}</a>`);
-            document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
-            const whaleLog = document.getElementById('whale-log');
-            whaleLog.scrollTop = whaleLog.scrollHeight;
-            console.log('Whale Hash ID:', txid);
+<!-- After -->
+function logWhaleHashId(txid) {
+    const newEntry = `Floor ${floor} - <a href="https://mempool.space/tx/${txid}" target="_blank">${txid}</a>`;
+    whaleHashIds.push(newEntry);
+    if (whaleHashIds.length > 50) {
+        whaleHashIds = ['Whale Transactions:', ...whaleHashIds.slice(-49)];
+        const whaleHashIdsDiv = document.getElementById('whale-hash-ids');
+        while (whaleHashIdsDiv.children.length > 49) {
+            whaleHashIdsDiv.removeChild(whaleHashIdsDiv.firstChild);
         }
+    }
+    const whaleHashIdsDiv = document.getElementById('whale-hash-ids');
+    const newDiv = document.createElement('div');
+    newDiv.innerHTML = newEntry;
+    whaleHashIdsDiv.appendChild(newDiv);
+    const whaleLog = document.getElementById('whale-log');
+    whaleLog.scrollTop = whaleLog.scrollHeight;
+    console.log('Whale Hash ID:', txid);
+}
 
 function logBattleEvent(event) {
     if (gameOver) return;
     const battleEvents = document.getElementById('battle-events');
-    // Handle kills display (static, no fading)
     if (event.startsWith('Kills:') || event.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/) || event === '') {
-        // Clear killsLog if starting a new kills block
         if (event === 'Kills:') {
             killsLog = [event];
         } else {
             killsLog.push(event);
+            if (killsLog.length > 10) {
+                killsLog = killsLog.slice(-10); // Cap at 10 entries
+            }
         }
         if (exit && enemies.length === 0) {
             // Show exactly 8 kills lines
@@ -2690,17 +2712,19 @@ function move(dir) {
         nx++;
         newDirection = 'right';
     }
-    // Update direction even if move is blocked
-    p.anim.direction = newDirection;
-    if (!map[ny] || map[ny][nx] === undefined) {
-        console.error('Invalid map access: nx=', nx, 'ny=', ny);
-        initMap();
-        needsRedraw = true;
-        return;
-    }
-    if (enemies.some(e => e.x === nx && e.y === ny)) {
-        return;
-    }
+// Update direction even if move is blocked
+p.anim.direction = newDirection;
+if (!map[ny] || map[ny][nx] === undefined) {
+    console.error('Invalid map access: nx=', nx, 'ny=', ny);
+    initMap();
+    needsRedraw = true;
+    return;
+}
+// Always update direction for rendering, even if blocked by enemy
+if (enemies.some(e => e.x === nx && e.y === ny)) {
+    needsRedraw = true; // Ensure redraw to reflect new direction
+    return;
+}
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx;
         p.y = ny;
@@ -2843,19 +2867,19 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     waveActive = false;
     exit = null;
     killsLog = [];
-    
-// Reset special sound tracking for the new floor
-specialSoundsPlayedThisFloor.lava = false;
-specialSoundsPlayedThisFloor.quicksand = false;
-specialSoundsPlayedThisFloor.pond = false;
-specialSoundsPlayedThisFloor.rune = false;
-
-// Reset runewords to allow reactivation on new floor
-p.runewords = [];
-
+    battleLog = []; // Clear battleLog to prevent memory buildup
+    // Reset special sound tracking for the new floor
+    specialSoundsPlayedThisFloor.lava = false;
+    specialSoundsPlayedThisFloor.quicksand = false;
+    specialSoundsPlayedThisFloor.pond = false;
+    specialSoundsPlayedThisFloor.rune = false;
+    // Reset runewords to allow reactivation on new floor
+    p.runewords = [];
+    // Clear runeDrops specific runes to prevent stale entries
+    runeDrops = runeDrops.filter(r => !r.specific);
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
-        initMap();
+    initMap();
     nextApiCallTime = null;
     const battleEvents = document.getElementById('battle-events');
     battleEvents.value = '';
@@ -3410,16 +3434,31 @@ function usePotion() {
     needsRedraw = true;
 }
 
+// Add at the top of the script section
+let dpadButtons = document.querySelectorAll('#dpad button');
+let actionsButtons = document.querySelectorAll('#actions button');
+function cleanupEventListeners() {
+    dpadButtons.forEach(button => {
+        button.removeEventListener('touchstart', button._touchstartHandler);
+        button.removeEventListener('touchend', button._touchendHandler);
+        button.removeEventListener('touchcancel', button._touchcancelHandler);
+        button.removeEventListener('click', button._clickHandler);
+    });
+    actionsButtons.forEach(button => {
+        button.removeEventListener('touchstart', button._touchstartHandler);
+        button.removeEventListener('touchend', button._touchendHandler);
+        button.removeEventListener('touchcancel', button._touchcancelHandler);
+        button.removeEventListener('click', button._clickHandler);
+    });
+}
+
 function restart() {
+    cleanupEventListeners();
     floor = 1;
     currentTheme = 'dungeon'; // Reset to default theme
     p.maxHP = 24; // Reset max HP to default
-    document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
+document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
     document.documentElement.style.setProperty('--text-shadow', '-1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000'); // Reset outlined font
-    // Force re-render of text color
-    document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator').forEach(el => {
-        el.style.color = '#ff8c00';
-    });
     wave = 1;
     document.getElementById('wave').textContent = wave;
     p.hp = 24;
@@ -3437,6 +3476,7 @@ function restart() {
     gameOverSoundPlayed = false;
     autoSubmitTriggered = false;
     enemiesSpawnedThisFloor = 0;
+    whalesSpawnedThisFloor = 0; // Added
     initialSpawnDoneThisFloor = false;
     initialWaveSpawned = false;
     waveActive = false;
@@ -3462,7 +3502,14 @@ function restart() {
     p.ripBlast = false; // Reset RIP blast flag
     document.getElementById('runes').textContent = 'None';
 
-    document.getElementById('whale-hash-ids').innerHTML = whaleHashIds.join('<br>');
+    const whaleHashIdsDiv = document.getElementById('whale-hash-ids');
+    whaleHashIdsDiv.innerHTML = ''; // Clear existing content
+    const newDiv = document.createElement('div');
+    newDiv.innerHTML = whaleHashIds.join('<br>');
+    whaleHashIdsDiv.appendChild(newDiv);
+    const whaleLog = document.getElementById('whale-log');
+    whaleLog.scrollTop = whaleLog.scrollHeight;
+
     document.getElementById('battle-events').value = '';
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
@@ -3480,6 +3527,73 @@ function restart() {
     document.getElementById('submit-score').disabled = false;
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
+
+    // Re-attach event listeners
+    dpadButtons.forEach(button => {
+        button._touchstartHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            button.classList.add('pressed');
+            if (!button._isMoving && !splashActive && !gameOver) {
+                button._isMoving = true;
+                const dir = button.id;
+                if (Date.now() - button._lastTouchMoveTime >= 200) {
+                    move(dir);
+                    button._lastTouchMoveTime = Date.now();
+                }
+                button._touchMovementTimer = setInterval(() => {
+                    if (!splashActive && !gameOver && button._isMoving) {
+                        const now = Date.now();
+                        if (now - button._lastTouchMoveTime >= 200) {
+                            move(dir);
+                            button._lastTouchMoveTime = now;
+                        }
+                    }
+                }, 200);
+            }
+        };
+        button._touchendHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            button.classList.remove('pressed');
+            if (button._touchMovementTimer) {
+                clearInterval(button._touchMovementTimer);
+                button._touchMovementTimer = null;
+            }
+            button._isMoving = false;
+            button._lastTouchMoveTime = 0;
+        };
+        button._touchcancelHandler = button._touchendHandler;
+        button._clickHandler = (e) => e.preventDefault();
+        button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
+        button.addEventListener('touchend', button._touchendHandler, { passive: false });
+        button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
+        button.addEventListener('click', button._clickHandler, { passive: false });
+        button._lastTouchMoveTime = 0;
+        button._isMoving = false;
+    });
+    actionsButtons.forEach(button => {
+        button._touchstartHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            button.classList.add('pressed');
+            if (button.id === 'mute') toggleMute();
+            else if (button.id === 'attack') attack();
+            else if (button.id === 'potion') usePotion();
+        };
+        button._touchendHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            button.classList.remove('pressed');
+        };
+        button._touchcancelHandler = button._touchendHandler;
+        button._clickHandler = (e) => e.preventDefault();
+        button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
+        button.addEventListener('touchend', button._touchendHandler, { passive: false });
+        button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
+        button.addEventListener('click', button._clickHandler, { passive: false });
+    });
+
     const battleEvents = document.getElementById('battle-events');
     battleEvents.style.transform = 'translateX(-100%)';
     battleEvents.style.opacity = '0';
@@ -3487,17 +3601,47 @@ function restart() {
 
     sounds.music.pause();
     sounds.music.currentTime = 0;
+    // Clear Web Audio buffers
+    Object.keys(sounds).forEach(key => {
+        if (sounds[key].buffer) {
+            sounds[key].buffer = null;
+            sounds[key].isPlaying = false;
+        }
+    });
+    // Reload Web Audio buffers
+    loadSoundBuffer('hit.wav', 'hit');
+    loadSoundBuffer('pickup.wav', 'pickup');
+    loadSoundBuffer('heads.wav', 'heads');
+    loadSoundBuffer('tails.wav', 'tails');
+    loadSoundBuffer('lava.wav', 'lava');
+    loadSoundBuffer('quicksand.wav', 'quicksand');
+    loadSoundBuffer('pond.wav', 'pond');
+    loadSoundBuffer('rune.wav', 'rune');
+    loadSoundBuffer('rune_drop.wav', 'rune_drop');
 
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
         apiTimeoutId = null;
+    }
+    // Stop gamepad polling
+    gamepadPollingActive = false;
+    gamepadIndex = null;
+    lastButtonsState = [];
+    lastAxesState = { axis0: 0, axis1: 0 };
+    lastStartPressTime = 0;
+    if (movementTimer) {
+        clearInterval(movementTimer);
+        movementTimer = null;
+        currentMoveDir = null;
+        lastMoveTime = 0;
+        pendingMove = false;
     }
 
     resetSplashScreen();
     initMap();
     updateSatsDisplay();
     needsRedraw = true;
-    }
+}
 
 function draw() {
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
