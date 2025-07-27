@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://noexxibndcooqjquhqzk.supabase.co https://mempool.space; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://noexxibndcooqjquhqzk.supabase.co/functions/v1/leaderboard https://mempool.space; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
         body { 
@@ -1014,11 +1014,11 @@ async function submitScore() {
     }
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
     try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ username, score: totalSats, floor })
-        });
+const response = await fetch(`${API_URL}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'submit', username, score: totalSats, floor })
+});
         const text = await response.text();
         console.log(`POST Status: ${response.status}, Response: ${text}`);
         let data;
@@ -1047,23 +1047,19 @@ async function submitScore() {
     }
 }
 
-const SUPABASE_URL = 'https://noexxibndcooqjquhqzk.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vZXh4aWJuZGNvb3FqcXVocXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyNzY3NDgsImV4cCI6MjA2NDg1Mjc0OH0.LvN81angnwKM5IS1lCrr-dUESgeJfvO6VjkC0lMB0y4';
+const API_URL = 'https://noexxibndcooqjquhqzk.supabase.co/functions/v1/leaderboard';
 const headers = {
-    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-    'apikey': SUPABASE_ANON_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
+    'Content-Type': 'application/json'
 };
 
 
 
 async function fetchLeaderboard(submittedUsername = null, submittedScore = null, submittedFloor = null) {
     try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard?select=username,score,floor&order=score.desc&limit=10`, {
-            method: 'GET',
-            headers
-        });
+const response = await fetch(`${API_URL}?action=fetch&limit=10`, {
+    method: 'GET',
+    headers
+});
         const text = await response.text();
         console.log(`GET Status: ${response.status}, Response: ${text}`);
         let data;
@@ -1080,17 +1076,17 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
             // Fetch player's score and rank if not in top 10 and floor >= 3
             if (submittedUsername && !playerInTop10 && submittedFloor >= 3) {
                 try {
-                    const playerResponse = await fetch(
-                        `${SUPABASE_URL}/rest/v1/leaderboard?select=username,score,floor&username=eq.${encodeURIComponent(submittedUsername)}&score=eq.${submittedScore}&floor=eq.${submittedFloor}`,
-                        { method: 'GET', headers }
-                    );
+const playerResponse = await fetch(
+    `${API_URL}?action=fetchPlayer&username=${encodeURIComponent(submittedUsername)}&score=${submittedScore}&floor=${submittedFloor}`,
+    { method: 'GET', headers }
+);
                     const playerData = await playerResponse.json();
                     if (playerResponse.ok && playerData.length > 0) {
                         playerEntry = playerData[0];
-                        const rankResponse = await fetch(
-                            `${SUPABASE_URL}/rest/v1/leaderboard?select=score&score=gt.${submittedScore}&order=score.desc`,
-                            { method: 'GET', headers }
-                        );
+const rankResponse = await fetch(
+    `${API_URL}?action=fetchRank&score=${submittedScore}`,
+    { method: 'GET', headers }
+);
                         const rankData = await rankResponse.json();
                         if (rankResponse.ok) {
                             playerRank = rankData.length + 1;
