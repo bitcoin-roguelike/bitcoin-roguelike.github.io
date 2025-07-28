@@ -4327,21 +4327,23 @@ function updateGamepad(timestamp) {
     // Handle buttons (A=0, B=1, Select=2, Start=3)
     const nowTime = Date.now();
 
-// A Button (0) - usePotion
-if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
-    usePotion();
-}
+    // A Button (0) - usePotion
+    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
+        usePotion();
+        lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
+    }
 
-// B Button (1) - attack
-if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
-    attack();
-}
+    // B Button (1) - attack
+    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
+        attack();
+        lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
+    }
 
-// Select Button (2) - toggleMute
-if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
-    toggleMute();
-    lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
-}
+    // Select Button (2) - toggleMute
+    if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
+        toggleMute();
+        lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
+    }
 
     // Start Button (3) - startGame or restart
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
