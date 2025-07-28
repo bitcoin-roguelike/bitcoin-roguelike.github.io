@@ -4167,7 +4167,7 @@ let lastButtonsState = []; // Track previous button states
 let lastAxesState = { axis0: 0, axis1: 0 }; // Track previous D-pad axis states
 let lastStartPressTime = 0; // Debounce Start button
 const DEBOUNCE_MS = 200; // Debounce interval
-const GAMEPAD_POLL_INTERVAL = 50; // Poll rate in ms
+const GAMEPAD_POLL_INTERVAL = 16; // Poll at ~60fps
 let lastGamepadPollTime = 0; // Throttle polling
 let movementTimer = null; // Timer for continuous movement
 let currentMoveDir = null; // Track current movement direction
@@ -4300,42 +4300,9 @@ document.getElementById('start-button').addEventListener('click', () => {
 
 // Poll gamepad state
 function updateGamepad(timestamp) {
-    // Debug log to track gamepad state
-    console.log(`updateGamepad: gamepadIndex=${gamepadIndex}, gamepadPollingActive=${gamepadPollingActive}, splashActive=${splashActive}`);
-
-    if (gamepadIndex === null) {
-        // Try to find a connected gamepad
-        const gamepads = navigator.getGamepads();
-        for (let i = 0; i < gamepads.length; i++) {
-            if (gamepads[i]) {
-                gamepadIndex = i;
-                gamepadPollingActive = true;
-                console.log(`Gamepad reconnected: index=${i}`);
-                break;
-            }
-        }
-        if (gamepadIndex === null) {
-            return; // No gamepad found, stop polling
-        }
+    if (gamepadIndex === null || !gamepadPollingActive) {
+        return; // Stop polling if no gamepad or not active
     }
-
-    if (!gamepadPollingActive) {
-        // Allow Start button to work at splash screen even if polling was stopped
-        const gamepad = navigator.getGamepads()[gamepadIndex];
-        if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3] && splashActive) {
-            const nowTime = Date.now();
-            if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
-                startGame();
-                lastStartPressTime = nowTime;
-                gamepadPollingActive = true; // Resume polling after starting
-                console.log('Start button pressed at splash screen');
-            }
-            lastButtonsState[3] = gamepad.buttons[3].pressed;
-        }
-        requestAnimationFrame(updateGamepad);
-        return;
-    }
-
     const now = performance.now();
     if (now - lastGamepadPollTime < GAMEPAD_POLL_INTERVAL) {
         requestAnimationFrame(updateGamepad);
@@ -4344,7 +4311,7 @@ function updateGamepad(timestamp) {
     lastGamepadPollTime = now;
     const gamepad = navigator.getGamepads()[gamepadIndex];
     if (!gamepad) {
-        gamepadIndex = null;
+                gamepadIndex = null;
         gamepadPollingActive = false;
         if (movementTimer) {
             clearInterval(movementTimer);
@@ -4352,50 +4319,36 @@ function updateGamepad(timestamp) {
             currentMoveDir = null;
             lastMoveTime = 0;
             pendingMove = false;
-        }
-        console.log('Gamepad disconnected');
+                    }
         return;
     }
 
-    // Check for actual gamepad input (buttons or axes)
-    const buttons = gamepad.buttons;
-    const axis0 = gamepad.axes[0];
-    const axis1 = gamepad.axes[1];
-    const deadZone = 0.2;
-    const hasInput = buttons.some(b => b.pressed) || Math.abs(axis0) > deadZone || Math.abs(axis1) > deadZone;
-
-    // Simulate user activity only if there's gamepad input
-    if (hasInput) {
-        const activityEvent = new KeyboardEvent('keydown', { key: 'Shift' });
-        document.dispatchEvent(activityEvent);
-    }
-
     // Handle buttons (A=0, B=1, Select=2, Start=3)
+    const buttons = gamepad.buttons;
     const nowTime = Date.now();
 
     // A Button (0) - usePotion
     if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
         usePotion();
-    }
+            }
 
     // B Button (1) - attack
     if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
         attack();
-    }
+            }
 
     // Select Button (2) - toggleMute
     if (buttons[2].pressed && !lastButtonsState[2]) {
         toggleMute();
-    }
+            }
 
     // Start Button (3) - startGame or restart
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (splashActive) {
             startGame();
-            console.log('Start button triggered startGame');
         } else if (gameOver) {
             restart();
-        }
+                    }
         lastStartPressTime = nowTime;
     }
 
@@ -4403,7 +4356,9 @@ function updateGamepad(timestamp) {
     lastButtonsState = buttons.map(b => b.pressed);
 
     // Handle D-pad (Axes 0 and 1)
-    // deadZone already defined above
+    const axis0 = gamepad.axes[0]; // Left/Right
+    const axis1 = gamepad.axes[1]; // Up/Down
+    const deadZone = 0.2; // Ignore small axis movements
 
     // Determine current direction
     let newMoveDir = null;
@@ -4434,13 +4389,13 @@ function updateGamepad(timestamp) {
         if (movementTimer) {
             clearInterval(movementTimer);
             movementTimer = null;
-        }
+                    }
         // Only move if 200ms have passed since last move
         if (nowTime - lastMoveTime >= 200) {
             pendingMove = true;
             move(newMoveDir);
             lastMoveTime = nowTime;
-            pendingMove = false;
+                        pendingMove = false;
         }
         movementTimer = setInterval(() => {
             if (!splashActive && !gameOver && !pendingMove) {
@@ -4449,7 +4404,7 @@ function updateGamepad(timestamp) {
                     pendingMove = true;
                     move(newMoveDir);
                     lastMoveTime = intervalTime;
-                    pendingMove = false;
+                                        pendingMove = false;
                 }
             }
         }, 200); // Move every 200ms
@@ -4459,7 +4414,7 @@ function updateGamepad(timestamp) {
         if (movementTimer) {
             clearInterval(movementTimer);
             movementTimer = null;
-        }
+                    }
         currentMoveDir = null;
         lastMoveTime = 0;
         pendingMove = false;
@@ -4475,4 +4430,3 @@ function updateGamepad(timestamp) {
     </script>
 </body>
 </html>
-
