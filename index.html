@@ -4328,12 +4328,12 @@ function updateGamepad(timestamp) {
     const nowTime = Date.now();
 
 // A Button (0) - usePotion
-if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver && nowTime - lastMoveTime >= 200) {
+if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
     usePotion();
 }
 
 // B Button (1) - attack
-if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver && nowTime - lastMoveTime >= 200) {
+if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
     attack();
 }
 
