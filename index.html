@@ -4330,13 +4330,11 @@ function updateGamepad(timestamp) {
 // A Button (0) - usePotion
 if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver && nowTime - lastMoveTime >= 200) {
     usePotion();
-    lastMoveTime = nowTime; // Update lastMoveTime to throttle actions
 }
 
 // B Button (1) - attack
 if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver && nowTime - lastMoveTime >= 200) {
     attack();
-    lastMoveTime = nowTime; // Update lastMoveTime to throttle actions
 }
 
 // Select Button (2) - toggleMute
