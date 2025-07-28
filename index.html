@@ -18,24 +18,23 @@
             background: #222; 
             font-family: 'VT323', monospace;
             overflow: hidden;
-            touch-action: pan-x pan-y; /* Prevents pinch-to-zoom */
-            -webkit-user-select: none; /* Prevents selection */
-            -webkit-touch-callout: none; /* Disables iOS callouts */
+            touch-action: pan-x pan-y;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
-        /* Existing styles remain unchanged */
-        #console { 
-            background: #111;
-            border: 4px solid #ff8c00;
-            padding: 4px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            max-width: 800px;
-            width: 100%;
-            box-sizing: border-box;
-        }
-#whale-log { 
+#console { 
+        background: #111;
+        border: 4px solid #ff8c00;
+        padding: 0; /* Updated to 0 from 4px 4px 4px 4px */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        max-width: 800px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+        #whale-log { 
             width: 618px; 
             height: 24px; 
             overflow-y: auto;
@@ -45,10 +44,12 @@
             text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
             padding: 12px; 
             border: 2px solid #ff8c00; 
-            font-size: 14px; 
+            font-size: 14px;
+            margin-top: 0; /* Ensure no top margin */
         }
         #whale-hash-ids { 
-            max-width: 620px; 
+            max-width: 620px;
+            margin-top: 0; /* Ensure no top margin */
         }
         #whale-hash-ids a { 
             color: var(--text-color, #ff8c00) !important; 
@@ -58,7 +59,8 @@
         #whale-hash-ids a:hover { 
             text-decoration: underline; 
         }
-        #whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator {color: var(--text-color, #ff8c00) !important;
+        #whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator {
+            color: var(--text-color, #ff8c00) !important;
         }
         #game-container { 
             position: relative; 
@@ -83,7 +85,7 @@
             display: none; 
             text-align: center; 
         }
-#battle-log { 
+        #battle-log { 
             width: 620px;
             margin-left: 20px; 
             background: transparent; 
@@ -95,54 +97,52 @@
             z-index: 10;
             margin-top: -240px;
         }
-#battle-log textarea {
-    background: transparent;
-    color: var(--text-color, #ff8c00) !important;
-    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
-    border: none;
-    font-family: 'VT323', monospace;
-    font-size: 16px;
-    resize: none;
-    width: 100%;
-    height: 200px;
-    padding: 0;
-    overflow-y: auto;
-    scroll-behavior: smooth;
-    z-index: 10;
-    pointer-events: none;
-    transition: transform 0.3s ease, opacity 0.2s ease;
-    transform: translateX(-100%);
-    opacity: 0;
-    /* Hide scrollbar */
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
-}
-#inventory { 
-    position: absolute;
-    top: 10px;
-    right: -12px;
-    background: transparent;
-    color: var(--text-color, #ff8c00) !important;
-    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
-    border: none;
-    padding: 8px;
-    z-index: 10;
-    font-family: 'VT323', monospace;
-    font-size: 20px;
-    line-height: 1.5;
-    width: 160px;
-}
-#inventory sup {
-    vertical-align: super;
-    font-size: 0.6em; /* Matches ™ size */
-    text-shadow: none; /* Remove shadow for clarity */
-}
-/* Tighten line-height for Safari */
-@media not all and (min-resolution: 0.001dpcm) { /* Targets Safari */
-    #inventory {
-        line-height: 1.0; /* Reduce line-height by ~50% */
-    }
-}
+        #battle-log textarea {
+            background: transparent;
+            color: var(--text-color, #ff8c00) !important;
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+            border: none;
+            font-family: 'VT323', monospace;
+            font-size: 16px;
+            resize: none;
+            width: 100%;
+            height: 200px;
+            padding: 0;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            z-index: 10;
+            pointer-events: none;
+            transition: transform 0.3s ease, opacity 0.2s ease;
+            transform: translateX(-100%);
+            opacity: 0;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #inventory { 
+            position: absolute;
+            top: 10px;
+            right: -12px;
+            background: transparent;
+            color: var(--text-color, #ff8c00) !important;
+            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+            border: none;
+            padding: 8px;
+            z-index: 10;
+            font-family: 'VT323', monospace;
+            font-size: 20px;
+            line-height: 1.5;
+            width: 160px;
+        }
+        #inventory sup {
+            vertical-align: super;
+            font-size: 0.6em;
+            text-shadow: none;
+        }
+        @media not all and (min-resolution: 0.001dpcm) {
+            #inventory {
+                line-height: 1.0;
+            }
+        }
         #floor-indicator { 
             position: absolute; 
             top: 11px; 
@@ -252,389 +252,386 @@
         #start-button:hover {
             background: #00b7ef;
         }
-#dpad button:active, #dpad button.pressed {
-    background: rgba(224, 123, 0, 0.7); /* Slightly darker than hover */
-}
-
-#submit-score, #view-leaderboard, #restart-game {
-    background: #ff8c00;
-    color: #fff;
-    border: none;
-    padding: 0px;
-    font-family: 'VT323', monospace;
-    font-size: 18px;
-    cursor: pointer;
-    border-radius: 5px;
-    width: 120px; /* Keep for view-leaderboard and restart-game */
-    height: 40px;
-    z-index: 40;
-}
-#submit-score {
-    width: 220px; /* Almost doubled from 120px */
-}
-
-#submit-score:disabled {
-    background: #666;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-#leaderboard-output {
-    position: absolute;
-    top: 0px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #111;
-    color: #ff8c00;
-    border: 2px solid #ff8c00;
-    padding: 0px;
-    font-family: 'VT323', monospace;
-    font-size: 14px;
-    max-height: 200px;
-    overflow-y: auto;
-    display: none;
-    width: 640px;
-    max-width: 100%;
-    text-align: left;
-    white-space: pre;
-    line-height: 1.2;
-    box-sizing: border-box;
-    word-break: break-word; /* Handle long text */
-}
-    
-/* Phones (320px–767px) */
-@media only screen and (min-width: 320px) and (max-width: 767px) {
-    body {
-        overflow: hidden;
-        touch-action: pan-x pan-y;
-        -webkit-user-select: none;
-        user-select: none;
-    }
-    #console {
-        padding: 5px;
-        overflow: hidden;
-    }
-    canvas, #splash-screen, #game-container, #game-over {
-        width: 100%;
-        max-width: 640px;
-        height: auto;
-        aspect-ratio: 1/1;
-    }
-    #whale-log {
-        width: 100%;
-        height: 24px;
-        overflow-y: auto;
-        scroll-behavior: smooth;
-        font-size: 9px;
-    }
-    #whale-hash-ids {
-    }
-    #battle-log {
-        width: 100%;
-        max-width: 480px;
-        font-size: 9px;
-    }
-    #battle-log textarea {
-        width: 100%;
-        margin-left: 8px;
-        height: 110px;
-        font-size: 10px; /* Match font-size for consistency */
-    }
-    #inventory {
-        width: 100px;
-        font-size: 12px;
-        line-height: 1.5;
-        margin-right: 2px;
-    }
-    #floor-indicator {
-        font-size: 10px;
-    }
-    button {
-        width: 55px;
-        height: 55px;
-        font-size: 12px;
-        border-radius: 50%;
-        margin-top: 0px;
-    }
-    button:hover {
-        background: rgba(224, 123, 0, 0.5);
-    }
-    #controller {
-        padding: 5px;
-        display: flex;
-        justify-content: flex-start;
-        gap: 40px;
-    }
-    #dpad {
-        display: grid;
-        grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 0px; /* Reduced from 5px to bring buttons closer */
-        margin-left: -10px;
-    }
-    #up {
-        grid-area: t;
-        margin-top: 160px;
-        margin-left: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #left {
-        grid-area: l;
-        margin-top: 0;
-        margin-left: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #right {
-        grid-area: r;
-        margin-top: 0;
-        margin-left: 0;
-        margin-right: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #down {
-        grid-area: b;
-        margin-top: 0;
-        margin-left: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #actions {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-    #mute {
-        padding: 0px;
-        border-radius: 25%;
-        height: 20px;
-        width: 20px;
-        background: #fff;
-        color: #000;
-        margin-right: 0px;
-        margin-left: -15px;
-        margin-top: 60px;
-        z-index: 30;
-    }
-    #attack {
-        padding: 0px;
-        margin-right: 0px;
-        background: #ff8c00;
-        height: 45px;
-        width: 45px;
-        border-radius: 50%;
-        margin-top: 165px;
-        z-index: 30;
-    }
-    #potion {
-        padding: 0px;
-        margin-right: 0px;
+        #dpad button:active, #dpad button.pressed {
+            background: rgba(224, 123, 0, 0.7);
+        }
+        #submit-score, #view-leaderboard, #restart-game {
+            background: #ff8c00;
+            color: #fff;
+            border: none;
+            padding: 0px;
+            font-family: 'VT323', monospace;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 120px;
+            height: 40px;
+            z-index: 40;
+        }
+        #submit-score {
+            width: 220px;
+        }
+        #submit-score:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        #leaderboard-output {
+            position: absolute;
+            top: 0px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #111;
+            color: #ff8c00;
+            border: 2px solid #ff8c00;
+            padding: 0px;
+            font-family: 'VT323', monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            width: 640px;
+            max-width: 100%;
+            text-align: left;
+            white-space: pre;
+            line-height: 1.2;
+            box-sizing: border-box;
+            word-break: break-word;
+        }
+        /* Phones (320px–767px) */
+        @media only screen and (min-width: 320px) and (max-width: 767px) {
+            body {
+                overflow: hidden;
+                touch-action: pan-x pan-y;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+#console {
+            padding: 0; /* Updated to 0 from 2px 4px */
+            overflow: hidden;
+            gap: 2px;
+        }
+            canvas, #splash-screen, #game-container, #game-over {
+                width: 100%;
+                max-width: 640px;
+                height: auto;
+                aspect-ratio: 1/1;
+            }
+            #whale-log {
+                width: 100%;
+                height: 24px;
+                overflow-y: auto;
+                scroll-behavior: smooth;
+                font-size: 9px;
+                margin-top: 0; /* Ensure no top margin */
+            }
+            #whale-hash-ids {
+                margin-top: 0; /* Ensure no top margin */
+            }
+            #battle-log {
+                width: 100%;
+                max-width: 480px;
+                font-size: 9px;
+            }
+            #battle-log textarea {
+                width: 100%;
+                margin-left: 8px;
+                height: 110px;
+                font-size: 10px;
+            }
+            #inventory {
+                width: 100px;
+                font-size: 12px;
+                line-height: 1.5;
+                margin-right: 2px;
+            }
+            #floor-indicator {
+                font-size: 10px;
+            }
+            button {
+                width: 55px;
+                height: 55px;
+                font-size: 12px;
+                border-radius: 50%;
+                margin-top: 0px;
+            }
+            button:hover {
+                background: rgba(224, 123, 0, 0.5);
+            }
+            #controller {
+                padding: 5px;
+                display: flex;
+                justify-content: flex-start;
+                gap: 40px;
+            }
+            #dpad {
+                display: grid;
+                grid-template-areas: ". t ." "l c r" ". b .";
+                gap: 0px;
+                margin-left: -10px;
+            }
+            #up {
+                grid-area: t;
+                margin-top: 160px;
+                margin-left: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #left {
+                grid-area: l;
+                margin-top: 0;
+                margin-left: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #right {
+                grid-area: r;
+                margin-top: 0;
+                margin-left: 0;
+                margin-right: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #down {
+                grid-area: b;
+                margin-top: 0;
+                margin-left: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #actions {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+            #mute {
+                padding: 0px;
+                border-radius: 25%;
+                height: 20px;
+                width: 20px;
+                background: #fff;
+                color: #000;
+                margin-right: 0px;
+                margin-left: -15px;
+                margin-top: 60px;
+                z-index: 30;
+            }
+            #attack {
+                padding: 0px;
+                margin-right: 0px;
+                background: #ff8c00;
+                height: 45px;
+                width: 45px;
+                border-radius: 50%;
+                margin-top: 165px;
+                z-index: 30;
+            }
+            #potion {
+                padding: 0px;
+                margin-right: 0px;
                 margin-left: 20px;
-        background: #ff8c00;
-        height: 35px;
-        width: 35px;
-        border-radius: 50%;
-        margin-top: 80px;
-        z-index: 30;
-    }
-    #mute:hover {
-        background: #ccc;
-    }
-    
-    #submit-score, #view-leaderboard, #restart-game {
-        width: 80px; /* Keep for view-leaderboard and restart-game */
-        height: 30px;
-        font-size: 16px;
-    }
-    #submit-score {
-        width: 160px; /* Doubled from 80px */
-    }
-#username-input {
-    width: 200px; /* Match main style */
-    font-size: 14px;
-}
-    #leaderboard-output {
-        top: -12px;
-        width: 100%;
-        max-width: 640px;
-        font-size: 12px;
-        max-height: 160px;
-        text-align: left;
-        white-space: pre;
-        line-height: 1.2;
-        word-break: break-word;
-    }
-
-}
-
-/* Tablets (768px–1024px, high pixel ratio) */
-@media only screen and (min-width: 768px) and (max-width: 1024px) and (-webkit-min-device-pixel-ratio: 2) {
-    body {
-        overflow: hidden;
-        touch-action: pan-x pan-y;
-        -webkit-user-select: none;
-        user-select: none;
-    }
-    #console {
-        padding: 5px;
-        overflow: hidden;
-        max-width: 640px;
-    }
-    canvas, #splash-screen, #game-container, #game-over {
-        width: 100%;
-        max-width: 640px;
-        height: auto;
-        aspect-ratio: 1/1;
-    }
-    #whale-log {
-        width: 100%;
-        height: 24px;
-        overflow-y: auto;
-        scroll-behavior: smooth;
-        font-size: 1.2rem;
-    }
-    #whale-hash-ids {
-        font-size: 1.2rem;
-    }
-    #battle-log {
-        width: 100%;
-        max-width: 480px;
-        font-size: 1.2rem;
-    }
-    #battle-log textarea {
-        width: 100%;
-        margin-left: -60px;
-        height: 156px;
-        font-size: 1.2rem;
-    }
-    #inventory {
-        width: 170px;
-        font-size: 1.4rem;
-        line-height: 1.5;
-        margin-right: 20px;
-    }
-    #floor-indicator {
-        font-size: 1.6rem;
-    }
-    button {
-        width: 65px;
-        height: 65px;
-        font-size: 1.2rem;
-        border-radius: 50%;
-        margin-top: 0px;
-    }
-    button:hover {
-        background: rgba(224, 123, 0, 0.5);
-    }
-    #controller {
-        padding: 5px;
-        display: flex;
-        justify-content: flex-start;
-        gap: 120px;
-    }
-    #dpad {
-        display: grid;
-        grid-template-areas: ". t ." "l c r" ". b .";
-        gap: 0px; /* Reduced from 5px to bring buttons closer */
-        margin-left: 20px;
-    }
-    #up {
-        grid-area: t;
-        margin-top: 160px;
-        margin-left: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #left {
-        grid-area: l;
-        margin-top: 0;
-        margin-left: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #right {
-        grid-area: r;
-        margin-top: 0;
-        margin-left: 0;
-        margin-right: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #down {
-        grid-area: b;
-        margin-top: 0;
-        margin-left: 0;
-        z-index: 30;
-        border-radius: 10%;
-    }
-    #actions {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-    #mute {
-        padding: 0px;
-        border-radius: 25%;
-        height: 24px;
-        width: 24px;
-        background: #fff;
-        color: #000;
-        margin-right: 80px;
-        margin-left: -15px;
-        margin-top: 45px;
-        z-index: 30;
-    }
-    #attack {
-        padding: 0px;
-        margin-right: 5px;
-        background: #ff8c00;
-        height: 65px;
-        width: 65px;
-        border-radius: 50%;
-        margin-top: 165px;
-        z-index: 30;
-    }
-    #potion {
-        padding: 0px;
-        margin-right: 5px;
-        margin-left: 20px;
-        background: #ff8c00;
-        height: 45px;
-        width: 45px;
-        border-radius: 50%;
-        margin-top: 80px;
-        z-index: 30;
-    }
-    #mute:hover {
-        background: #ccc;
-    }
-
-    #submit-score, #view-leaderboard, #restart-game {
-        width: 100px; /* Keep for view-leaderboard and restart-game */
-        height: 48px;
-        font-size: 18px;
-    }
-    #submit-score {
-        width: 200px; /* Doubled from 100px */
-    }
-#username-input {
-    width: 200px; /* Match main style */
-    font-size: 16px;
-}
-    #leaderboard-output {
-        top: 0px;
-        width: 100%;
-        max-width: 640px;
-        font-size: 14px;
-        max-height: 200px;
-        text-align: left;
-        white-space: pre;
-        line-height: 1.2;
-        word-break: break-word;
-    }
-
-}
+                background: #ff8c00;
+                height: 35px;
+                width: 35px;
+                border-radius: 50%;
+                margin-top: 80px;
+                z-index: 30;
+            }
+            #mute:hover {
+                background: #ccc;
+            }
+            #submit-score, #view-leaderboard, #restart-game {
+                width: 80px;
+                height: 30px;
+                font-size: 16px;
+            }
+            #submit-score {
+                width: 160px;
+            }
+            #username-input {
+                width: 200px;
+                font-size: 14px;
+            }
+            #leaderboard-output {
+                top: -12px;
+                width: 100%;
+                max-width: 640px;
+                font-size: 12px;
+                max-height: 160px;
+                text-align: left;
+                white-space: pre;
+                line-height: 1.2;
+                word-break: break-word;
+            }
+        }
+        /* Tablets (768px–1024px, high pixel ratio) */
+        @media only screen and (min-width: 768px) and (max-width: 1024px) and (-webkit-min-device-pixel-ratio: 2) {
+            body {
+                overflow: hidden;
+                touch-action: pan-x pan-y;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+#console {
+            padding: 0; /* Updated to 0 from 2px 4px */
+            overflow: hidden;
+            max-width: 640px;
+            gap: 2px;
+        }
+            canvas, #splash-screen, #game-container, #game-over {
+                width: 100%;
+                max-width: 640px;
+                height: auto;
+                aspect-ratio: 1/1;
+            }
+            #whale-log {
+                width: 100%;
+                height: 24px;
+                overflow-y: auto;
+                scroll-behavior: smooth;
+                font-size: 1.2rem;
+                margin-top: 0; /* Ensure no top margin */
+            }
+            #whale-hash-ids {
+                font-size: 1.2rem;
+                margin-top: 0; /* Ensure no top margin */
+            }
+            #battle-log {
+                width: 100%;
+                max-width: 480px;
+                font-size: 1.2rem;
+            }
+            #battle-log textarea {
+                width: 100%;
+                margin-left: -60px;
+                height: 156px;
+                font-size: 1.2rem;
+            }
+            #inventory {
+                width: 170px;
+                font-size: 1.4rem;
+                line-height: 1.5;
+                margin-right: 20px;
+            }
+            #floor-indicator {
+                font-size: 1.6rem;
+            }
+            button {
+                width: 65px;
+                height: 65px;
+                font-size: 1.2rem;
+                border-radius: 50%;
+                margin-top: 0px;
+            }
+            button:hover {
+                background: rgba(224, 123, 0, 0.5);
+            }
+            #controller {
+                padding: 5px;
+                display: flex;
+                justify-content: flex-start;
+                gap: 120px;
+            }
+            #dpad {
+                display: grid;
+                grid-template-areas: ". t ." "l c r" ". b .";
+                gap: 0px;
+                margin-left: 20px;
+            }
+            #up {
+                grid-area: t;
+                margin-top: 160px;
+                margin-left: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #left {
+                grid-area: l;
+                margin-top: 0;
+                margin-left: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #right {
+                grid-area: r;
+                margin-top: 0;
+                margin-left: 0;
+                margin-right: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #down {
+                grid-area: b;
+                margin-top: 0;
+                margin-left: 0;
+                z-index: 30;
+                border-radius: 10%;
+            }
+            #actions {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+            #mute {
+                padding: 0px;
+                border-radius: 25%;
+                height: 24px;
+                width: 24px;
+                background: #fff;
+                color: #000;
+                margin-right: 80px;
+                margin-left: -15px;
+                margin-top: 45px;
+                z-index: 30;
+            }
+            #attack {
+                padding: 0px;
+                margin-right: 5px;
+                background: #ff8c00;
+                height: 65px;
+                width: 65px;
+                border-radius: 50%;
+                margin-top: 165px;
+                z-index: 30;
+            }
+            #potion {
+                padding: 0px;
+                margin-right: 5px;
+                margin-left: 20px;
+                background: #ff8c00;
+                height: 45px;
+                width: 45px;
+                border-radius: 50%;
+                margin-top: 80px;
+                z-index: 30;
+            }
+            #mute:hover {
+                background: #ccc;
+            }
+            #submit-score, #view-leaderboard, #restart-game {
+                width: 100px;
+                height: 48px;
+                font-size: 18px;
+            }
+            #submit-score {
+                width: 200px;
+            }
+            #username-input {
+                width: 200px;
+                font-size: 16px;
+            }
+            #leaderboard-output {
+                top: 0px;
+                width: 100%;
+                max-width: 640px;
+                font-size: 14px;
+                max-height: 200px;
+                text-align: left;
+                white-space: pre;
+                line-height: 1.2;
+                word-break: break-word;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1652,7 +1649,7 @@ function placeStairs() {
         exit = {x, y};
         map[y][x] = 2; // Stairs tile
         updateSatsDisplay();
-        logBattleEvent(`Floor ${floor} - Stairs appeared at (${x}, ${y})!`);
+        logBattleEvent(`Floor ${floor} - Stairs appeared!`);
         needsRedraw = true;
         return true;
     } else {
@@ -4160,7 +4157,7 @@ let lastButtonsState = []; // Track previous button states
 let lastAxesState = { axis0: 0, axis1: 0 }; // Track previous D-pad axis states
 let lastStartPressTime = 0; // Debounce Start button
 const DEBOUNCE_MS = 200; // Debounce interval
-const GAMEPAD_POLL_INTERVAL = 50; // Poll rate in ms
+const GAMEPAD_POLL_INTERVAL = 16.67; // Poll rate in ms
 let lastGamepadPollTime = 0; // Throttle polling
 let movementTimer = null; // Timer for continuous movement
 let currentMoveDir = null; // Track current movement direction
