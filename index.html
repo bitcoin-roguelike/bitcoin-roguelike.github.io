@@ -3508,7 +3508,7 @@ function restart() {
     floor = 1;
     currentTheme = 'dungeon'; // Reset to default theme
     p.maxHP = 24; // Reset max HP to default
-document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
+    document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
     document.documentElement.style.setProperty('--text-shadow', '-1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000'); // Reset outlined font
     wave = 1;
     document.getElementById('wave').textContent = wave;
@@ -3579,7 +3579,7 @@ document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset 
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
 
-    // Re-attach event listeners
+    // Re-attach event listeners for dpadButtons only
     dpadButtons.forEach(button => {
         button._touchstartHandler = (e) => {
             e.preventDefault();
@@ -3623,54 +3623,26 @@ document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset 
         button._lastTouchMoveTime = 0;
         button._isMoving = false;
     });
-    actionsButtons.forEach(button => {
-        button._touchstartHandler = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            button.classList.add('pressed');
-            if (button.id === 'mute') toggleMute();
-            else if (button.id === 'attack') attack();
-            else if (button.id === 'potion') usePotion();
-        };
-        button._touchendHandler = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            button.classList.remove('pressed');
-        };
-        button._touchcancelHandler = button._touchendHandler;
-        button._clickHandler = (e) => e.preventDefault();
-        button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
-        button.addEventListener('touchend', button._touchendHandler, { passive: false });
-        button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
-        button.addEventListener('click', button._clickHandler, { passive: false });
-    });
 
     const battleEvents = document.getElementById('battle-events');
     battleEvents.style.transform = 'translateX(-100%)';
     battleEvents.style.opacity = '0';
     splashActive = true;
 
+    // Pause and reset music without clearing Web Audio buffers
     sounds.music.pause();
     sounds.music.currentTime = 0;
-// Pause and reset music without clearing Web Audio buffers
-sounds.music.pause();
-sounds.music.currentTime = 0;
 
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
         apiTimeoutId = null;
     }
-    // Stop gamepad polling
-    gamepadPollingActive = false;
-    gamepadIndex = null;
-    lastButtonsState = [];
-    lastAxesState = { axis0: 0, axis1: 0 };
-    lastStartPressTime = 0;
+
+    // Preserve gamepad and action button states
     if (movementTimer) {
         clearInterval(movementTimer);
         movementTimer = null;
         currentMoveDir = null;
-        lastMoveTime = 0;
         pendingMove = false;
     }
 
