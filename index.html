@@ -1014,13 +1014,19 @@ async function submitScore() {
     }
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
     try {
-    const response = await fetch(`${API_URL}?action=submit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, score: totalSats, floor })
-    });
+const response = await fetch(`${API_URL}?action=submit`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ username, score: totalSats, floor })
+      });
+      if (response.status === 429) {
+        console.error('Rate limit exceeded for submitting scores');
+        return;
+      }
+      if (!response.ok) {
+        console.error(`POST Status: ${response.status}, Response: ${await response.text()}`);
+        return;
+      }
         const text = await response.text();
         console.log(`POST Status: ${response.status}, Response: ${text}`);
         let data;
@@ -1049,119 +1055,163 @@ async function submitScore() {
     }
 }
 
-const API_URL = 'https://noexxibndcooqjquhqzk.supabase.co/functions/v1/leaderboard';
-const headers = {
-    'Content-Type': 'application/json'
-};
+// Generate or retrieve session ID
+  function generateSessionId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
 
+  const sessionId = localStorage.getItem('sessionId') || generateSessionId();
+  localStorage.setItem('sessionId', sessionId);
+
+const API_URL = 'https://noexxibndcooqjquhqzk.supabase.co/functions/v1/leaderboard';
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Session-ID': sessionId
+  };
 
 
 async function fetchLeaderboard(submittedUsername = null, submittedScore = null, submittedFloor = null) {
     try {
-const response = await fetch(`${API_URL}?action=fetch&limit=10`, {
-    method: 'GET',
-    headers
-});
-        const text = await response.text();
-        console.log(`GET Status: ${response.status}, Response: ${text}`);
-        let data;
-        try {
-            data = text ? JSON.parse(text) : [];
-        } catch (e) {
-            data = { raw: text };
-        }
-        if (response.ok && Array.isArray(data)) {
-            let playerInTop10 = submittedUsername ? data.some(entry => entry.username === submittedUsername && entry.score === submittedScore && entry.floor === submittedFloor) : false;
-            let playerEntry = null;
-            let playerRank = null;
-
-            // Fetch player's score and rank if not in top 10 and floor >= 3
-            if (submittedUsername && !playerInTop10 && submittedFloor >= 3) {
-                try {
-const playerResponse = await fetch(
-    `${API_URL}?action=fetchPlayer&username=${encodeURIComponent(submittedUsername)}&score=${submittedScore}&floor=${submittedFloor}`,
-    { method: 'GET', headers }
-);
-                    const playerData = await playerResponse.json();
-                    if (playerResponse.ok && playerData.length > 0) {
-                        playerEntry = playerData[0];
-const rankResponse = await fetch(
-    `${API_URL}?action=fetchRank&score=${submittedScore}`,
-    { method: 'GET', headers }
-);
-                        const rankData = await rankResponse.json();
-                        if (rankResponse.ok) {
-                            playerRank = rankData.length + 1;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error fetching player score or rank:', e);
-                }
-            }
-
-            // Format leaderboard
-            const maxUsernameLength = 20;
-            const scoreWidth = 14; // Increased from 12 to handle large BTC values
-            const numberWidth = 10; // Increased from 8 for consistent score padding
-            const floorWidth = 6;  // Increased from 5 for better floor alignment
-            const header = `Rank  Username                Score         Floor`; // Adjusted spacing
-            let rows = data.map((entry, index) => {
-                const rank = (index + 1).toString().padStart(2, '0');
-                const username = entry.username.length > maxUsernameLength
-                    ? entry.username.substring(0, maxUsernameLength - 2) + '..'
-                    : entry.username.padEnd(maxUsernameLength);
-                const scoreValue = entry.score;
-                let numberPart, unitPart;
-                if (scoreValue >= 1e8) {
-                    numberPart = (scoreValue / 1e8).toFixed(1);
-                    unitPart = 'BTC';
-                } else {
-                    numberPart = scoreValue.toString();
-                    unitPart = 'sats';
-                }
-                const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
-                const score = scoreDisplay.padEnd(scoreWidth);
-                const floor = entry.floor.toString().padStart(floorWidth);
-                return `${rank}    ${username}${score}${floor}`;
-            });
-
-            // Replace or append player's entry with actual rank if not in top 10
-            if (playerEntry && !playerInTop10 && playerRank) {
-                const username = playerEntry.username.length > maxUsernameLength
-                    ? playerEntry.username.substring(0, maxUsernameLength - 2) + '..'
-                    : playerEntry.username.padEnd(maxUsernameLength);
-                const scoreValue = playerEntry.score;
-                let numberPart, unitPart;
-                if (scoreValue >= 1e8) {
-                    numberPart = (scoreValue / 1e8).toFixed(1);
-                    unitPart = 'BTC';
-                } else {
-                    numberPart = scoreValue.toString();
-                    unitPart = 'sats';
-                }
-                const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
-                const score = scoreDisplay.padEnd(scoreWidth);
-                const floor = playerEntry.floor.toString().padStart(floorWidth);
-                const playerRow = `${playerRank.toString().padStart(2, '0')}    ${username}${score}${floor}`;
-                if (rows.length >= 10) {
-                    rows[9] = playerRow; // Replace 10th entry
-                } else {
-                    rows.push(playerRow); // Append if fewer than 10 entries
-                }
-            }
-
-            const leaderboardText = `${header}\n${rows.join('\n') || 'No entries yet!'}`;
-            document.getElementById('leaderboard-output').textContent = leaderboardText;
-        } else {
-            document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
-        }
+      const leaderboardResponse = await fetch(`${API_URL}?action=fetch&limit=10`, {
+        method: 'GET',
+        headers
+      });
+      if (leaderboardResponse.status === 429) {
+        console.error('Rate limit exceeded for fetching leaderboard');
+        document.getElementById('leaderboard-output').textContent = 'Rate limit exceeded for fetching leaderboard';
         document.getElementById('leaderboard-output').style.display = 'block';
+        return;
+      }
+      if (!leaderboardResponse.ok) {
+        const errorText = await leaderboardResponse.text();
+        console.error(`GET Status: ${leaderboardResponse.status}, Response: ${errorText}`);
+        document.getElementById('leaderboard-output').textContent = `Error: ${leaderboardResponse.status} ${errorText}`;
+        document.getElementById('leaderboard-output').style.display = 'block';
+        return;
+      }
+      const text = await leaderboardResponse.text();
+      console.log(`GET Status: ${leaderboardResponse.status}, Response: ${text}`);
+      let data;
+      try {
+        data = text ? JSON.parse(text) : [];
+      } catch (e) {
+        data = { raw: text };
+      }
+      if (leaderboardResponse.ok && Array.isArray(data)) {
+        let playerInTop10 = submittedUsername ? data.some(entry => entry.username === submittedUsername && entry.score === submittedScore && entry.floor === submittedFloor) : false;
+        let playerEntry = null;
+        let playerRank = null;
+
+        // Fetch player's score and rank if not in top 10 and floor >= 3
+        if (submittedUsername && !playerInTop10 && submittedFloor >= 3) {
+          try {
+            const playerResponse = await fetch(
+              `${API_URL}?action=fetchPlayer&username=${encodeURIComponent(submittedUsername)}&score=${submittedScore}&floor=${submittedFloor}`,
+              { method: 'GET', headers }
+            );
+            if (playerResponse.status === 429) {
+              console.error('Rate limit exceeded for fetching player');
+              document.getElementById('leaderboard-output').textContent = 'Rate limit exceeded for fetching player';
+              document.getElementById('leaderboard-output').style.display = 'block';
+              return;
+            }
+            if (!playerResponse.ok) {
+              console.error(`GET Status: ${playerResponse.status}, Response: ${await playerResponse.text()}`);
+              return;
+            }
+            const playerData = await playerResponse.json();
+            if (playerResponse.ok && playerData.length > 0) {
+              playerEntry = playerData[0];
+              const rankResponse = await fetch(`${API_URL}?action=fetchRank&score=${submittedScore}`, {
+                method: 'GET',
+                headers
+              });
+              if (rankResponse.status === 429) {
+                console.error('Rate limit exceeded for fetching rank');
+                document.getElementById('leaderboard-output').textContent = 'Rate limit exceeded for fetching rank';
+                document.getElementById('leaderboard-output').style.display = 'block';
+                return;
+              }
+              if (!rankResponse.ok) {
+                console.error(`GET Status: ${rankResponse.status}, Response: ${await rankResponse.text()}`);
+                return;
+              }
+              const rankData = await rankResponse.json();
+              if (rankResponse.ok) {
+                playerRank = rankData.length + 1;
+              }
+            }
+          } catch (e) {
+            console.error('Error fetching player score or rank:', e);
+          }
+        }
+
+        // Format leaderboard
+        const maxUsernameLength = 20;
+        const scoreWidth = 14;
+        const numberWidth = 10;
+        const floorWidth = 6;
+        const header = `Rank  Username                Score         Floor`;
+        let rows = data.map((entry, index) => {
+          const rank = (index + 1).toString().padStart(2, '0');
+          const username = entry.username.length > maxUsernameLength
+            ? entry.username.substring(0, maxUsernameLength - 2) + '..'
+            : entry.username.padEnd(maxUsernameLength);
+          const scoreValue = entry.score;
+          let numberPart, unitPart;
+          if (scoreValue >= 1e8) {
+            numberPart = (scoreValue / 1e8).toFixed(1);
+            unitPart = 'BTC';
+          } else {
+            numberPart = scoreValue.toString();
+            unitPart = 'sats';
+          }
+          const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
+          const score = scoreDisplay.padEnd(scoreWidth);
+          const floor = entry.floor.toString().padStart(floorWidth);
+          return `${rank}    ${username}${score}${floor}`;
+        });
+
+        // Replace or append player's entry with actual rank if not in top 10
+        if (playerEntry && !playerInTop10 && playerRank) {
+          const username = playerEntry.username.length > maxUsernameLength
+            ? playerEntry.username.substring(0, maxUsernameLength - 2) + '..'
+            : playerEntry.username.padEnd(maxUsernameLength);
+          const scoreValue = playerEntry.score;
+          let numberPart, unitPart;
+          if (scoreValue >= 1e8) {
+            numberPart = (scoreValue / 1e8).toFixed(1);
+            unitPart = 'BTC';
+          } else {
+            numberPart = scoreValue.toString();
+            unitPart = 'sats';
+          }
+          const scoreDisplay = `${numberPart.padStart(numberWidth)} ${unitPart}`;
+          const score = scoreDisplay.padEnd(scoreWidth);
+          const floor = playerEntry.floor.toString().padStart(floorWidth);
+          const playerRow = `${playerRank.toString().padStart(2, '0')}    ${username}${score}${floor}`;
+          if (rows.length >= 10) {
+            rows[9] = playerRow; // Replace 10th entry
+          } else {
+            rows.push(playerRow); // Append if fewer than 10 entries
+          }
+        }
+
+        const leaderboardText = `${header}\n${rows.join('\n') || 'No entries yet!'}`;
+        document.getElementById('leaderboard-output').textContent = leaderboardText;
+      } else {
+        document.getElementById('leaderboard-output').textContent = `Error: ${leaderboardResponse.status} ${JSON.stringify(data, null, 2)}`;
+      }
+      document.getElementById('leaderboard-output').style.display = 'block';
     } catch (error) {
-        document.getElementById('leaderboard-output').textContent = `Fetch error: ${error.message}`;
-        console.error('Fetch leaderboard error:', error);
-        document.getElementById('leaderboard-output').style.display = 'block';
+      document.getElementById('leaderboard-output').textContent = `Fetch error: ${error.message}`;
+      console.error('Fetch leaderboard error:', error);
+      document.getElementById('leaderboard-output').style.display = 'block';
     }
-}
+  }
 
 document.getElementById('username-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && gameOver) {
