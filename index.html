@@ -3048,16 +3048,18 @@ function updateProjectiles() {
             return false;
         }
         
-        // Check for first enemy hit and deal damage
-        let hit = enemies.find(e => e.x === nx && e.y === ny);
-        if (hit) {
-            const damage = Math.floor(p.atk * 0.5); // Half the damage output for shooting sword
-            hit.hp -= damage;
-            logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (HP: ${hit.hp})`);
-            playWebAudioSound(sounds.hit);
-            if (hit.hp <= 0) {
-                kills[hit.type.name]++;
-                let dropPlaced = false;
+// Check for first enemy hit and deal damage
+let hit = enemies.find(e => e.x === nx && e.y === ny);
+if (hit) {
+    const damage = Math.floor(p.atk * 0.5); // Half the damage output for shooting sword
+    hit.hp -= damage;
+    logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (HP: ${hit.hp})`);
+    playWebAudioSound(sounds.hit);
+    if (hit.hp <= 0) {
+        kills[hit.type.name]++;
+        let dropPlaced = false;
+        // Remove enemy immediately to prevent further hits
+        enemies = enemies.filter(e => e !== hit);
                 if (map[hit.y][hit.x] === 0) {
                     map[hit.y][hit.x] = 3;
                     satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
@@ -3650,23 +3652,9 @@ document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset 
 
     sounds.music.pause();
     sounds.music.currentTime = 0;
-    // Clear Web Audio buffers
-    Object.keys(sounds).forEach(key => {
-        if (sounds[key].buffer) {
-            sounds[key].buffer = null;
-            sounds[key].isPlaying = false;
-        }
-    });
-    // Reload Web Audio buffers
-    loadSoundBuffer('hit.wav', 'hit');
-    loadSoundBuffer('pickup.wav', 'pickup');
-    loadSoundBuffer('heads.wav', 'heads');
-    loadSoundBuffer('tails.wav', 'tails');
-    loadSoundBuffer('lava.wav', 'lava');
-    loadSoundBuffer('quicksand.wav', 'quicksand');
-    loadSoundBuffer('pond.wav', 'pond');
-    loadSoundBuffer('rune.wav', 'rune');
-    loadSoundBuffer('rune_drop.wav', 'rune_drop');
+// Pause and reset music without clearing Web Audio buffers
+sounds.music.pause();
+sounds.music.currentTime = 0;
 
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
@@ -4367,20 +4355,23 @@ function updateGamepad(timestamp) {
     // Handle buttons (A=0, B=1, Select=2, Start=3)
     const nowTime = Date.now();
 
-    // A Button (0) - usePotion
-    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
-        usePotion();
-    }
+// A Button (0) - usePotion
+if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver && nowTime - lastMoveTime >= 200) {
+    usePotion();
+    lastMoveTime = nowTime; // Update lastMoveTime to throttle actions
+}
 
-    // B Button (1) - attack
-    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
-        attack();
-    }
+// B Button (1) - attack
+if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver && nowTime - lastMoveTime >= 200) {
+    attack();
+    lastMoveTime = nowTime; // Update lastMoveTime to throttle actions
+}
 
-    // Select Button (2) - toggleMute
-    if (buttons[2].pressed && !lastButtonsState[2]) {
-        toggleMute();
-    }
+// Select Button (2) - toggleMute
+if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
+    toggleMute();
+    lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
+}
 
     // Start Button (3) - startGame or restart
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
