@@ -4119,18 +4119,6 @@ document.querySelectorAll('#dpad button').forEach(button => {
     button._touchstartHandler = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Remove 'pressed' class from all other buttons to prevent multiple stuck buttons
-        document.querySelectorAll('#dpad button').forEach(b => {
-            if (b !== button) {
-                b.classList.remove('pressed');
-                if (b._touchMovementTimer) {
-                    clearInterval(b._touchMovementTimer);
-                    b._touchMovementTimer = null;
-                    b._isMoving = false;
-                    b._lastTouchMoveTime = 0;
-                }
-            }
-        });
         button.classList.add('pressed');
         if (!button._isMoving && !splashActive && !gameOver) {
             button._isMoving = true;
@@ -4164,17 +4152,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
         button._lastTouchMoveTime = 0;
     };
 
-    button._touchcancelHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed');
-        if (button._touchMovementTimer) {
-            clearInterval(button._touchMovementTimer);
-            button._touchMovementTimer = null;
-        }
-        button._isMoving = false;
-        button._lastTouchMoveTime = 0;
-    };
+    button._touchcancelHandler = button._touchendHandler;
 
     button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
     button.addEventListener('touchend', button._touchendHandler, { passive: false });
@@ -4481,4 +4459,5 @@ if (newMoveDir) {
     </script>
 </body>
 </html>
+
 
