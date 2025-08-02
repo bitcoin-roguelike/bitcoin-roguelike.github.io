@@ -193,21 +193,23 @@
             gap: 5px; 
             align-items: center; 
         }
-        button { 
-            background-color: transparent;
-            border: 1px solid #ff8c00;
-            color: #ff8c00;
-            padding: 8px; 
-            border: 0px solid #000; 
-            cursor: pointer; 
-            font-size: 14px; 
-            width: 40px; 
-            height: 40px;
-            box-sizing: border-box; 
-        }
-        button:hover {
-            background: rgba(224, 123, 0, 0.5);
-        }
+button {
+    background-color: transparent;
+    border: 1px solid #ff8c00;
+    color: #ff8c00;
+    padding: 8px;
+    border: 0px solid #000;
+    cursor: pointer;
+    font-size: 14px;
+    width: 40px;
+    height: 40px;
+    box-sizing: border-box;
+    transition: none; /* Prevent any transitions */
+}
+button:hover {
+    background: rgba(224, 123, 0, 0.5);
+    transition: background 0.1s ease; /* Smooth hover effect */
+}
         #mute {
             padding: 0px;
             border-radius: 25%;
@@ -253,7 +255,8 @@
             background: #00b7ef;
         }
 #dpad button:active, #dpad button.pressed {
-    background: rgba(224, 123, 0, 0.7); /* Slightly darker than hover */
+    background: rgba(224, 123, 0, 0.7);
+    transition: none; /* Instant change for pressed state */
 }
 
 #submit-score, #view-leaderboard, #restart-game {
