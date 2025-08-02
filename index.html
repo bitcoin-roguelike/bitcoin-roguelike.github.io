@@ -3873,19 +3873,32 @@ enemies.forEach(e => {
         // Apply theme-based effects
         if (isVisible) {
             if (currentTheme === 'desert') {
-                // Create a white-ish silhouette with slight transparency for desert theme
-                const imageData = tempCtx.getImageData(0, 0, S, S);
-                const data = imageData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i + 3] > 0) { // Non-transparent pixel
-                        data[i] = 255;     // Red
-                        data[i + 1] = 242; // Green
-                        data[i + 2] = 230; // Blue
-                        data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-                    }
-                }
-                tempCtx.putImageData(imageData, 0, 0);
-            } else if (currentTheme === 'hell') {
+// Create a white-ish silhouette with slight transparency for desert theme
+    const imageData = tempCtx.getImageData(0, 0, S, S);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0) { // Non-transparent pixel
+            data[i] = 255;     // Red
+            data[i + 1] = 242; // Green
+            data[i + 2] = 230; // Blue
+            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+        }
+    }
+    tempCtx.putImageData(imageData, 0, 0);
+} else if (currentTheme === 'ruins') {
+    // Create a Maya gold silhouette with slight transparency for ruins theme
+    const imageData = tempCtx.getImageData(0, 0, S, S);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0) { // Non-transparent pixel
+            data[i] = 218;     // Red
+            data[i + 1] = 165; // Green
+            data[i + 2] = 32;   // Blue
+            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+        }
+    }
+    tempCtx.putImageData(imageData, 0, 0);
+} else if (currentTheme === 'hell') {
                 // Apply red tint for hell theme
                 tempCtx.globalCompositeOperation = 'source-atop';
                 tempCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
