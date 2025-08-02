@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://noexxibndcooqjquhqzk.supabase.co/functions/v1/leaderboard https://mempool.space; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
-    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>
         body { 
             margin: 0; 
@@ -636,7 +636,7 @@
     }
 
 }
-    </style>
+</style>
 </head>
 <body>
     <div id="console">
@@ -4392,68 +4392,49 @@ function updateGamepad(timestamp) {
     // Update button states
     lastButtonsState = buttons.map(b => b.pressed);
 
-    // Handle D-pad (Axes 0 and 1)
-    // deadZone already defined above
+// Handle D-pad (Axes 0 and 1)
+// deadZone already defined above
 
-    // Determine current direction
-    let newMoveDir = null;
-    if (!splashActive && !gameOver) {
-        if (currentMoveDir && !pendingMove) {
-            // Continue in current direction if still held
-            if (
-                (currentMoveDir === 'left' && axis0 < -deadZone) ||
-                (currentMoveDir === 'right' && axis0 > deadZone) ||
-                (currentMoveDir === 'up' && axis1 < -deadZone) ||
-                (currentMoveDir === 'down' && axis1 > deadZone)
-            ) {
-                newMoveDir = currentMoveDir;
-            }
-        } else if (!pendingMove) {
-            // Select new direction: prioritize axis0 (left/right) if both active
-            if (Math.abs(axis0) > deadZone) {
-                newMoveDir = axis0 > 0 ? 'right' : 'left';
-            } else if (Math.abs(axis1) > deadZone) {
-                newMoveDir = axis1 > 0 ? 'down' : 'up';
-            }
-        }
+// Determine current direction
+let newMoveDir = null;
+if (!splashActive && !gameOver) {
+    // Prioritize axis0 (left/right) if both active, matching touch behavior
+    if (Math.abs(axis0) > deadZone) {
+        newMoveDir = axis0 > 0 ? 'right' : 'left';
+    } else if (Math.abs(axis1) > deadZone) {
+        newMoveDir = axis1 > 0 ? 'down' : 'up';
     }
+}
 
-    // Handle continuous movement
-    if (newMoveDir && newMoveDir !== currentMoveDir && !pendingMove) {
-        // New direction: clear old timer and start new one
+// Handle continuous movement
+if (newMoveDir) {
+    // New direction or continuing movement
+    if (newMoveDir !== currentMoveDir) {
         if (movementTimer) {
             clearInterval(movementTimer);
             movementTimer = null;
         }
-        // Only move if 200ms have passed since last move
-        if (nowTime - lastMoveTime >= 200) {
-            pendingMove = true;
-            move(newMoveDir);
-            lastMoveTime = nowTime;
-            pendingMove = false;
-        }
+        // Immediate move on new direction
+        move(newMoveDir);
+        lastMoveTime = Date.now();
+        currentMoveDir = newMoveDir;
+        // Start continuous movement timer
         movementTimer = setInterval(() => {
-            if (!splashActive && !gameOver && !pendingMove) {
-                const intervalTime = Date.now();
-                if (intervalTime - lastMoveTime >= 200) {
-                    pendingMove = true;
-                    move(newMoveDir);
-                    lastMoveTime = intervalTime;
-                    pendingMove = false;
-                }
+            if (!splashActive && !gameOver && currentMoveDir) {
+                move(currentMoveDir);
+                lastMoveTime = Date.now();
             }
         }, 200); // Move every 200ms
-        currentMoveDir = newMoveDir;
-    } else if (!newMoveDir && currentMoveDir) {
-        // D-pad released: clear timer
-        if (movementTimer) {
-            clearInterval(movementTimer);
-            movementTimer = null;
-        }
-        currentMoveDir = null;
-        lastMoveTime = 0;
-        pendingMove = false;
     }
+} else if (currentMoveDir) {
+    // D-pad released: clear timer
+    if (movementTimer) {
+        clearInterval(movementTimer);
+        movementTimer = null;
+    }
+    currentMoveDir = null;
+    lastMoveTime = 0;
+}
 
     // Update axis states
     lastAxesState.axis0 = Math.abs(axis0) > deadZone ? axis0 : 0;
