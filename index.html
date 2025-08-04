@@ -143,18 +143,19 @@
         line-height: 1.0; /* Reduce line-height by ~50% */
     }
 }
-        #floor-indicator { 
-            position: absolute; 
-            top: 11px; 
-            left: 10px; 
-            background: transparent; 
-            color: var(--text-color, #ff8c00) !important; 
-            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
-            padding: 8px; 
-            z-index: 10; 
-            font-family: 'VT323', monospace;
-            font-size: 24px; 
-        }
+	#floor-indicator { 
+    	    position: absolute; 
+    	    top: 11px; 
+	    left: 10px; 
+	    background: transparent; 
+	    color: var(--text-color, #ff8c00) !important; 
+	    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
+	    padding: 8px; 
+	    z-index: 10; 
+	    font-family: 'VT323', monospace;
+	    font-size: clamp(21px, 5.33vw, 32px);
+	    line-height: 1.2; / Prevents squishing /
+	}
         #controller { 
             grid-area: controller; 
             display: flex; 
@@ -350,7 +351,7 @@ button:hover {
         margin-right: 2px;
     }
     #floor-indicator {
-        font-size: 10px;
+        font-size: clamp(16px, 4.67vw, 24px);
     }
     button {
         width: 55px;
@@ -518,7 +519,7 @@ button:hover {
         margin-right: 20px;
     }
     #floor-indicator {
-        font-size: 1.6rem;
+        font-size: clamp(24px, 4.67vw, 37px);
     }
     button {
         width: 65px;
