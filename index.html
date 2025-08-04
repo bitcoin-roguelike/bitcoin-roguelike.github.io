@@ -1311,7 +1311,7 @@ document.querySelectorAll('#actions button').forEach(button => {
 
 const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
-let currentTheme = 'dungeon'; // Default theme
+let currentTheme = 'ruins'; // Default theme
 const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
 let initialWaveSpawned = false; // Track if initial wave has spawned
 
@@ -1333,6 +1333,7 @@ let map = [],
         runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
         immortal: false, // Flag for HODL runeword immortality
         ripBlast: false, // Flag for RIP runeword blast
+        isFalling: false, // Flag to track if the player is currently animating
         anim: {
             frames: {
                 front: [new Image(), new Image()],
@@ -1340,7 +1341,8 @@ let map = [],
                 right: [new Image(), new Image()],
                 armor_front: [new Image(), new Image()],
                 armor_back: [new Image(), new Image()],
-                armor_right: [new Image(), new Image()]
+                armor_right: [new Image(), new Image()],
+                fall: [new Image(), new Image(), new Image()],
             },
             direction: 'front',
             frameIndex: 0,
@@ -1365,6 +1367,14 @@ p.anim.frames.armor_back[1].src = 'player_armor-back2.png';
 p.anim.frames.armor_right[0].src = 'player_armor-right1.png';
 p.anim.frames.armor_right[1].src = 'player_armor-right2.png';
 
+// player is affected during theme "Ruins"
+p.anim.frames.fall[0].src = 'player_fall1.png';
+p.anim.frames.fall[1].src = 'player_fall2.png';
+p.anim.frames.fall[2].src = 'player_fall3.png';
+p.anim.frames.fall.forEach((frame, i) => {
+    frame.onerror = () => console.error(`Failed to load fall frame ${i}: ${frame.src}`);
+});
+
 let floor = 1, wave = 1, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
 let scoreSubmitted = false; // Tracks if score has been submitted
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
@@ -1381,6 +1391,7 @@ let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
 let autoSubmitTriggered = false;
+let inputBlocked = false;
 
 const specialSoundsPlayedThisFloor = {
     lava: false,
@@ -1478,7 +1489,7 @@ const specialSoundsPlayedThisFloor = {
                 frameDuration: 200
             },
             hp: 6,
-            atk: 4,
+            atk: 4, // changed this to whale attacking for 10% of players life + 3 dmg to balance the end-game and still be pretty dangerous at the early stages
             reward: 0,
             move: 2
         }
@@ -1699,7 +1710,7 @@ const sounds = {
     pond: { buffer: null, url: 'pond.wav', isPlaying: false, duration: 500 },
     rune: { buffer: null, url: 'rune.wav', isPlaying: false, duration: 2000 },
     rune_drop: { buffer: null, url: 'rune_drop.wav', isPlaying: false, duration: 1000 },
-    hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 1000 }
+    hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 745 }
 };
 
 sounds.music.loop = true;
@@ -2754,7 +2765,7 @@ if (enemyCount > 0 && enemies.length > 0 && !exit) {
 }
 
 function move(dir) {
-    if (gameOver || splashActive) return;
+    if (gameOver || splashActive || inputBlocked) return;
     swordDir = dir;
     let nx = p.x, ny = p.y;
     let newDirection = p.anim.direction; // Default to current direction
@@ -2926,9 +2937,6 @@ if (currentTheme !== 'dungeon') {
             case 'paradise':
                 soundKey = 'pond';
                 break;
-            case 'ruins':
-                soundKey = 'hole';
-                break;
         }
         if (soundKey && !specialSoundsPlayedThisFloor[soundKey]) {
             playWebAudioSound(sounds[soundKey]);
@@ -2937,6 +2945,214 @@ if (currentTheme !== 'dungeon') {
         }
     }
 }
+
+// Check for falling animation (only on Ruins theme)
+if (
+    currentTheme === 'ruins' &&
+    map[ny][nx] === 6 && // Ring hole tile
+    !p.isFalling // Not already falling
+) {
+    inputBlocked = true;
+    p.isFalling = true;
+    const direction = p.anim.direction; // Save current direction for push
+    const oldX = p.x;
+    const oldY = p.y;
+
+    // Start fall animation - ensure it starts from frame 0
+    let frameIndex = 0;
+    const fallDuration = 200; // ms per frame
+    const totalFrames = 4; // it is really just 3 frames but the last seems to be clipped off due to this "totalFrames - 1"
+    const startTime = Date.now();
+
+    function animateFall() {
+        const elapsed = Date.now() - startTime;
+        frameIndex = Math.min(Math.floor(elapsed / fallDuration), totalFrames - 1);
+
+        // Update animation - this ensures all frames play, including the last one!
+        p.anim.frameIndex = frameIndex;
+        needsRedraw = true;
+
+        if (frameIndex < totalFrames - 1) {
+            requestAnimationFrame(animateFall);
+        } else {
+            // Animation complete, now push player one tile away
+            let pushX = oldX;
+            let pushY = oldY;
+
+            switch (direction) {
+                case 'up': pushY--; break;
+                case 'down': pushY++; break;
+                case 'left': pushX--; break;
+                case 'right': pushX++; break;
+            }
+
+            // Ensure player lands on a valid floor tile (not wall or hole), preferring same direction
+            pushX = oldX; // Reuse existing pushX
+            pushY = oldY; // Reuse existing pushY
+            let validPosition = false;
+
+            // Log original position for debugging
+            //console.log(`Original position: (${oldX}, ${oldY}), tile=${oldX >= 0 && oldX < W && oldY >= 0 && oldY < H ? map[oldY][oldX] : 'out of bounds'}`);
+
+            // Try pushing one tile in the original direction
+            //console.log(`Direction before initial push: ${direction}`);
+            switch (direction) {
+                case 'back': pushY--; break; // Up
+                case 'front': pushY++; break; // Down
+                case 'left': pushX--; break;
+                case 'right': pushX++; break;
+            }
+
+            //console.log(`Initial push: direction=${direction}, position=(${pushX}, ${pushY}), tile=${pushX >= 0 && pushX < W && pushY >= 0 && pushY < H ? map[pushY][pushX] : 'out of bounds'}`);
+
+            // Check if initial push position is the hole; if so, player is already on it
+            if (
+                pushX >= 0 && pushX < W &&
+                pushY >= 0 && pushY < H &&
+                map[pushY][pushX] === 6 // Initial push is the hole
+            ) {
+                // Try one tile before the hole (opposite direction, same side)
+                let backX = oldX;
+                let backY = oldY;
+                switch (direction) {
+                    case 'front': backY--; break; // Up (opposite of front)
+                    case 'back': backY++; break; // Down (opposite of back)
+                    case 'left': backX++; break; // Right (opposite of left)
+                    case 'right': backX--; break; // Left (opposite of right)
+                }
+                //console.log(`Back push (opposite direction): position=(${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                if (
+                    backX >= 0 && backX < W &&
+                    backY >= 0 && backY < H &&
+                    map[backY][backX] !== 1 && // Not a wall
+                    map[backY][backX] !== 6 // Not a hole
+                ) {
+                    pushX = backX;
+                    pushY = backY;
+                    validPosition = true;
+                    //console.log(`Valid back push position found at (${pushX}, ${pushY})`);
+                } else {
+                    //console.log(`Back push invalid at (${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                    // Try adjacent tiles on same side (left/right for front/back, up/down for left/right)
+                    const adjacent = [
+                        direction === 'front' || direction === 'back' ? { x: oldX - 1, y: oldY } : { x: oldX, y: oldY - 1 }, // Left or up
+                        direction === 'front' || direction === 'back' ? { x: oldX + 1, y: oldY } : { x: oldX, y: oldY + 1 }  // Right or down
+                    ];
+                    for (let i = 0; i < adjacent.length; i++) {
+                        const adjX = adjacent[i].x;
+                        const adjY = adjacent[i].y;
+                        //console.log(`Adjacent push ${i+1}: position=(${adjX}, ${adjY}), tile=${adjX >= 0 && adjX < W && adjY >= 0 && adjY < H ? map[adjY][adjX] : 'out of bounds'}`);
+                        if (
+                            adjX >= 0 && adjX < W &&
+                            adjY >= 0 && adjY < H &&
+                            map[adjY][adjX] !== 1 && // Not a wall
+                            map[adjY][adjX] !== 6 // Not a hole
+                        ) {
+                            pushX = adjX;
+                            pushY = adjY;
+                            validPosition = true;
+                            //console.log(`Valid adjacent push position found at (${pushX}, ${pushY})`);
+                            break;
+                        }
+                    }
+                }
+            } else if (
+                pushX >= 0 && pushX < W &&
+                pushY >= 0 && pushY < H &&
+                map[pushY][pushX] !== 1 && // Not a wall
+                map[pushY][pushX] !== 6 // Not a hole
+            ) {
+                validPosition = true;
+                //console.log(`Valid initial position found at (${pushX}, ${pushY})`);
+            } else if (
+                pushX >= 0 && pushX < W &&
+                pushY >= 0 && pushY < H &&
+                map[pushY][pushX] === 1 // Wall detected
+            ) {
+                // Try one tile before the hole (opposite direction, same side)
+                let backX = oldX;
+                let backY = oldY;
+                switch (direction) {
+                    case 'front': backY--; break; // Up
+                    case 'back': backY++; break; // Down
+                    case 'left': backX++; break; // Right
+                    case 'right': backX--; break; // Left
+                }
+                //console.log(`Back push (opposite direction): position=(${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                if (
+                    backX >= 0 && backX < W &&
+                    backY >= 0 && backY < H &&
+                    map[backY][backX] !== 1 && // Not a wall
+                    map[backY][backX] !== 6 // Not a hole
+                ) {
+                    pushX = backX;
+                    pushY = backY;
+                    validPosition = true;
+                    //console.log(`Valid back push position found at (${pushX}, ${pushY})`);
+                } else {
+                    //console.log(`Back push invalid at (${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                    // Try adjacent tiles on same side
+                    const adjacent = [
+                        direction === 'front' || direction === 'back' ? { x: oldX - 1, y: oldY } : { x: oldX, y: oldY - 1 }, // Left or up
+                        direction === 'front' || direction === 'back' ? { x: oldX + 1, y: oldY } : { x: oldX, y: oldY + 1 }  // Right or down
+                    ];
+                    for (let i = 0; i < adjacent.length; i++) {
+                        const adjX = adjacent[i].x;
+                        const adjY = adjacent[i].y;
+                        //console.log(`Adjacent push ${i+1}: position=(${adjX}, ${adjY}), tile=${adjX >= 0 && adjX < W && adjY >= 0 && adjY < H ? map[adjY][adjX] : 'out of bounds'}`);
+                        if (
+                            adjX >= 0 && adjX < W &&
+                            adjY >= 0 && adjY < H &&
+                            map[adjY][adjX] !== 1 && // Not a wall
+                            map[adjY][adjX] !== 6 // Not a hole
+                        ) {
+                            pushX = adjX;
+                            pushY = adjY;
+                            validPosition = true;
+                            //console.log(`Valid adjacent push position found at (${pushX}, ${pushY})`);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Final check to ensure player doesn't land on hole
+            if (validPosition && pushX >= 0 && pushX < W && pushY >= 0 && pushY < H && map[pushY][pushX] === 6) {
+                //console.log(`Error: Final position is a hole at (${pushX}, ${pushY}); resetting to invalid`);
+                validPosition = false;
+            }
+
+            if (!validPosition) {
+                console.log(`No valid position found; player may be stuck at (${pushX}, ${pushY}), tile=${pushX >= 0 && pushX < W && pushY >= 0 && pushY < H ? map[pushY][pushX] : 'out of bounds'}`);
+            }
+
+            // Update player position if valid
+            if (validPosition) {
+                p.x = pushX;
+                p.y = pushY;
+            } else {
+                // Fallback: keep player at original position if no valid move
+                p.x = oldX;
+                p.y = oldY;
+            }
+
+            // Reset falling flag and animation state
+            p.isFalling = false;
+            p.anim.frameIndex = 0; // Reset to first frame
+            p.anim.direction = direction; // Restore original direction
+            // ⬅️ UNBLOCK INPUT HERE
+    	    setTimeout(() => {
+    	    	inputBlocked = false;
+    	    	}, 200); // Small delay to ensure smooth transition
+            needsRedraw = true;
+        }
+    }
+    // Ensure we reset to first frame before starting animation
+    p.anim.frameIndex = 0;
+    animateFall();
+    return; // Exit move early to prevent further movement
+}
+
 if (exit && p.x === exit.x && p.y === exit.y) {
     sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
     if (p.immortal) {
@@ -3030,7 +3246,7 @@ function moveEnemies() {
                 (Math.abs(e.x - p.x) === 1 && e.y === p.y) || (Math.abs(e.y - p.y) === 1 && e.x === p.x) :
                 Math.abs(e.x - p.x) <= 1 && Math.abs(e.y - p.y) <= 1
             ) {
-const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) : e.type.atk;
+const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) + 3 : e.type.atk;	// Added + 3 dmg to make the whale still pretty dangerous at early stages
 p.hp -= damage;
 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
 playWebAudioSound(sounds.hit);
@@ -3620,6 +3836,7 @@ function restart() {
         button._touchstartHandler = (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (inputBlocked || splashActive || gameOver) return;
             button.classList.add('pressed');
             if (!button._isMoving && !splashActive && !gameOver) {
                 button._isMoving = true;
@@ -3764,8 +3981,14 @@ function draw() {
         }
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
-        const frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
-        const frame = p.anim.frames[frameKey][p.anim.frameIndex];
+	let frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
+	if (p.isFalling) {
+		frameKey = 'fall';
+	} else {
+		// Ensure default sprite when not falling
+		frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
+	}
+	const frame = p.anim.frames[frameKey][p.anim.frameIndex];
         c.save();
         if (direction === 'left') {
             c.translate((p.x + 1) * S, p.y * S);
@@ -3894,9 +4117,9 @@ enemies.forEach(e => {
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] > 0) { // Non-transparent pixel
-            data[i] = 218;     // Red
-            data[i + 1] = 165; // Green
-            data[i + 2] = 32;   // Blue
+            data[i] = 201;     // Red
+            data[i + 1] = 151; // Green
+            data[i + 2] = 2;   // Blue
             data[i + 3] = Math.round(0.95 * 255); // 95% opacity
         }
     }
@@ -4304,7 +4527,7 @@ document.getElementById('start-button').addEventListener('click', () => {
 // Poll gamepad state
 function updateGamepad(timestamp) {
     // Debug log to track gamepad state
-    console.log(`updateGamepad: gamepadIndex=${gamepadIndex}, gamepadPollingActive=${gamepadPollingActive}, splashActive=${splashActive}`);
+    //console.log(`updateGamepad: gamepadIndex=${gamepadIndex}, gamepadPollingActive=${gamepadPollingActive}, splashActive=${splashActive}`);
 
     if (gamepadIndex === null) {
         // Try to find a connected gamepad
@@ -4371,6 +4594,12 @@ function updateGamepad(timestamp) {
     if (hasInput) {
         const activityEvent = new KeyboardEvent('keydown', { key: 'Shift' });
         document.dispatchEvent(activityEvent);
+    }
+
+    if (!splashActive && !gameOver && inputBlocked) {
+    // Just return, don't process movement
+    requestAnimationFrame(updateGamepad);
+    return;
     }
 
     // Handle buttons (A=0, B=1, Select=2, Start=3)
@@ -4462,5 +4691,6 @@ if (newMoveDir) {
     </script>
 </body>
 </html>
+
 
 
