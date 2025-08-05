@@ -1284,6 +1284,11 @@ document.querySelectorAll('#dpad button').forEach(button => {
         e.stopPropagation();
         button.classList.remove('pressed'); // Remove visual feedback
             }, { passive: false });
+    button.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed'); // Ensure removal on touch cancel
+            }, { passive: false });
     button.addEventListener('click', (e) => {
         e.preventDefault(); // Prevent default click behavior after onclick
             }, { passive: false });
@@ -3243,7 +3248,11 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
         floorIndicator.textContent.startsWith("Rune:")) {
         // Reset to normal floor text if leaving rune tile
         setTimeout(() => {
-            if (!currentRuneTile || !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
+            // Double-check that player is still not on a rune tile before resetting
+            const stillOnRuneTile = map[p.y][p.x] === 9 && 
+                runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
+            
+            if (!stillOnRuneTile) {
                 floorIndicator.textContent = `Floor ${floor}`;
             }
         }, 100); // Small delay to prevent flicker
@@ -3263,6 +3272,13 @@ if (map[p.y][p.x] === 9) {
         // Show rune name when stepping on rune tile
         if (!floorIndicator.textContent.startsWith("Rune:")) {
             floorIndicator.textContent = `Rune: ${rune.letter.toUpperCase()}`;
+        } else {
+            // Update rune letter if it's different from what's currently displayed
+            const currentRuneText = floorIndicator.textContent;
+            const expectedRune = `Rune: ${rune.letter.toUpperCase()}`;
+            if (currentRuneText !== expectedRune) {
+                floorIndicator.textContent = expectedRune;
+            }
         }
         currentRuneTile = { x: p.x, y: p.y };
     }
@@ -3270,9 +3286,13 @@ if (map[p.y][p.x] === 9) {
     // Player moved away from rune tile
     const floorIndicator = document.getElementById('floor-indicator');
     if (floorIndicator.textContent.startsWith("Rune:")) {
-        // Reset to floor text after a delay
+        // Reset to floor text after a delay, but only if not currently on another rune tile
         setTimeout(() => {
-            if (!currentRuneTile || !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
+            // Check again if player is now on a different rune tile
+            const stillOnRuneTile = map[p.y][p.x] === 9 && 
+                runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
+            
+            if (!stillOnRuneTile) {
                 floorIndicator.textContent = `Floor ${floor}`;
             }
         }, 100);
@@ -3899,51 +3919,51 @@ function restart() {
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
 
-    // Re-attach event listeners for dpadButtons only
-    dpadButtons.forEach(button => {
-        button._touchstartHandler = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (inputBlocked || splashActive || gameOver) return;
-            button.classList.add('pressed');
-            if (!button._isMoving && !splashActive && !gameOver) {
-                button._isMoving = true;
-                const dir = button.id;
-                if (Date.now() - button._lastTouchMoveTime >= 200) {
-                    move(dir);
-                    button._lastTouchMoveTime = Date.now();
-                }
-                button._touchMovementTimer = setInterval(() => {
-                    if (!splashActive && !gameOver && button._isMoving) {
-                        const now = Date.now();
-                        if (now - button._lastTouchMoveTime >= 200) {
-                            move(dir);
-                            button._lastTouchMoveTime = now;
-                        }
+// Re-attach event listeners for dpadButtons only
+dpadButtons.forEach(button => {
+    button._touchstartHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (inputBlocked || splashActive || gameOver) return;
+        button.classList.add('pressed');
+        if (!button._isMoving && !splashActive && !gameOver) {
+            button._isMoving = true;
+            const dir = button.id;
+            if (Date.now() - button._lastTouchMoveTime >= 200) {
+                move(dir);
+                button._lastTouchMoveTime = Date.now();
+            }
+            button._touchMovementTimer = setInterval(() => {
+                if (!splashActive && !gameOver && button._isMoving) {
+                    const now = Date.now();
+                    if (now - button._lastTouchMoveTime >= 200) {
+                        move(dir);
+                        button._lastTouchMoveTime = now;
                     }
-                }, 200);
-            }
-        };
-        button._touchendHandler = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            button.classList.remove('pressed');
-            if (button._touchMovementTimer) {
-                clearInterval(button._touchMovementTimer);
-                button._touchMovementTimer = null;
-            }
-            button._isMoving = false;
-            button._lastTouchMoveTime = 0;
-        };
-        button._touchcancelHandler = button._touchendHandler;
-        button._clickHandler = (e) => e.preventDefault();
-        button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
-        button.addEventListener('touchend', button._touchendHandler, { passive: false });
-        button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
-        button.addEventListener('click', button._clickHandler, { passive: false });
-        button._lastTouchMoveTime = 0;
+                }
+            }, 200);
+        }
+    };
+    button._touchendHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed');
+        if (button._touchMovementTimer) {
+            clearInterval(button._touchMovementTimer);
+            button._touchMovementTimer = null;
+        }
         button._isMoving = false;
-    });
+        button._lastTouchMoveTime = 0;
+    };
+    button._touchcancelHandler = button._touchendHandler;
+    button._clickHandler = (e) => e.preventDefault();
+    button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
+    button.addEventListener('touchend', button._touchendHandler, { passive: false });
+    button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
+    button.addEventListener('click', button._clickHandler, { passive: false });
+    button._lastTouchMoveTime = 0;
+    button._isMoving = false;
+});
 
     const battleEvents = document.getElementById('battle-events');
     battleEvents.style.transform = 'translateX(-100%)';
