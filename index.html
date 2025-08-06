@@ -1391,6 +1391,8 @@ let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let satoshiDrops = [];
 let runeDrops = []; // Array to store rune drops with positions and letters
+let scrollDrops = []; // Array to store scroll drops with positions
+let portals = []; // Array to store active portal positions and animation state
 let splashActive = true;
 let waveActive = false;
 let musicMuted = false;        
@@ -1531,7 +1533,9 @@ const assets = {
         q: new Image(), r: new Image(), s: new Image(), t: new Image(), u: new Image(),
         v: new Image(), y: new Image(), z: new Image(), æ: new Image(), ø: new Image()
     },
-    diamond: new Image()
+    diamond: new Image(),
+    scroll: new Image(),
+    town_portal: [new Image(), new Image(), new Image()]
 };
         types[0].anim.frames[0].src = 'shrimp_1.png';
 	types[0].anim.frames[1].src = 'shrimp_2.png';
@@ -1623,7 +1627,13 @@ const assets = {
 	assets.runes.z.src = 'rune-z.png';
 	assets.runes.æ.src = 'rune-æ.png';
 	assets.runes.ø.src = 'rune-ø.png';
+	
 	assets.diamond.src = 'diamond.png';
+	assets.scroll.src = 'scroll.png';
+	assets.town_portal[0].src = 'town_portal_1.png';
+	assets.town_portal[1].src = 'town_portal_2.png';
+	assets.town_portal[2].src = 'town_portal_3.png';
+	
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
 });
@@ -2107,10 +2117,12 @@ function initMap() {
         map = Array(H).fill().map(() => Array(W).fill(1));
         fogMap = Array(H).fill().map(() => Array(W).fill(0));
         rooms = [];
-        satoshiDrops = [];
-        runeDrops = []; // Clear rune drops on map, but keep p.runes, p.runewords, p.immortal
-        // Reset rune tracking
-	currentRuneTile = null;
+satoshiDrops = [];
+runeDrops = []; // Clear rune drops on map, but keep p.runes, p.runewords, p.immortal
+scrollDrops = []; // Clear scroll drops
+portals = []; // Clear portals
+// Reset rune tracking
+currentRuneTile = null;
 
 function checkCurrentRuneTile() {
     if (map[p.y][p.x] === 9) {
@@ -2770,6 +2782,42 @@ async function fetchTxs() {
                         }
                     }
                 }
+
+// Scroll drop logic (1 in 25 chance)
+if (Math.random() < 1/25) {
+    let scrollPlaced = false;
+    if (map[enemy.y][enemy.x] === 0) {
+        map[enemy.y][enemy.x] = 11; // Scroll tile
+        scrollDrops.push({ x: enemy.x, y: enemy.y });
+        scrollPlaced = true;
+    } else {
+        const adjacent = [
+            { x: enemy.x, y: enemy.y - 1 },
+            { x: enemy.x, y: enemy.y + 1 },
+            { x: enemy.x - 1, y: enemy.y },
+            { x: enemy.x + 1, y: enemy.y }
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny) &&
+                !scrollDrops.some(s => s.x === nx && s.y === ny)
+            ) {
+                map[ny][nx] = 11; // Scroll tile
+                scrollDrops.push({ x: nx, y: ny });
+                scrollPlaced = true;
+                break;
+            }
+        }
+    }
+    if (scrollPlaced) {
+        logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a scroll!`);
+        playWebAudioSound(sounds.pickup);
+    }
+}
+                
                 // Rune drop logic (20% for Hell Shrimp, 10% for others)
                 if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
                     let runeLetter;
@@ -3025,6 +3073,42 @@ if (currentTheme === 'ruins') {
             logBattleEvent(`Floor ${floor} - Diamond collected!`);
             updatePlayerState();              // updates inventory display
         }
+        
+if (map[ny][nx] === 11) { // Scroll tile
+    const scroll = scrollDrops.find(s => s.x === nx && s.y === ny);
+    if (scroll) {
+        map[ny][nx] = 0; // Consume scroll
+        scrollDrops = scrollDrops.filter(s => s !== scroll);
+        playWebAudioSound(sounds.pickup);
+        logBattleEvent(`Floor ${floor} - Scroll consumed! Town portal opened nearby!`);
+        // Find an adjacent tile for the portal
+        const adjacent = [
+            { x: nx, y: ny - 1 },
+            { x: nx, y: ny + 1 },
+            { x: nx - 1, y: ny },
+            { x: nx + 1, y: ny }
+        ].filter(pos => 
+            pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H &&
+            map[pos.y][pos.x] === 0 &&
+            !enemies.some(e => e.x === pos.x && e.y === pos.y) &&
+            !portals.some(p => p.x === pos.x && p.y === pos.y)
+        );
+        if (adjacent.length > 0) {
+            const portalPos = adjacent[Math.floor(Math.random() * adjacent.length)];
+            map[portalPos.y][portalPos.x] = 12; // Portal tile
+            portals.push({
+                x: portalPos.x,
+                y: portalPos.y,
+                frameIndex: 0,
+                lastFrameTime: performance.now(),
+                frameDuration: 200
+            });
+        } else {
+            logBattleEvent(`Floor ${floor} - No space for town portal!`);
+        }
+    }
+}
+        
 // Check for adjacent special tiles (type 6) and play ambient sound once per floor
 if (currentTheme !== 'dungeon') {
     const adjacent = [
@@ -3517,6 +3601,41 @@ if (hit) {
                 if (!dropPlaced) {
                     // No space for satoshi drop
                 }
+
+// Scroll drop logic (1 in 25 chance)
+if (Math.random() < 1/25) {
+    let scrollPlaced = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 11; // Scroll tile
+        scrollDrops.push({ x: hit.x, y: hit.y });
+        scrollPlaced = true;
+    } else {
+        const adjacent = [
+            { x: hit.x, y: hit.y - 1 },
+            { x: hit.x, y: hit.y + 1 },
+            { x: hit.x - 1, y: hit.y },
+            { x: hit.x + 1, y: hit.y }
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny) &&
+                !scrollDrops.some(s => s.x === nx && s.y === ny)
+            ) {
+                map[ny][nx] = 11; // Scroll tile
+                scrollDrops.push({ x: nx, y: ny });
+                scrollPlaced = true;
+                break;
+            }
+        }
+    }
+    if (scrollPlaced) {
+        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a scroll!`);
+        playWebAudioSound(sounds.pickup);
+    }
+}
                 
                 // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
                 if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
@@ -3823,6 +3942,41 @@ function attack() {
                 if (!dropPlaced) {
                     // No space for satoshi drop
                 }
+
+// Scroll drop logic (1 in 25 chance)
+if (Math.random() < 1/25) {
+    let scrollPlaced = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 11; // Scroll tile
+        scrollDrops.push({ x: hit.x, y: hit.y });
+        scrollPlaced = true;
+    } else {
+        const adjacent = [
+            { x: hit.x, y: hit.y - 1 },
+            { x: hit.x, y: hit.y + 1 },
+            { x: hit.x - 1, y: hit.y },
+            { x: hit.x + 1, y: hit.y }
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny) &&
+                !scrollDrops.some(s => s.x === nx && s.y === ny)
+            ) {
+                map[ny][nx] = 11; // Scroll tile
+                scrollDrops.push({ x: nx, y: ny });
+                scrollPlaced = true;
+                break;
+            }
+        }
+    }
+    if (scrollPlaced) {
+        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a scroll!`);
+        playWebAudioSound(sounds.pickup);
+    }
+}
                 
                 // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
                 if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
@@ -3967,8 +4121,10 @@ function restart() {
     killsLog = [];
     satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
     kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-    satoshiDrops = [];
-    swordDir = 'right';
+satoshiDrops = [];
+scrollDrops = [];
+portals = [];
+swordDir = 'right';
     swordActive = false;
     swordStart = 0;
     fogMap = [];
@@ -4135,10 +4291,25 @@ function draw() {
                     c.globalAlpha = 1; // Restore full opacity
                 }
             }
-            if (map[y][x] === 10) {          // diamond tile
-                c.drawImage(assets.diamond, x * S, y * S, S, S);
-            }
-            if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
+if (map[y][x] === 10) { // diamond tile
+    c.drawImage(assets.diamond, x * S, y * S, S, S);
+}
+if (map[y][x] === 11) { // scroll tile
+    c.drawImage(assets.scroll, x * S, y * S, S, S);
+}
+if (map[y][x] === 12) { // portal tile
+    const portal = portals.find(p => p.x === x && p.y === y);
+    if (portal) {
+        const now = performance.now();
+        if (now - portal.lastFrameTime >= portal.frameDuration) {
+            portal.frameIndex = (portal.frameIndex + 1) % assets.town_portal.length;
+            portal.lastFrameTime = now;
+            needsRedraw = true; // Ensure redraw for animation
+        }
+        c.drawImage(assets.town_portal[portal.frameIndex], x * S, y * S, S, S);
+    }
+}
+if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
     // Draw projectiles, skipping player's position
@@ -4887,4 +5058,5 @@ if (newMoveDir) {
     </script>
 </body>
 </html>
+
 
