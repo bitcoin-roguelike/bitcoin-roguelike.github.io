@@ -670,6 +670,7 @@ button:hover {
     Health: <span id="health">24</span><br>
     Potions: <span id="potions">0</span><br>
     Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
+    Diamonds: <span id="diamonds">0</span><br>   <!-- NEW -->
     Bag: <span id="sats">0</span><br>
     Runes: <span id="runes">None</span><br>
 </div>
@@ -1359,6 +1360,7 @@ let map = [],
     }, 
     enemies = [], 
     rooms = [];
+    diamonds = 0;          // total diamonds collected in the current run
     
 // Load animation frames
 p.anim.frames.front[0].src = 'player-front1.png';
@@ -1528,7 +1530,8 @@ const assets = {
         l: new Image(), m: new Image(), n: new Image(), o: new Image(), p: new Image(),
         q: new Image(), r: new Image(), s: new Image(), t: new Image(), u: new Image(),
         v: new Image(), y: new Image(), z: new Image(), æ: new Image(), ø: new Image()
-    }
+    },
+    diamond: new Image()
 };
         types[0].anim.frames[0].src = 'shrimp_1.png';
 	types[0].anim.frames[1].src = 'shrimp_2.png';
@@ -1620,6 +1623,7 @@ const assets = {
 	assets.runes.z.src = 'rune-z.png';
 	assets.runes.æ.src = 'rune-æ.png';
 	assets.runes.ø.src = 'rune-ø.png';
+	assets.diamond.src = 'diamond.png';
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
 });
@@ -2223,7 +2227,7 @@ function checkCurrentRuneTile() {
 
         // Place pickaxe (chance to drop a pickaxe)
         let pickaxePositions = [];
-        if (Math.random() < 0.2) { // 20% chance to spawn a pickaxe
+        if (Math.random() < 1) { // 20% chance to spawn a pickaxe
             pickaxePositions = spawnItemWithChance(4, 1.0, 1, 5, true);
             if (pickaxePositions.length > 0) {
             } else {
@@ -2375,10 +2379,35 @@ function createSecretRoom(wx, wy, px, py, dir) {
         console.warn(`No floor tile found to connect secret room at (${wx}, ${wy})`);
     }
     // Place armor in the center
-    const armorX = rx + 1;
-    const armorY = ry + 1;
-    map[armorY][armorX] = 5;
-    rooms.push({ x: rx, y: ry, w: roomSize, h: roomSize });
+// … after placing armor in the center …
+const armorX = rx + 1;
+const armorY = ry + 1;
+map[armorY][armorX] = 5;
+
+// place a diamond with 50 % chance
+const dirs = [
+    {dx: -1, dy: 0},
+    {dx:  1, dy: 0},
+    {dx:  0, dy: -1},
+    {dx:  0, dy:  1}
+];
+dirs.sort(() => Math.random() - 0.5);
+for (const d of dirs) {
+    const nx = armorX + d.dx;
+    const ny = armorY + d.dy;
+    if (
+        nx >= 0 && nx < W &&
+        ny >= 0 && ny < H &&
+        map[ny][nx] === 0          // only on an empty floor tile
+    ) {
+        if (Math.random() < 0.25) {   // ← 25 % chance
+            map[ny][nx] = 10;          // diamond tile
+        }
+        break;
+    }
+}
+ 
+    
     // Show "Found Secret!" in Whale alert area and log success
     const floorIndicator = document.getElementById('floor-indicator');
     floorIndicator.textContent = `Found Secret!`;
@@ -2395,18 +2424,20 @@ function updatePlayerState() {
     if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
-            }
+    }
 
-    // Prevent HP from going below 1 if immortal
+    // HODL immortality protection
     if (p.immortal && p.hp <= 0) {
         p.hp = 1;
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-            }
+    }
 
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
+    document.getElementById('diamonds').textContent = diamonds;   // ← new line
     needsRedraw = true;
 }
+
 
 function updateFogMap(px, py) {
     const radius = 4; // Visibility radius
@@ -2838,52 +2869,67 @@ if (enemies.some(e => e.x === nx && e.y === ny)) {
                     logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
                     playWebAudioSound(sounds.pickup);
                 }
+                }
                 // If p.hp > 36, do nothing and continue
-            } else if (currentTheme === 'desert') {
-                p.hp = Math.max(0, p.hp - 2);
-                logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0 && p.immortal) {
-                    p.hp = 1;
-                    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-                } else if (p.hp <= 0) {
-                    p.hp = 0;
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
-                }
-            } else if (currentTheme === 'hell') {
-                p.hp = Math.max(0, p.hp - 8);
-                logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0 && p.immortal) {
-                    p.hp = 1;
-                    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-                } else if (p.hp <= 0) {
-                    p.hp = 0;
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
-                }
-            } else if (currentTheme === 'ruins') {
-                if (p.hp === 1) {
-                    p.hp = 0;
-                    logBattleEvent(`Floor ${floor} - Fell into Hole: Hero Fell! Reached Floor ${floor}`);
-                    playWebAudioSound(sounds.hole);
-                    gameOver = true;
-                } else {
-                    const oldHP = p.hp;
-                    p.hp = Math.ceil(p.hp / 2); // Halve HP, round up
-                    logBattleEvent(`Floor ${floor} - Fell into Hole: -${oldHP - p.hp} HP (now ${p.hp})`);
-                    playWebAudioSound(sounds.hole);
-                    if (p.hp <= 0 && p.immortal) {
-                        p.hp = 1;
-                        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-                    } else if (p.hp <= 0) {
-                        p.hp = 0;
-                        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
-                    }
-                }
-            }
+// Desert – Sludge pit
+if (currentTheme === 'desert') {
+    p.hp = Math.max(0, p.hp - 2);
+    logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
+    playWebAudioSound(sounds.hit);
+    if (p.hp <= 0 && p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+    } else if (p.hp <= 0) {
+        p.hp = 0;
+        diamonds = 0;                // ← reset diamonds
+        updatePlayerState();          // ← update display
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+    }
+}
+
+// Hell – Lava
+if (currentTheme === 'hell') {
+    p.hp = Math.max(0, p.hp - 8);
+    logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
+    playWebAudioSound(sounds.hit);
+    if (p.hp <= 0 && p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+    } else if (p.hp <= 0) {
+        p.hp = 0;
+        diamonds = 0;
+        updatePlayerState();
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+    }
+}
+
+// Ruins – Falling into a hole
+if (currentTheme === 'ruins') {
+    if (p.hp === 1) {
+        p.hp = 0;
+        logBattleEvent(`Floor ${floor} - Fell into Hole: Hero Fell! Reached Floor ${floor}`);
+        playWebAudioSound(sounds.hole);
+        gameOver = true;
+    } else {
+        const oldHP = p.hp;
+        p.hp = Math.ceil(p.hp / 2);
+        logBattleEvent(`Floor ${floor} - Fell into Hole: -${oldHP - p.hp} HP (now ${p.hp})`);
+        playWebAudioSound(sounds.hole);
+        if (p.hp <= 0 && p.immortal) {
+            p.hp = 1;
+            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        } else if (p.hp <= 0) {
+            p.hp = 0;
+            diamonds = 0;
+            updatePlayerState();
+            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+            gameOver = true;
+        }
+    }
+}
+
             updatePlayerState();
         }
         if (map[ny][nx] === 7) {
@@ -2938,6 +2984,13 @@ if (enemies.some(e => e.x === nx && e.y === ny)) {
             playWebAudioSound(sounds.pickup);
             logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
             updatePlayerState();
+        }
+        if (map[ny][nx] === 10) {            // diamond tile
+    	    diamonds++;                      // collect it
+            map[ny][nx] = 0;                 // remove from map
+            playWebAudioSound(sounds.pickup);
+            logBattleEvent(`Floor ${floor} - Diamond collected!`);
+            updatePlayerState();              // updates inventory display
         }
 // Check for adjacent special tiles (type 6) and play ambient sound once per floor
 if (currentTheme !== 'dungeon') {
@@ -3341,11 +3394,14 @@ playWebAudioSound(sounds.hit);
 if (p.hp <= 0 && p.immortal) {
     p.hp = 1;
     logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-    } else if (p.hp <= 0) {
+} else if (p.hp <= 0) {
     p.hp = 0;
+    diamonds = 0;                // reset diamonds
+    updatePlayerState();          // update inventory
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
     gameOver = true;
-    }
+}
+
 updatePlayerState(); // Check HP and armor state after damage
             }
         }
@@ -3855,6 +3911,7 @@ function restart() {
     p.hp = 24;
     p.potions = 0;
     p.pickaxes = 0;
+    diamonds = 0;
     p.hasArmor = false;
     p.x = 2;
     p.y = 2;
@@ -3989,6 +4046,7 @@ dpadButtons.forEach(button => {
 
     resetSplashScreen();
     initMap();
+    updatePlayerState();
     updateSatsDisplay();
     needsRedraw = true;
 }
@@ -4043,6 +4101,9 @@ function draw() {
                     c.drawImage(assets.runes[rune.letter], x * S, y * S, S, S);
                     c.globalAlpha = 1; // Restore full opacity
                 }
+            }
+            if (map[y][x] === 10) {          // diamond tile
+                c.drawImage(assets.diamond, x * S, y * S, S, S);
             }
             if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
@@ -4211,14 +4272,14 @@ enemies.forEach(e => {
     }
     tempCtx.putImageData(imageData, 0, 0);
 } else if (currentTheme === 'ruins') {
-    // Create a Maya gold silhouette with slight transparency for ruins theme
+    // Create a Gargoyle silhouette with slight transparency for ruins theme
     const imageData = tempCtx.getImageData(0, 0, S, S);
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] > 0) { // Non-transparent pixel
-            data[i] = 201;     // Red
-            data[i + 1] = 151; // Green
-            data[i + 2] = 2;   // Blue
+            data[i] = 144;     // Red
+            data[i + 1] = 126; // Green
+            data[i + 2] = 105;   // Blue
             data[i + 3] = Math.round(0.95 * 255); // 95% opacity
         }
     }
@@ -4317,17 +4378,20 @@ function gameLoop(timestamp) {
     }
     updateProjectiles();
     if ((needsRedraw || p.hp <= 8) && !splashActive) draw();
+// Final death check (after all updates)
 if (p.hp <= 0 && !gameOver) {
     if (p.immortal) {
         p.hp = 1;
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-                updatePlayerState();
     } else {
         p.hp = 0;
+        diamonds = 0;                // reset diamonds
+        updatePlayerState();          // update inventory
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
         gameOver = true;
     }
 }
+
     requestAnimationFrame(gameLoop);
 }
 
@@ -4790,3 +4854,4 @@ if (newMoveDir) {
     </script>
 </body>
 </html>
+
