@@ -2227,7 +2227,7 @@ function checkCurrentRuneTile() {
 
         // Place pickaxe (chance to drop a pickaxe)
         let pickaxePositions = [];
-        if (Math.random() < 1) { // 20% chance to spawn a pickaxe
+        if (Math.random() < 0.2) { // 20% chance to spawn a pickaxe
             pickaxePositions = spawnItemWithChance(4, 1.0, 1, 5, true);
             if (pickaxePositions.length > 0) {
             } else {
@@ -2300,10 +2300,21 @@ function createSecretRoom(wx, wy, px, py, dir) {
         logBattleEvent(`Floor ${floor} - No 3x3 wall block for secret room! Pickaxe refunded`);
         return;
     }
-    // Validate room placement
+    // Validate room placement - allow overlap with existing rooms
     let valid = true;
+    let overlappingRooms = 0;
+
+    // Count how many existing rooms this new room overlaps with
     for (let y = ry; y < ry + roomSize; y++) {
         for (let x = rx; x < rx + roomSize; x++) {
+            // Check if any existing room overlaps with this tile
+            rooms.forEach(r => {
+                if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
+                    overlappingRooms++;
+                }
+            });
+            
+            // Check for conflicts (items, player, enemies)
             if (
                 [2, 3, 4, 5].includes(map[y][x]) || // Items
                 (x === px && y === py) || // Player
@@ -2315,14 +2326,25 @@ function createSecretRoom(wx, wy, px, py, dir) {
         }
         if (!valid) break;
     }
-    // Allow overlap with one room (e.g., corridor)
-    let overlapCount = 0;
-    rooms.forEach(r => {
-        if (!(rx >= r.x + r.w || rx + roomSize <= r.x || ry >= r.y + r.h || ry + roomSize <= r.y)) {
-            overlapCount++;
+
+    // If we have conflicts, but it's a valid 3x3 wall area, proceed anyway
+    // (This allows for rooms that slightly overlap corridors)
+    if (!valid && overlappingRooms > 0) {
+        // Check specifically if the room can be placed in this location
+        let canPlace = true;
+        for (let y = ry; y < ry + roomSize; y++) {
+            for (let x = rx; x < rx + roomSize; x++) {
+                // Allow overlap with items, player, or enemies if they're not in the main area
+                if (map[y][x] !== 0 && map[y][x] !== 1) { // Not a floor or wall
+                    canPlace = false;
+                    break;
+                }
+            }
+            if (!canPlace) break;
         }
-    });
-    if (overlapCount > 1) valid = false;
+        valid = canPlace;
+    }
+
     if (!valid) {
         console.warn(`Failed to create secret room at (${rx}, ${ry}): invalid placement (items, player, or overlap)`);
         p.pickaxes++;
@@ -2337,86 +2359,97 @@ function createSecretRoom(wx, wy, px, py, dir) {
     }
     // Clear the broken wall
     map[wy][wx] = 0;
-    // Punch a non-directional hole (clear one adjacent tile)
-    const adjacent = [
-        { x: wx - 1, y: wy }, // Left
-        { x: wx + 1, y: wy }, // Right
-        { x: wx, y: wy - 1 }, // Up
-        { x: wx, y: wy + 1 }  // Down
-    ].filter(pos => pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] !== 0);
-    if (adjacent.length > 0) {
-        const hole = adjacent[Math.floor(Math.random() * adjacent.length)];
-        map[hole.y][hole.x] = 0;
-            }
-    // Carve a corridor to a nearby floor tile
-    let floorTiles = [];
-    for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-            if (map[y][x] === 0 && !(x === px && y === py) && !(x === wx && y === wy)) {
-                floorTiles.push({ x, y });
-            }
-        }
-    }
-    if (floorTiles.length > 0) {
-        floorTiles.sort((a, b) => {
-            const distA = Math.abs(a.x - wx) + Math.abs(a.y - wy);
-            const distB = Math.abs(b.x - wx) + Math.abs(b.y - wy);
-            return distA - distB;
-        });
-        const target = floorTiles[0];
-        let x = wx, y = wy;
-        while (x !== target.x || y !== target.y) {
-            if (Math.abs(target.x - x) > Math.abs(target.y - y)) {
-                x += target.x > x ? 1 : -1;
-            } else {
-                y += target.y > y ? 1 : -1;
-            }
-            if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 0) {
-                map[y][x] = 0;
-            }
-        }
-            } else {
-        console.warn(`No floor tile found to connect secret room at (${wx}, ${wy})`);
-    }
-    // Place armor in the center
-// … after placing armor in the center …
-const armorX = rx + 1;
-const armorY = ry + 1;
-map[armorY][armorX] = 5;
+// Punch a non-directional hole (clear one adjacent tile)
+const adjacent = [
+    { x: wx - 1, y: wy }, // Left
+    { x: wx + 1, y: wy }, // Right
+    { x: wx, y: wy - 1 }, // Up
+    { x: wx, y: wy + 1 }  // Down
+].filter(pos => pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] !== 0);
 
-// place a diamond with 50 % chance
-const dirs = [
-    {dx: -1, dy: 0},
-    {dx:  1, dy: 0},
-    {dx:  0, dy: -1},
-    {dx:  0, dy:  1}
-];
-dirs.sort(() => Math.random() - 0.5);
-for (const d of dirs) {
-    const nx = armorX + d.dx;
-    const ny = armorY + d.dy;
-    if (
-        nx >= 0 && nx < W &&
-        ny >= 0 && ny < H &&
-        map[ny][nx] === 0          // only on an empty floor tile
-    ) {
-        if (Math.random() < 0.25) {   // ← 25 % chance
-            map[ny][nx] = 10;          // diamond tile
+if (adjacent.length > 0) {
+    const hole = adjacent[Math.floor(Math.random() * adjacent.length)];
+    map[hole.y][hole.x] = 0;
+}
+
+// Carve a corridor to a nearby floor tile
+let floorTiles = [];
+for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+        if (map[y][x] === 0 && !(x === px && y === py) && !(x === wx && y === wy)) {
+            floorTiles.push({ x, y });
         }
-        break;
     }
 }
- 
+
+if (floorTiles.length > 0) {
+    floorTiles.sort((a, b) => {
+        const distA = Math.abs(a.x - wx) + Math.abs(a.y - wy);
+        const distB = Math.abs(b.x - wx) + Math.abs(b.y - wy);
+        return distA - distB;
+    });
+    const target = floorTiles[0];
+    let x = wx, y = wy;
+    while (x !== target.x || y !== target.y) {
+        if (Math.abs(target.x - x) > Math.abs(target.y - y)) {
+            x += target.x > x ? 1 : -1;
+        } else {
+            y += target.y > y ? 1 : -1;
+        }
+        if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 0) {
+            map[y][x] = 0;
+        }
+    }
+} else {
+    console.warn(`No floor tile found to connect secret room at (${wx}, ${wy})`);
+}
+    // Place armor in the center
+    const armorX = rx + 1;
+    const armorY = ry + 1;
+    map[armorY][armorX] = 5;
+
+    // place a diamond with 50 % chance
+    const dirs = [
+        {dx: -1, dy: 0},
+        {dx:  1, dy: 0},
+        {dx:  0, dy: -1},
+        {dx:  0, dy:  1}
+    ];
+    dirs.sort(() => Math.random() - 0.5);
+    for (const d of dirs) {
+        const nx = armorX + d.dx;
+        const ny = armorY + d.dy;
+        if (
+            nx >= 0 && nx < W &&
+            ny >= 0 && ny < H &&
+            map[ny][nx] === 0          // only on an empty floor tile
+        ) {
+            if (Math.random() < 0.25) {   // ← 25 % chance
+                map[ny][nx] = 10;          // diamond tile
+            }
+            break;
+        }
+    }
     
-    // Show "Found Secret!" in Whale alert area and log success
-    const floorIndicator = document.getElementById('floor-indicator');
-    floorIndicator.textContent = `Found Secret!`;
-    logBattleEvent(`Floor ${floor} - Secret Room Created!`);
-    setTimeout(() => {
-        floorIndicator.textContent = `Floor ${floor}`;
-    }, 5000);
-    updateFogMap(px, py);
-        needsRedraw = true;
+// Always consume one pickaxe when creating a secret room
+if (p.pickaxes > 0) {
+    p.pickaxes--;
+    logBattleEvent(`Floor ${floor} - Secret Room Created! (Pickaxe consumed)`);
+    // Reset pickaxe durability when collecting new one
+    p.pickaxe.reset();
+    // Update display immediately
+    updatePickaxeDisplay();
+}
+
+// Show "Found Secret!" in Whale alert area and log success
+const floorIndicator = document.getElementById('floor-indicator');
+floorIndicator.textContent = `Found Secret!`;
+logBattleEvent(`Floor ${floor} - Secret Room Created!`);
+setTimeout(() => {
+    floorIndicator.textContent = `Floor ${floor}`;
+}, 5000);
+updateFogMap(px, py);
+needsRedraw = true;
 }
 
 // Modified updatePlayerState to ensure immortality works correctly
