@@ -1285,45 +1285,54 @@ document.addEventListener('dblclick', (e) => {
     e.stopPropagation();
     }, { passive: false });
 
-// Block canvas touch interference
 const canvas = document.getElementById('game');
+let touchMoveInterval = null; // Global variable for continuous touch movement
+let touchTimeout = null; // Global variable for touch timeout
+let dpadButtons = document.querySelectorAll('#dpad button');
+let actionsButtons = document.querySelectorAll('#actions button');
+
+// Block canvas touch interference
 canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-            } else if (!e.target.closest('#dpad, #actions')) {
+    } else if (!e.target.closest('#dpad, #actions')) {
         e.preventDefault();
-            }
+    }
 }, { passive: false });
 canvas.addEventListener('touchmove', (e) => {
     if (e.scale !== 1 || e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-            }
+    } else if (!e.target.closest('#dpad, #actions')) {
+        e.preventDefault();
+    }
 }, { passive: false });
-
-
+canvas.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0 && !e.target.closest('#dpad, #actions')) {
+        e.preventDefault();
+    }
+}, { passive: false });
 
 // Touch handlers for #actions buttons
 document.querySelectorAll('#actions button').forEach(button => {
     button.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent scrolling
-        e.stopPropagation(); // Stop event bubbling
-        button.classList.add('pressed'); // Add visual feedback
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.add('pressed');
         if (button.id === 'mute') toggleMute();
         else if (button.id === 'attack') attack();
         else if (button.id === 'potion') usePotion();
-            }, { passive: false });
+    }, { passive: false });
     button.addEventListener('touchend', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        button.classList.remove('pressed'); // Remove visual feedback
-            }, { passive: false });
+        button.classList.remove('pressed');
+    }, { passive: false });
     button.addEventListener('click', (e) => {
-        e.preventDefault(); // Prevent default click behavior
-            }, { passive: false });
+        e.preventDefault();
+    }, { passive: false });
 });
-        
 
 const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
@@ -2163,6 +2172,9 @@ if (inHideout) {
     blacksmithPos = null;
     waypointPos = null;
     exit = null; // Prevent stairs and related enemy spawning
+
+    dpadButtons = document.querySelectorAll('#dpad button');
+    actionsButtons = document.querySelectorAll('#actions button');
 
     rooms = [];
     const roomSize = 7;
@@ -4393,69 +4405,170 @@ function usePotion() {
     needsRedraw = true;
 }
 
-let dpadButtons = document.querySelectorAll('#dpad button');
-let actionsButtons = document.querySelectorAll('#actions button');
+function cleanupEventListeners() {
+    // Clear any existing intervals
+    if (touchMoveInterval) {
+        clearInterval(touchMoveInterval);
+        touchMoveInterval = null;
+    }
+    if (touchTimeout) {
+        clearTimeout(touchTimeout);
+        touchTimeout = null;
+    }
+    
+    // Clear existing touch listeners from dpad buttons
+    dpadButtons.forEach(button => {
+        button.classList.remove('pressed');
+        // Remove all event listeners for each button
+        if (button._touchstartHandler) {
+            button.removeEventListener('touchstart', button._touchstartHandler);
+            button._touchstartHandler = null;
+        }
+        if (button._touchendHandler) {
+            button.removeEventListener('touchend', button._touchendHandler);
+            button._touchendHandler = null;
+        }
+        if (button._touchcancelHandler) {
+            button.removeEventListener('touchcancel', button._touchcancelHandler);
+            button._touchcancelHandler = null;
+        }
+        if (button._clickHandler) {
+            button.removeEventListener('click', button._clickHandler);
+            button._clickHandler = null;
+        }
+        if (button._contextmenuHandler) {
+            button.removeEventListener('contextmenu', button._contextmenuHandler);
+            button._contextmenuHandler = null;
+        }
+    });
+
+    // Clear existing touch listeners from actions buttons
+    actionsButtons.forEach(button => {
+        if (button._touchstartHandler) {
+            button.removeEventListener('touchstart', button._touchstartHandler);
+            button._touchstartHandler = null;
+        }
+        if (button._touchendHandler) {
+            button.removeEventListener('touchend', button._touchendHandler);
+            button._touchendHandler = null;
+        }
+        if (button._touchcancelHandler) {
+            button.removeEventListener('touchcancel', button._touchcancelHandler);
+            button._touchcancelHandler = null;
+        }
+        if (button._clickHandler) {
+            button.removeEventListener('click', button._clickHandler);
+            button._clickHandler = null;
+        }
+        if (button._contextmenuHandler) {
+            button.removeEventListener('contextmenu', button._contextmenuHandler);
+            button._contextmenuHandler = null;
+        }
+    });
+}
 
 /* initialise all touch listeners (called on load and after a restart) */
 function initTouchControls() {
-    /* ----- D‑pad -------------------------------------------------- */
+    /* ----- D-pad -------------------------------------------------- */
+    let activeTouchId = null; // Track the active touch identifier
+    let currentTouchDir = null;
+    let lastTouchMoveTime = 0;
+
+    // Use the global dpadButtons
     dpadButtons.forEach(button => {
-        /* store the handlers so they can be removed later */
+        /* Store handlers for later removal */
         button._touchstartHandler = function (e) {
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault();
+            e.stopPropagation();
             if (inputBlocked || splashActive || gameOver) return;
 
-            button.classList.add('pressed');
-
-            /* move immediately */
-            move(button.id);
-
-            /* continuous movement – 150 ms between steps */
-            button._touchMovementTimer = setInterval(() => {
-                if (!splashActive && !gameOver) move(button.id);
-            }, 150);
+            const touch = e.changedTouches[0];
+            // Only set new direction if no active touch or this touch is taking over
+            if (!activeTouchId) {
+                activeTouchId = touch.identifier;
+                button.classList.add('pressed');
+                currentTouchDir = button.id;
+                const now = Date.now();
+                move(currentTouchDir); // Immediate move on touch start
+                lastTouchMoveTime = now;
+                
+                // Clear any existing interval
+                if (touchMoveInterval) {
+                    clearInterval(touchMoveInterval);
+                }
+                
+                // Set up continuous movement
+                touchMoveInterval = setInterval(() => {
+                    if (activeTouchId && currentTouchDir && !inputBlocked) {
+                        move(currentTouchDir);
+                    }
+                }, 150); // Move every 150ms for consistent movement
+            }
         };
 
         button._touchendHandler = function (e) {
-            e.preventDefault(); e.stopPropagation();
-            button.classList.remove('pressed');
-            if (button._touchMovementTimer) {
-                clearInterval(button._touchMovementTimer);
-                button._touchMovementTimer = null;
+            e.preventDefault();
+            e.stopPropagation();
+            const touch = e.changedTouches[0];
+            if (touch.identifier === activeTouchId) {
+                button.classList.remove('pressed');
+                activeTouchId = null;
+                currentTouchDir = null;
+                lastTouchMoveTime = 0;
+                
+                // Clear continuous movement
+                if (touchMoveInterval) {
+                    clearInterval(touchMoveInterval);
+                    touchMoveInterval = null;
+                }
             }
         };
 
         button._touchcancelHandler = button._touchendHandler;
-        button._clickHandler = function (e) { e.preventDefault(); };
+        button._contextmenuHandler = function (e) { 
+            e.preventDefault(); 
+            e.stopPropagation();
+        };
+        button._clickHandler = function (e) { 
+            e.preventDefault(); 
+            e.stopPropagation();
+        };
 
         button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
         button.addEventListener('touchend', button._touchendHandler, { passive: false });
         button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
+        button.addEventListener('contextmenu', button._contextmenuHandler, { passive: false });
         button.addEventListener('click', button._clickHandler, { passive: false });
     });
-}
 
-function cleanupEventListeners() {
-    dpadButtons.forEach(button => {
-        if (button._touchstartHandler) button.removeEventListener('touchstart', button._touchstartHandler);
-        if (button._touchendHandler) button.removeEventListener('touchend', button._touchendHandler);
-        if (button._touchcancelHandler) button.removeEventListener('touchcancel', button._touchcancelHandler);
-        if (button._clickHandler) button.removeEventListener('click', button._clickHandler);
-        /* stop any running interval */
-        if (button._touchMovementTimer) {
-            clearInterval(button._touchMovementTimer);
-            button._touchMovementTimer = null;
+    /* Clean up on restart */
+    document.addEventListener('restart', () => {
+        // Clear any remaining intervals
+        if (touchMoveInterval) {
+            clearInterval(touchMoveInterval);
+            touchMoveInterval = null;
         }
-    });
-
-    actionsButtons.forEach(button => {
-        if (button._touchstartHandler) button.removeEventListener('touchstart', button._touchstartHandler);
-        if (button._touchendHandler) button.removeEventListener('touchend', button._touchendHandler);
-        if (button._touchcancelHandler) button.removeEventListener('touchcancel', button._touchcancelHandler);
-        if (button._clickHandler) button.removeEventListener('click', button._clickHandler);
+        if (touchTimeout) {
+            clearTimeout(touchTimeout);
+            touchTimeout = null;
+        }
+        
+        dpadButtons.forEach(button => {
+            button.classList.remove('pressed');
+            // Remove all event listeners
+            if (button._touchstartHandler) button.removeEventListener('touchstart', button._touchstartHandler);
+            if (button._touchendHandler) button.removeEventListener('touchend', button._touchendHandler);
+            if (button._touchcancelHandler) button.removeEventListener('touchcancel', button._touchcancelHandler);
+            if (button._clickHandler) button.removeEventListener('click', button._clickHandler);
+            if (button._contextmenuHandler) button.removeEventListener('contextmenu', button._contextmenuHandler);
+        });
+        activeTouchId = null;
+        currentTouchDir = null;
+        lastTouchMoveTime = 0;
+        // Re-attach listeners after cleanup
+        initTouchControls();
     });
 }
-
 
 /* ------------------------------------------------------------------
    Restart the game – reset state & re‑initialise listeners
@@ -4465,6 +4578,8 @@ function restart() {
        1. Clean up old listeners/timers
        ------------------------------------------------------------------ */
     cleanupEventListeners();
+    document.dispatchEvent(new Event('restart')); // Trigger custom restart event
+    
     /* ------------------------------------------------------------------
        2. Reset all game state variables
        ------------------------------------------------------------------ */
@@ -4516,7 +4631,7 @@ function restart() {
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
-    hasPlayedOnce = true;  // allow the “Enter” key to start the next game
+    hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
 
     /* ------------------------------------------------------------------
@@ -4549,10 +4664,18 @@ function restart() {
     document.getElementById('splash-screen').style.display = 'block';
 
     /* ------------------------------------------------------------------
-       4. Re‑attach touch listeners
+       4. Re-initialize button variables and touch listeners
        ------------------------------------------------------------------ */
-    initTouchControls();
-
+    // Re-initialize button variables properly
+    dpadButtons = document.querySelectorAll('#dpad button');
+    actionsButtons = document.querySelectorAll('#actions button');
+    
+    // Cleanup old listeners first
+    cleanupEventListeners();
+    
+    // Re-initialize touch controls
+    initTouchControls(); // Re-initialize touch controls
+    
     /* ------------------------------------------------------------------
        5. Reset audio & gamepad polling
        ------------------------------------------------------------------ */
@@ -5123,53 +5246,7 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         populateNameList();
         requestAnimationFrame(gameLoop);
         
-document.querySelectorAll('#dpad button').forEach(button => {
-    button._touchMovementTimer = null;
-    button._lastTouchMoveTime = 0;
-    button._isMoving = false;
-
-    button._touchstartHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.add('pressed');
-        if (!button._isMoving && !splashActive && !gameOver) {
-            button._isMoving = true;
-            const dir = button.id;
-            const now = Date.now();
-            if (now - button._lastTouchMoveTime >= 200) {
-                move(dir);
-                button._lastTouchMoveTime = now;
-            }
-            button._touchMovementTimer = setInterval(() => {
-                if (!splashActive && !gameOver && button._isMoving) {
-                    const now = Date.now();
-                    if (now - button._lastTouchMoveTime >= 200) {
-                        move(dir);
-                        button._lastTouchMoveTime = now;
-                    }
-                }
-            }, 200);
-        }
-    };
-
-    button._touchendHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed');
-        if (button._touchMovementTimer) {
-            clearInterval(button._touchMovementTimer);
-            button._touchMovementTimer = null;
-        }
-        button._isMoving = false;
-        button._lastTouchMoveTime = 0;
-    };
-
-    button._touchcancelHandler = button._touchendHandler;
-
-    button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
-    button.addEventListener('touchend', button._touchendHandler, { passive: false });
-    button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
-});
+// Removed redundant D-pad touch event listeners; handled in initTouchControls
 
 //////////////////////
 // Gamepad support //
@@ -5400,11 +5477,13 @@ if (!gamepadPollingActive) {
     const deadZone = 0.2;
     const hasInput = buttons.some(b => b.pressed) || Math.abs(axis0) > deadZone || Math.abs(axis1) > deadZone;
 
-    // Simulate user activity only if there's gamepad input
-    if (hasInput) {
+setInterval(() => {
+    // Simulate user activity only if there's gamepad input and no D-pad button is pressed
+    if (hasInput && !document.querySelector('#dpad button.pressed')) {
         const activityEvent = new KeyboardEvent('keydown', { key: 'Shift' });
         document.dispatchEvent(activityEvent);
     }
+}, 30000); // Every 30 seconds to prevent sleep
 
     if (!splashActive && !gameOver && inputBlocked) {
     // Just return, don't process movement
@@ -5491,8 +5570,29 @@ if (!splashActive && !gameOver) {
     // Continue polling
     requestAnimationFrame(updateGamepad);
 }
+
+// Initialize touch controls after DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize the global button variables
+    dpadButtons = document.querySelectorAll('#dpad button');
+    actionsButtons = document.querySelectorAll('#actions button');
+    
+    setTimeout(() => {
+        initTouchControls();
+    }, 100);
+});
+
+// Add this to prevent context menu issues
+document.addEventListener('contextmenu', function(e) {
+    // Only prevent context menu for elements that might cause issues
+    if (e.target.closest('#game-container, #dpad, #actions') || 
+        e.target.id === 'game' || 
+        e.target.id === 'battle-events') {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+    }
+}, { passive: false });
     </script>
 </body>
 </html>
-
-
