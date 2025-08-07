@@ -305,6 +305,11 @@ button:hover {
     box-sizing: border-box;
     word-break: break-word; /* Handle long text */
 }
+
+#sats-calc {
+    display: block;          /* line‑break */
+    color: var(--text-color);   /* inherits the theme colour */
+}
     
 /* Phones (320px–767px) */
 @media only screen and (min-width: 320px) and (max-width: 767px) {
@@ -668,10 +673,13 @@ button:hover {
 <div id="inventory" style="-webkit-nbsp-mode: normal;">
     <span id="wave" style="display: none;">1</span>
     Health: <span id="health">24</span><br>
+    Armor: <span id="armorStatus">Cloth</span><br>
     Potions: <span id="potions">0</span><br>
     Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
     Diamonds: <span id="diamonds">0</span><br>   <!-- NEW -->
-    Bag: <span id="sats">0</span><br>
+    <span id="perfectlyCutDiamonds" style="display: none;">0</span>
+    Floor x Bag: <span id="sats" style="display: none;">0</span>
+    <span id="sats-calc" class="calc"></span>
     Runes: <span id="runes">None</span><br>
 </div>
         </div>
@@ -977,6 +985,23 @@ function levenshtein(a, b) {
     return matrix[b.length][a.length];
 }
 
+/**
+ * Calculates the score that will be sent to the leaderboard.
+ *  • `floor` is the current floor number.
+ *  • The multiplier is `floor / 100`.
+ *  • The extra amount is `floor / 100` of the raw satoshis.
+ *
+ * Example: floor = 45, raw = 14000 BTC
+ *   multiplier = 45 / 100 = 0.45
+ *   extra      = 14000 * 0.45 = 6300
+ *   finalScore = 14000 + 6300 = 20300
+ */
+function getScoreWithMultiplier(rawScore, currentFloor) {
+    const multiplier = currentFloor / 100;          // 0.45 for floor 45
+    const added = Math.floor(rawScore * multiplier);
+    return rawScore + added;                       // 20300 in the example
+}
+
 // Modified submitScore function with nearest name matching and random fallback
 async function submitScore() {
     if (!gameOver) return;
@@ -1019,12 +1044,15 @@ async function submitScore() {
         }
     }
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
+    // NEW: calculate the leaderboard score with the floor multiplier
+    const leaderboardScore = getScoreWithMultiplier(totalSats, floor);
     try {
-const response = await fetch(`${API_URL}?action=submit`, {
+    const response = await fetch(`${API_URL}?action=submit`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ username, score: totalSats, floor })
-      });
+        // send the multiplied score
+        body: JSON.stringify({ username, score: leaderboardScore, floor })
+    });
       if (response.status === 429) {
         console.error('Rate limit exceeded for submitting scores');
         return;
@@ -1045,9 +1073,10 @@ const response = await fetch(`${API_URL}?action=submit`, {
             scoreSubmitted = true;
             document.getElementById('submit-score').disabled = true;
             document.getElementById('submit-score').style.background = '#666';
-            document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${totalSats} sats (Floor ${floor})`;
+            document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${leaderboardScore} sats (Floor ${floor})`;
             document.getElementById('leaderboard-output').style.display = 'block';
-            await fetchLeaderboard(username, totalSats, floor);
+            
+            await fetchLeaderboard(username, leaderboardScore, floor);
         } else {
             document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
             if (response.status === 400 && text.includes('new row violates row-level security policy')) {
@@ -1323,8 +1352,8 @@ const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
 let initialWaveSpawned = false; // Track if initial wave has spawned
 
 function selectNewTheme(current) {
-    const availableThemes = themes.filter(t => t !== current);
-    return availableThemes[Math.floor(Math.random() * availableThemes.length)];
+    const available = themes.filter(t => t !== current);
+    return available[Math.floor(Math.random() * available.length)];
 }
 
 let currentRuneTile = null; // Track current rune tile position
@@ -1337,6 +1366,8 @@ let map = [],
         atk: 2,
         pickaxes: 0,
         hasArmor: false,
+        hasDiamondArmor: false, // Track diamond armor
+    	perfectlyCutDiamonds: 0, // Track perfectly cut diamonds
         runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
         runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
         immortal: false, // Flag for HODL runeword immortality
@@ -1350,6 +1381,9 @@ let map = [],
                 armor_front: [new Image(), new Image()],
                 armor_back: [new Image(), new Image()],
                 armor_right: [new Image(), new Image()],
+                diamond_armor_front: [new Image(), new Image()],
+                diamond_armor_back: [new Image(), new Image()],
+                diamond_armor_right: [new Image(), new Image()],
                 fall: [new Image(), new Image(), new Image()],
             },
             direction: 'front',
@@ -1361,6 +1395,7 @@ let map = [],
     enemies = [], 
     rooms = [];
     diamonds = 0;          // total diamonds collected in the current run
+    let themeTimeoutId = null;   // <‑‑ new
     
 // Load animation frames
 p.anim.frames.front[0].src = 'player-front1.png';
@@ -1385,6 +1420,11 @@ p.anim.frames.fall.forEach((frame, i) => {
 });
 
 let floor = 1, wave = 1, exit = null, needsRedraw = true, lastUpdate = 0, gameOver = false;
+let previousFloorState = null; // Store state before entering hideout
+let inHideout = false; // Track if player is in hideout
+let jewellerPos = null; // Track jeweller position
+let blacksmithPos = null; // Track blacksmith position
+let waypointPos = null; // Track waypoint position
 let scoreSubmitted = false; // Tracks if score has been submitted
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
@@ -1511,7 +1551,8 @@ const assets = {
         desert: { floor: new Image(), wall: new Image(), special: new Image() },
         paradise: { floor: new Image(), wall: new Image(), special: new Image() },
         hell: { floor: new Image(), wall: new Image(), special: new Image() },
-        ruins: { floor: new Image(), wall: new Image(), special: new Image() }
+        ruins: { floor: new Image(), wall: new Image(), special: new Image() },
+        hideout: { floor: new Image(), wall: new Image(), diamond_wall: new Image() }
     },
     potion: new Image(),
     player: new Image(),
@@ -1522,9 +1563,13 @@ const assets = {
     pickaxe: new Image(),
     armor: new Image(),
     player_armor: new Image(),
+    player_diamond_armor: new Image(),
     pickaxe_sword: new Image(),
     shoot_sword: new Image(),
     gnome: new Image(),
+    jeweller: new Image(),
+    blacksmith: new Image(),
+    waypoint: new Image(),
     runes: {
         on_floor: new Image(),
         a: new Image(), b: new Image(), c: new Image(), d: new Image(), e: new Image(),
@@ -1633,6 +1678,22 @@ const assets = {
 	assets.town_portal[0].src = 'town_portal_1.png';
 	assets.town_portal[1].src = 'town_portal_2.png';
 	assets.town_portal[2].src = 'town_portal_3.png';
+	assets.themes.hideout.floor.src = 'town_floor.png';
+	assets.themes.hideout.wall.src = 'town_wall.png';
+	assets.themes.hideout.diamond_wall.src = 'diamond_wall.png';
+	assets.jeweller.src = 'jeweller.png';
+	assets.blacksmith.src = 'blacksmith.png';
+	assets.waypoint.src = 'waypoint.png';
+	assets.player_diamond_armor.src = 'player_diamond_armor.png';
+	p.anim.frames.diamond_armor_front = [new Image(), new Image()];
+	p.anim.frames.diamond_armor_front[0].src = 'player_diamond_armor-front1.png';
+	p.anim.frames.diamond_armor_front[1].src = 'player_diamond_armor-front2.png';
+	p.anim.frames.diamond_armor_back = [new Image(), new Image()];
+	p.anim.frames.diamond_armor_back[0].src = 'player_diamond_armor-back1.png';
+	p.anim.frames.diamond_armor_back[1].src = 'player_diamond_armor-back2.png';
+	p.anim.frames.diamond_armor_right = [new Image(), new Image()];
+	p.anim.frames.diamond_armor_right[0].src = 'player_diamond_armor-right1.png';
+	p.anim.frames.diamond_armor_right[1].src = 'player_diamond_armor-right2.png';
 	
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
@@ -1657,6 +1718,10 @@ types.forEach(t => {
 });
 
 function placeStairs() {
+    if (inHideout) {
+        console.warn('Attempted to place stairs in hideout – forbidden');
+        return false;
+    }
     if (exit) {
         logBattleEvent(`Floor ${floor} - Stairs placement skipped: exit already exists at (${exit.x}, ${exit.y})`);
         return true;
@@ -2033,8 +2098,18 @@ function logBattleEvent(event) {
 }
 
 function updateSatsDisplay() {
-    const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-    document.getElementById('sats').textContent = totalSats < 1e8 ? `${totalSats} sats` : `${(totalSats / 1e8).toFixed(1)} BTC`;
+    const raw = Object.values(satsEarned).reduce((sum, v) => sum + v, 0);
+    const mult = getScoreWithMultiplier(raw , floor);
+
+    // Main value (sats or BTC)
+    const satsElem   = document.getElementById('sats');
+    satsElem.textContent =
+        raw < 1e8 ? `${raw} sats` : `${(raw / 1e8).toFixed(1)} BTC`;
+
+    // The calculation – shown on its own line
+    const calcElem = document.getElementById('sats-calc');
+    calcElem.textContent = `${floor / 100}: ${mult < 1e8 ? `${mult} sats` : `${(mult / 1e8).toFixed(1)} BTC`}`;
+
     // Trigger kills display only when exit exists and no enemies remain
     if (exit && enemies.length === 0) {
         logBattleEvent(`Kills:`);
@@ -2085,6 +2160,110 @@ function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer
 
 function initMap() {
     try {
+if (inHideout) {
+    currentTheme = 'hideout';
+    document.documentElement.style.setProperty('--text-color', '#ff8c00');
+    document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
+        el.style.color = '#ff8c00';
+    });
+    enemies = [];
+    enemiesSpawnedThisFloor = 0;
+    whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
+    initialSpawnDoneThisFloor = false;
+    initialWaveSpawned = false;
+    map = Array(H).fill().map(() => Array(W).fill(1));
+    fogMap = Array(H).fill().map(() => Array(W).fill(0));
+    rooms = [];
+    satoshiDrops = [];
+    runeDrops = runeDrops.filter(r => !r.specific);
+    scrollDrops = [];
+    portals = [];
+    currentRuneTile = null;
+    jewellerPos = null;
+    blacksmithPos = null;
+    waypointPos = null;
+    exit = null; // Prevent stairs and related enemy spawning
+
+    rooms = [];
+    const roomSize = 7;
+    const gap = 2;
+
+    const mainRoomX = Math.floor((W - roomSize) / 2);
+    const mainRoomY = Math.floor((H - roomSize) / 2);
+    rooms.push({ x: mainRoomX, y: mainRoomY, w: roomSize, h: roomSize });
+    for (let y = mainRoomY; y < mainRoomY + roomSize; y++) {
+        for (let x = mainRoomX; x < mainRoomX + roomSize; x++) {
+            map[y][x] = 0;
+        }
+    }
+
+    const leftRoomX = mainRoomX - roomSize - gap;
+    const leftRoomY = mainRoomY;
+    rooms.push({ x: leftRoomX, y: leftRoomY, w: roomSize, h: roomSize });
+    for (let y = leftRoomY; y < leftRoomY + roomSize; y++) {
+        for (let x = leftRoomX; x < leftRoomX + roomSize; x++) {
+            map[y][x] = 0;
+        }
+    }
+
+    const rightRoomX = mainRoomX + roomSize + gap;
+    const rightRoomY = mainRoomY;
+    rooms.push({ x: rightRoomX, y: rightRoomY, w: roomSize, h: roomSize });
+    for (let y = rightRoomY; y < rightRoomY + roomSize; y++) {
+        for (let x = rightRoomX; x < rightRoomX + roomSize; x++) {
+            map[y][x] = 0;
+        }
+    }
+
+    for (let x = leftRoomX + roomSize; x < mainRoomX; x++) {
+        map[mainRoomY + 3][x] = 0;
+    }
+    for (let x = mainRoomX + roomSize; x < rightRoomX; x++) {
+        map[mainRoomY + 3][x] = 0;
+    }
+
+    jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+    const diamondWallTiles = [
+        {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
+        {x: mainRoomX + 2, y: mainRoomY + 3}, {x: mainRoomX + 4, y: mainRoomY + 3},
+        {x: mainRoomX + 2, y: mainRoomY + 4}, {x: mainRoomX + 4, y: mainRoomY + 4}
+    ];
+    diamondWallTiles.forEach(pos => {
+        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
+            map[pos.y][pos.x] = 13;
+        }
+    });
+    map[jewellerPos.y][jewellerPos.x] = 14;
+
+    // Place blacksmith at a fixed position in the left room
+    const blacksmithX = leftRoomX + 3;
+    const blacksmithY = leftRoomY + 3;
+    if (map[blacksmithY][blacksmithX] === 0) {
+        map[blacksmithY][blacksmithX] = 15; // Blacksmith
+        blacksmithPos = { x: blacksmithX, y: blacksmithY };
+    } else {
+        console.warn('Failed to place blacksmith: tile occupied at', blacksmithX, blacksmithY);
+    }
+
+    // Place waypoint at a fixed position in the right room
+    const waypointX = rightRoomX + 3;
+    const waypointY = rightRoomY + 3;
+    if (map[waypointY][waypointX] === 0) {
+        map[waypointY][waypointX] = 16; // Waypoint
+        waypointPos = { x: waypointX, y: waypointY };
+    } else {
+        console.warn('Failed to place waypoint: tile occupied at', waypointX, waypointY);
+    }
+
+    p.x = mainRoomX + 3;
+    p.y = mainRoomY + 6;
+    updateFogMap(p.x, p.y);
+    needsRedraw = true;
+    logBattleEvent(`Hideout - Entered the secret hideout!`);
+    document.getElementById('floor-indicator').textContent = `Hideout`;
+    return;
+}
+
         // Change theme every fourth floor
         if (floor % 3 === 0 && floor > 1) {
             currentTheme = selectNewTheme(currentTheme);
@@ -2105,7 +2284,7 @@ function initMap() {
         }
         document.documentElement.style.setProperty('--text-color', textColor);
         // Force re-render of text color
-        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator').forEach(el => {
+        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
             el.style.color = textColor;
         });
         // Reset enemy spawning variables
@@ -2466,9 +2645,21 @@ needsRedraw = true;
 
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
-    if (p.hp <= 24 && p.hasArmor) {
+    if (p.hp <= 24 && p.hasDiamondArmor) {
+        p.hasDiamondArmor = false;
+        p.hasArmor = false;
+        logBattleEvent(`Floor ${floor} - Diamond Armor lost! Reverted to normal clothing.`);
+        document.getElementById('armorStatus').textContent = 'Cloth';
+    } else if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
+        document.getElementById('armorStatus').textContent = 'Cloth';
+    } else if (p.hasDiamondArmor) {
+        document.getElementById('armorStatus').textContent = 'Diamond';
+    } else if (p.hasArmor) {
+        document.getElementById('armorStatus').textContent = 'Leather';
+    } else {
+        document.getElementById('armorStatus').textContent = 'Cloth';
     }
 
     // HODL immortality protection
@@ -2479,7 +2670,8 @@ function updatePlayerState() {
 
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
-    document.getElementById('diamonds').textContent = diamonds;   // ← new line
+    document.getElementById('diamonds').textContent = diamonds;
+    document.getElementById('perfectlyCutDiamonds').textContent = p.perfectlyCutDiamonds;
     needsRedraw = true;
 }
 
@@ -2555,14 +2747,20 @@ let lastKeyMoveTime = 0; // Track last keyboard move time
 let pendingKeyDir = null; // Track latest keyboard direction
 let isKeyHeld = false; // Track if a key is held
 let enemiesSpawnedThisFloor = 0;
+let scrollDroppedThisFloor = false; // Track if a scroll has dropped on this floor
 let nextApiCallTime = null;
 let initialSpawnDoneThisFloor = false;
 let apiTimeoutId = null;
 const API_INTERVAL = 20000; // 20 seconds
 
+function shouldSpawn() {
+  // If we are in hideout, or we have just stepped into it, abort.
+  return !inHideout;
+}
+
 async function fetchTxs() {
-    if (gameOver || splashActive || floor === 0) {
-        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}`);
+    if (gameOver || splashActive || floor === 0 || inHideout) {
+        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}`);
         return;
     }
     const now = Date.now();
@@ -2583,10 +2781,22 @@ async function fetchTxs() {
             apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
             return;
         }
+        
+    // *** NEW *** Abort early if we have stepped into hideout while the request was still processing.
+    if (!shouldSpawn()) {
+      console.log('Player entered hideout while fetchTxs was in progress. Aborting enemy spawn.');
+      return;
+    }
+        
         let enemyCount = 0;
         const processedTxids = new Set();
         console.warn(`[WHALE ATTEMPT] Checking ${res.data.length} transactions for Whale spawns (> 100 BTC)`);
         for (const tx of res.data.slice(0, 10)) {
+      // *** NEW *** Stop the loop if hideout has been entered during this loop.
+      if (!shouldSpawn()) {
+        console.log('Player entered hideout. Stopping spawn loop.');
+        break;
+      }
             if (processedTxids.has(tx.txid)) continue;
             processedTxids.add(tx.txid);
             let value = 0;
@@ -2669,6 +2879,11 @@ async function fetchTxs() {
                     console.log(`No valid spawn position found for tx ${tx.txid}, skipping`);
                     continue;
                 }
+      // *** NEW *** Check again before pushing the new enemy.
+      if (!shouldSpawn()) {
+        console.log('Player entered hideout. Skipping enemy spawn.');
+        continue;
+      }
                 enemies.push(newEnemy);
                 const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
                 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
@@ -2783,9 +2998,10 @@ async function fetchTxs() {
                     }
                 }
 
-// Scroll drop logic (1 in 25 chance)
-if (Math.random() < 1/25) {
+// Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
+if (!scrollDroppedThisFloor && Math.random() < 1/25) {
     let scrollPlaced = false;
+    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
     if (map[enemy.y][enemy.x] === 0) {
         map[enemy.y][enemy.x] = 11; // Scroll tile
         scrollDrops.push({ x: enemy.x, y: enemy.y });
@@ -2898,6 +3114,10 @@ if (enemyCount > 0 && enemies.length > 0 && !exit) {
     }
 }
 
+function isSolid(x, y) {
+    return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
+}
+
 function move(dir) {
     if (gameOver || splashActive || inputBlocked) return;
     swordDir = dir;
@@ -2919,6 +3139,7 @@ function move(dir) {
         nx++;
         newDirection = 'right';
     }
+    if (nx < 0 || nx >= W || ny < 0 || ny >= H || isSolid(nx, ny)) return;
 // Update direction even if move is blocked
 p.anim.direction = newDirection;
 if (!map[ny] || map[ny][nx] === undefined) {
@@ -2942,7 +3163,7 @@ if (enemies.some(e => e.x === nx && e.y === ny)) {
             map[ny][nx] = 0; 
             playWebAudioSound(sounds.pickup);
         }
-        if (map[ny][nx] === 6) {
+        if (map[ny][nx] === 6 && !inHideout) {
             if (currentTheme === 'paradise') {
                 if (p.hp <= 36) {
                     const oldHP = p.hp;
@@ -3108,6 +3329,8 @@ if (map[ny][nx] === 11) { // Scroll tile
         }
     }
 }
+
+
         
 // Check for adjacent special tiles (type 6) and play ambient sound once per floor
 if (currentTheme !== 'dungeon') {
@@ -3345,7 +3568,11 @@ if (
     return; // Exit move early to prevent further movement
 }
 
-if (exit && p.x === exit.x && p.y === exit.y) {
+if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
+
+    // NEW: make sure the scroll flag is reset for the next floor
+    scrollDroppedThisFloor = false;
+
     sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
     if (p.immortal) {
         p.immortal = false;
@@ -3374,6 +3601,19 @@ if (exit && p.x === exit.x && p.y === exit.y) {
     document.getElementById('wave').textContent = wave;
     initMap();
     nextApiCallTime = null;
+    
+    // Show the theme name for 3 s, then revert to the floor number
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+
+    const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+    floorIndicator.textContent = themeName;               // 1️⃣ show theme
+
+    themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+        floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+        themeTimeoutId = null;
+    }, 3000);
+    
     const battleEvents = document.getElementById('battle-events');
     battleEvents.value = '';
     battleEvents.style.transform = 'translateX(-100%)';
@@ -3384,6 +3624,86 @@ if (exit && p.x === exit.x && p.y === exit.y) {
             console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
         }
     }, 1000);
+}
+
+if (map[ny][nx] === 12) { // Portal tile in normal floor
+    inHideout = true;
+    initMap();
+    return;
+}
+if (map[ny][nx] === 16 && inHideout) {
+    if (previousFloorState) {
+        // Restore previous floor state
+        map = previousFloorState.map.map(row => [...row]);
+        enemies = previousFloorState.enemies.map(e => ({ ...e, type: { ...e.type } }));
+        rooms = previousFloorState.rooms.map(r => ({ ...r }));
+        exit = previousFloorState.exit ? { ...previousFloorState.exit } : null;
+        satoshiDrops = [...previousFloorState.satoshiDrops];
+        runeDrops = [...previousFloorState.runeDrops];
+        scrollDrops = [...previousFloorState.scrollDrops];
+        portals = previousFloorState.portals.map(p => ({ ...p }));
+        floor = previousFloorState.floor;
+        wave = previousFloorState.wave;
+        enemiesSpawnedThisFloor = previousFloorState.enemiesSpawnedThisFloor;
+        whalesSpawnedThisFloor = previousFloorState.whalesSpawnedThisFloor;
+        initialSpawnDoneThisFloor = previousFloorState.initialSpawnDoneThisFloor;
+        initialWaveSpawned = previousFloorState.initialWaveSpawned;
+        waveActive = previousFloorState.waveActive;
+        currentTheme = previousFloorState.currentTheme;
+        const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
+        p.x = portal ? portal.x : 2;
+        p.y = portal ? portal.y : 2;
+        inHideout = false;
+        document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+        updateFogMap(p.x, p.y);
+        needsRedraw = true;
+        logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
+        document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
+        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
+            el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
+        });
+        return;
+    } else {
+        inHideout = false;
+        initMap();
+        portals = [{ x: p.x, y: p.y, frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }];
+        map[p.y][p.x] = 12;
+        logBattleEvent(`Floor ${floor} - Returned to a new floor via waypoint!`);
+        document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+        needsRedraw = true;
+        document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
+        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
+            el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
+        });
+        return;
+    }
+}
+
+if (map[ny][nx] === 14 && inHideout) { // Jeweller
+    if (diamonds >= 3) {
+        diamonds -= 3;
+        p.perfectlyCutDiamonds++;
+        logBattleEvent(`Hideout - Jeweller refined 3 diamonds into a Perfectly Cut Diamond!`);
+        playWebAudioSound(sounds.pickup);
+        updatePlayerState();
+    } else {
+        logBattleEvent(`Hideout - Jeweller requires 3 diamonds to refine!`);
+    }
+}
+if (map[ny][nx] === 15 && inHideout) { // Blacksmith
+    if (p.perfectlyCutDiamonds >= 1 && !p.hasDiamondArmor) {
+        p.perfectlyCutDiamonds--;
+        p.hasDiamondArmor = true;
+        p.hasArmor = false; // Remove regular armor
+        p.hp += 1000;
+        logBattleEvent(`Hideout - Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
+        playWebAudioSound(sounds.pickup);
+        updatePlayerState();
+    } else if (p.hasDiamondArmor) {
+        logBattleEvent(`Hideout - Blacksmith: You already have Diamond Armor!`);
+    } else {
+        logBattleEvent(`Hideout - Blacksmith requires a Perfectly Cut Diamond!`);
+    }
 }
 
 if (map[ny][nx] === 8) {
@@ -3523,7 +3843,7 @@ updatePlayerState(); // Check HP and armor state after damage
             }
         }
     });
-if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive) {
+if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
     if (placeStairs()) {
         wave++;
         waveActive = false;
@@ -3602,9 +3922,10 @@ if (hit) {
                     // No space for satoshi drop
                 }
 
-// Scroll drop logic (1 in 25 chance)
-if (Math.random() < 1/25) {
+// Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
+if (!scrollDroppedThisFloor && Math.random() < 1/25) {
     let scrollPlaced = false;
+    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
     if (map[hit.y][hit.x] === 0) {
         map[hit.y][hit.x] = 11; // Scroll tile
         scrollDrops.push({ x: hit.x, y: hit.y });
@@ -3943,9 +4264,10 @@ function attack() {
                     // No space for satoshi drop
                 }
 
-// Scroll drop logic (1 in 25 chance)
-if (Math.random() < 1/25) {
+// Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
+if (!scrollDroppedThisFloor && Math.random() < 1/25) {
     let scrollPlaced = false;
+    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
     if (map[hit.y][hit.x] === 0) {
         map[hit.y][hit.x] = 11; // Scroll tile
         scrollDrops.push({ x: hit.x, y: hit.y });
@@ -4089,6 +4411,13 @@ function cleanupEventListeners() {
 function restart() {
     cleanupEventListeners();
     floor = 1;
+    inHideout = false;
+    previousFloorState = null;
+    jewellerPos = null;
+    blacksmithPos = null;
+    waypointPos = null;
+    p.hasDiamondArmor = false;
+    p.perfectlyCutDiamonds = 0;
     currentTheme = 'dungeon'; // Reset to default theme
     p.maxHP = 24; // Reset max HP to default
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
@@ -4112,6 +4441,7 @@ function restart() {
     autoSubmitTriggered = false;
     enemiesSpawnedThisFloor = 0;
     whalesSpawnedThisFloor = 0; // Added
+    scrollDroppedThisFloor = false; // Reset scroll drop flag
     initialSpawnDoneThisFloor = false;
     initialWaveSpawned = false;
     waveActive = false;
@@ -4175,6 +4505,7 @@ dpadButtons.forEach(button => {
         if (!button._isMoving && !splashActive && !gameOver) {
             button._isMoving = true;
             const dir = button.id;
+            swordDir = dir;                // <‑‑ added
             if (Date.now() - button._lastTouchMoveTime >= 200) {
                 move(dir);
                 button._lastTouchMoveTime = Date.now();
@@ -4297,6 +4628,29 @@ if (map[y][x] === 10) { // diamond tile
 if (map[y][x] === 11) { // scroll tile
     c.drawImage(assets.scroll, x * S, y * S, S, S);
 }
+
+// Save floor state before entering hideout
+if (!inHideout) {
+    previousFloorState = {
+        map: map.map(row => [...row]),
+        enemies: enemies.map(e => ({ ...e, type: { ...e.type } })),
+        rooms: rooms.map(r => ({ ...r })),
+        exit: exit ? { ...exit } : null,
+        satoshiDrops: [...satoshiDrops],
+        runeDrops: [...runeDrops],
+        scrollDrops: [...scrollDrops],
+        portals: portals.map(p => ({ ...p })),
+        floor: floor,
+        wave: wave,
+        enemiesSpawnedThisFloor: enemiesSpawnedThisFloor,
+        whalesSpawnedThisFloor: whalesSpawnedThisFloor,
+        initialSpawnDoneThisFloor: initialSpawnDoneThisFloor,
+        initialWaveSpawned: initialWaveSpawned,
+        waveActive: waveActive,
+        currentTheme: currentTheme
+    };
+}
+
 if (map[y][x] === 12) { // portal tile
     const portal = portals.find(p => p.x === x && p.y === y);
     if (portal) {
@@ -4309,6 +4663,20 @@ if (map[y][x] === 12) { // portal tile
         c.drawImage(assets.town_portal[portal.frameIndex], x * S, y * S, S, S);
     }
 }
+
+if (map[y][x] === 13) { // Diamond wall
+    c.drawImage(assets.themes.hideout.diamond_wall, x * S, y * S, S, S);
+}
+if (map[y][x] === 14) { // Jeweller
+    c.drawImage(assets.jeweller, x * S, y * S, S, S);
+}
+if (map[y][x] === 15) { // Blacksmith
+    c.drawImage(assets.blacksmith, x * S, y * S, S, S);
+}
+if (map[y][x] === 16) { // Waypoint
+    c.drawImage(assets.waypoint, x * S, y * S, S, S);
+}
+
 if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
     }
@@ -4334,13 +4702,10 @@ if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * 
         }
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
-	let frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
-	if (p.isFalling) {
-		frameKey = 'fall';
-	} else {
-		// Ensure default sprite when not falling
-		frameKey = p.hasArmor ? `armor_${baseDirection}` : baseDirection;
-	}
+let frameKey = p.hasDiamondArmor ? `diamond_armor_${baseDirection}` : (p.hasArmor ? `armor_${baseDirection}` : baseDirection);
+if (p.isFalling) {
+    frameKey = 'fall';
+}
 	const frame = p.anim.frames[frameKey][p.anim.frameIndex];
         c.save();
         if (direction === 'left') {
@@ -4567,7 +4932,7 @@ function gameLoop(timestamp) {
         document.getElementById('health').textContent = 0;
         // Reset text color to Bitcoin orange for game-over screen
         document.documentElement.style.setProperty('--text-color', '#ff8c00');
-        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input').forEach(el => {
+        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input, #sats-calc').forEach(el => {
             el.style.color = '#ff8c00';
         });
         // Auto-submit score with random name from names array only if gamepad is connected
@@ -4647,18 +5012,22 @@ document.addEventListener('keydown', e => {
     let moveDir = null;
     if (e.key === 'ArrowUp') {
         e.preventDefault();
+        swordDir = 'up';          // <‑‑ added
         moveDir = 'up';
         pendingKeyDir = 'up';
     } else if (e.key === 'ArrowDown') {
         e.preventDefault();
+        swordDir = 'down';         // <‑‑ added
         moveDir = 'down';
         pendingKeyDir = 'down';
     } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
+        swordDir = 'left';          // <‑‑ added
         moveDir = 'left';
         pendingKeyDir = 'left';
     } else if (e.key === 'ArrowRight') {
         e.preventDefault();
+        swordDir = 'right';         // <‑‑ added
         moveDir = 'right';
         pendingKeyDir = 'right';
     } else if (e.key === 'a') {
@@ -4716,6 +5085,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
         if (!button._isMoving && !splashActive && !gameOver) {
             button._isMoving = true;
             const dir = button.id;
+            swordDir = dir;                // <‑‑ added
             const now = Date.now();
             if (now - button._lastTouchMoveTime >= 200) {
                 move(dir);
@@ -5007,16 +5377,20 @@ function updateGamepad(timestamp) {
 // Handle D-pad (Axes 0 and 1)
 // deadZone already defined above
 
-// Determine current direction
-let newMoveDir = null;
-if (!splashActive && !gameOver) {
-    // Prioritize axis0 (left/right) if both active, matching touch behavior
-    if (Math.abs(axis0) > deadZone) {
-        newMoveDir = axis0 > 0 ? 'right' : 'left';
-    } else if (Math.abs(axis1) > deadZone) {
-        newMoveDir = axis1 > 0 ? 'down' : 'up';
+    // --- NEW: read dpad
+    let newMoveDir = null;
+    if (!splashActive && !gameOver) {
+        // Right stick (axes[2] = X, axes[3] = Y)
+        if (Math.abs(axis0) > deadZone) {
+            newMoveDir = axis0 > 0 ? 'right' : 'left';
+        } else if (Math.abs(axis1) > deadZone) {
+            newMoveDir = axis1 > 0 ? 'down' : 'up';
+        }
+        // Update the global swordDir so that `attack()` (and the projectile)
+        // will use the most recent aiming direction.
+        if (newMoveDir) swordDir = newMoveDir;
     }
-}
+
 
 // Handle continuous movement
 if (newMoveDir) {
@@ -5058,5 +5432,3 @@ if (newMoveDir) {
     </script>
 </body>
 </html>
-
-
