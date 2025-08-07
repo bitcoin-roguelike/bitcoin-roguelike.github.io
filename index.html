@@ -1302,27 +1302,7 @@ canvas.addEventListener('touchmove', (e) => {
             }
 }, { passive: false });
 
-// Touch handlers for #dpad buttons
-document.querySelectorAll('#dpad button').forEach(button => {
-    button.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent scrolling
-        e.stopPropagation(); // Stop event bubbling
-        button.classList.add('pressed'); // Add visual feedback
-            }, { passive: false });
-    button.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed'); // Remove visual feedback
-            }, { passive: false });
-    button.addEventListener('touchcancel', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed'); // Ensure removal on touch cancel
-            }, { passive: false });
-    button.addEventListener('click', (e) => {
-        e.preventDefault(); // Prevent default click behavior after onclick
-            }, { passive: false });
-});
+
 
 // Touch handlers for #actions buttons
 document.querySelectorAll('#actions button').forEach(button => {
@@ -4830,6 +4810,26 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
             c.fillRect(x * S, y * S, S, S);
         }
     }
+    
+/**
+ * Makes pure‑red pixels transparent (α = 0).  
+ * Works for desert and ruins – the same color is used for the “eyes” in those PNGs.
+ */
+function punchHoleThroughRed(imageData) {
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+        // Check for pure red or near-red with wider tolerance
+        if (
+            d[i] >= 200 && d[i] <= 255 && // Red component (wider range)
+            d[i+1] <= 50 && // Green component (wider range)
+            d[i+2] <= 50 // Blue component (wider range)
+        ) {
+            //console.log(`Found near-red pixel at index ${i}: R=${d[i]}, G=${d[i+1]}, B=${d[i+2]}, A=${d[i+3]}`);
+            d[i+3] = 1; // Mark eye pixels with a unique alpha (1) to identify them later
+        }
+    }
+}
+
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
     if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
@@ -4861,16 +4861,22 @@ enemies.forEach(e => {
         }
         
         // Draw the sprite on the temporary canvas
+        tempCtx.imageSmoothingEnabled = false;
         tempCtx.drawImage(img, 0, 0, S, S);
         
         // Apply theme-based effects
         if (isVisible) {
-            if (currentTheme === 'desert') {
-// Create a white-ish silhouette with slight transparency for desert theme
+if (currentTheme === 'desert') {
     const imageData = tempCtx.getImageData(0, 0, S, S);
     const data = imageData.data;
+    punchHoleThroughRed(imageData); // Mark eye pixels
     for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] > 0) { // Non-transparent pixel
+        if (data[i + 3] === 1) { // Eye pixel
+            data[i] = 255;     // Red
+            data[i + 1] = 0;   // Green
+            data[i + 2] = 0;   // Blue
+            data[i + 3] = 255; // Full opacity
+        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
             data[i] = 255;     // Red
             data[i + 1] = 242; // Green
             data[i + 2] = 230; // Blue
@@ -4879,14 +4885,19 @@ enemies.forEach(e => {
     }
     tempCtx.putImageData(imageData, 0, 0);
 } else if (currentTheme === 'ruins') {
-    // Create a Gargoyle silhouette with slight transparency for ruins theme
     const imageData = tempCtx.getImageData(0, 0, S, S);
     const data = imageData.data;
+    punchHoleThroughRed(imageData); // Mark eye pixels
     for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] > 0) { // Non-transparent pixel
+        if (data[i + 3] === 1) { // Eye pixel
+            data[i] = 255;     // Red
+            data[i + 1] = 0;   // Green
+            data[i + 2] = 0;   // Blue
+            data[i + 3] = 255; // Full opacity
+        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
             data[i] = 144;     // Red
             data[i + 1] = 126; // Green
-            data[i + 2] = 105;   // Blue
+            data[i + 2] = 105; // Blue
             data[i + 3] = Math.round(0.95 * 255); // 95% opacity
         }
     }
@@ -5483,4 +5494,5 @@ if (!splashActive && !gameOver) {
     </script>
 </body>
 </html>
+
 
