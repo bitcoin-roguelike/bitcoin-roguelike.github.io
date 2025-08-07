@@ -2392,33 +2392,56 @@ function checkCurrentRuneTile() {
         } else {
         }
 
-        // Place potions
-        let potionPositions = [];
-        let selectedRooms = rooms.sort(() => 0.5 - Math.random()).slice(0, Math.min(3, rooms.length));
-        let proximityRange = 5;
-        for (let r of selectedRooms) {
-            let x, y, attempts = 100;
-            while (attempts > 0 && potionPositions.length < 3) {
-                x = r.x + Math.floor(Math.random() * r.w);
-                y = r.y + Math.floor(Math.random() * r.h);
-                if (map[y][x] === 0 && (x !== p.x || y !== p.y) && !potionPositions.some(p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange)) {
-                    map[y][x] = 2;
-                    potionPositions.push({x, y});
-                    if (potionPositions.length === 3) break;
-                }
-                attempts--;
-            }
-            if (attempts === 0 && potionPositions.length < 3) {
-                console.warn('Potion placement failed: room=', r, 'attempts=', 100);
-                proximityRange = Math.max(proximityRange - 1, 1);
-                attempts = 100;
-                continue;
-            }
+/* -------------------------------------------------
+   Place potions – 2 total, never in the same room
+   ------------------------------------------------- */
+
+let potionPositions = [];                         // all potion coordinates
+let selectedRooms = rooms
+    .sort(() => 0.5 - Math.random())              // random order
+    .slice(0, Math.min(3, rooms.length));        // look at up to 3 rooms
+
+let proximityRange = 5;
+let potionsNeeded = 2;                             // how many potions are still missing
+
+for (let r of selectedRooms) {
+    if (potionsNeeded <= 0) break;                // we already have 2
+
+    let x, y, attempts = 100;
+
+    // try to place **one** potion in this room
+    while (attempts > 0 && potionsNeeded > 0) {
+        x = r.x + Math.floor(Math.random() * r.w);
+        y = r.y + Math.floor(Math.random() * r.h);
+
+        // empty tile, not the player, not too close to another potion
+        if (
+            map[y][x] === 0 &&
+            (x !== p.x || y !== p.y) &&
+            !potionPositions.some(
+                p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange
+            )
+        ) {
+            map[y][x] = 2;                        // place the potion
+            potionPositions.push({ x, y });
+            potionsNeeded--;                      // one potion placed
+            break;                                // stop – only one per room
         }
+
+        attempts--;
+    }
+
+    // If we ran out of attempts in this room, warn and try again with a tighter range
+    if (attempts === 0 && potionsNeeded > 0) {
+        console.warn('Potion placement failed: room=', r, 'attempts=', 100);
+        proximityRange = Math.max(proximityRange - 1, 1);
+        attempts = 100;                           // restart attempts for the same room
+    }
+}
 
         // Place pickaxe (chance to drop a pickaxe)
         let pickaxePositions = [];
-        if (Math.random() < 0.2) { // 20% chance to spawn a pickaxe
+        if (Math.random() < 0.25) { // 25% chance to spawn a pickaxe
             pickaxePositions = spawnItemWithChance(4, 1.0, 1, 5, true);
             if (pickaxePositions.length > 0) {
             } else {
@@ -4556,13 +4579,30 @@ dpadButtons.forEach(button => {
         apiTimeoutId = null;
     }
 
-    // Preserve gamepad and action button states
-    if (movementTimer) {
-        clearInterval(movementTimer);
-        movementTimer = null;
-        currentMoveDir = null;
-        pendingMove = false;
-    }
+// Preserve gamepad and action button states, but reinitialize gamepad polling
+if (movementTimer) {
+    clearInterval(movementTimer);
+    movementTimer = null;
+}
+currentMoveDir = null;
+gamepadMoveDir = null;
+gamepadLastMoveTime = 0;
+lastButtonsState = [];
+lastAxesState = { axis0: 0, axis1: 0 };
+if (gamepadIndex !== null) {
+    gamepadPollingActive = true;
+    // Start movementTimer for gamepad
+    movementTimer = setInterval(() => {
+        if (!splashActive && !gameOver && gamepadMoveDir) {
+            const now = Date.now();
+            if (now - gamepadLastMoveTime >= 150) {
+                move(gamepadMoveDir);
+                gamepadLastMoveTime = now;
+            }
+        }
+    }, 50); // Poll frequently, moves capped at 150ms
+    requestAnimationFrame(updateGamepad);
+}
 
     resetSplashScreen();
     initMap();
@@ -4967,10 +5007,10 @@ if (p.hp <= 0 && !gameOver) {
 document.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
         if (splashActive && !hasPlayedOnce) {
-                        return; // Block Enter on initial splash screen
+            return; // Block Enter on initial splash screen
         }
         if (splashActive && hasPlayedOnce) {
-                        const startButton = document.getElementById('start-button');
+            const startButton = document.getElementById('start-button');
             startButton.style.background = '#00b7ef'; // Mimic :hover color
             setTimeout(() => {
                 startButton.style.background = '#00e8d8'; // Revert to original color
@@ -4980,7 +5020,7 @@ document.addEventListener('keydown', e => {
                 sounds.music.pause(); // Ensure clean state
                 sounds.music.currentTime = 0;
                 sounds.music.play().then(() => {
-                                    }).catch(e => console.error('Music play failed on Enter:', e));
+                }).catch(e => console.error('Music play failed on Enter:', e));
             }
             fadeSplash();
             setTimeout(() => {
@@ -4993,13 +5033,13 @@ document.addEventListener('keydown', e => {
             return;
         }
         if (gameOver && hasPlayedOnce) {
-                        restart();
+            restart();
             return;
         }
     }
     if (gameOver || splashActive) return;
 
-     /*
+    /*
     // DEBUG: Runeword testing with keys 1-9 - comment out when not needed
     if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
         debugRuneword(e.key);
@@ -5008,50 +5048,51 @@ document.addEventListener('keydown', e => {
     }
     */
 
-    // Handle movement and actions
-    let moveDir = null;
-    if (e.key === 'ArrowUp') {
+    // Update key states and handle actions
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
-        swordDir = 'up';          // <‑‑ added
-        moveDir = 'up';
-        pendingKeyDir = 'up';
-    } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        swordDir = 'down';         // <‑‑ added
-        moveDir = 'down';
-        pendingKeyDir = 'down';
-    } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        swordDir = 'left';          // <‑‑ added
-        moveDir = 'left';
-        pendingKeyDir = 'left';
-    } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        swordDir = 'right';         // <‑‑ added
-        moveDir = 'right';
-        pendingKeyDir = 'right';
+        keyStates[e.key] = true;
     } else if (e.key === 'a') {
         attack();
     } else if (e.key === 'd') {
         usePotion();
     }
 
-    // Process movement: instant on first press, 50ms cap for all subsequent moves
-    if (moveDir) {
-        const now = Date.now();
-        if (!isKeyHeld || now - lastKeyMoveTime >= 50) {
-            move(moveDir);
-            lastKeyMoveTime = now;
-            isKeyHeld = true;
-        }
+    // Start keyboard movement polling if not already started
+    if (!keyboardMovementTimer) {
+        keyboardMovementTimer = setInterval(() => {
+            if (!splashActive && !gameOver) {
+                let newMoveDir = null;
+                if (keyStates.ArrowUp) {
+                    newMoveDir = 'up';
+                } else if (keyStates.ArrowDown) {
+                    newMoveDir = 'down';
+                } else if (keyStates.ArrowLeft) {
+                    newMoveDir = 'left';
+                } else if (keyStates.ArrowRight) {
+                    newMoveDir = 'right';
+                }
+
+                if (newMoveDir) {
+                    const now = Date.now();
+                    if (!currentMoveDir || newMoveDir !== currentMoveDir || now - lastMoveTime >= 150) {
+                        move(newMoveDir);
+                        lastMoveTime = now;
+                        currentMoveDir = newMoveDir;
+                    }
+                } else if (currentMoveDir) {
+                    currentMoveDir = null;
+                    lastMoveTime = 0;
+                }
+            }
+        }, 50); // Poll frequently, moves capped at 150ms
     }
 });
 
-// Clear pending direction and key held state on release
+// Update key states on release
 document.addEventListener('keyup', e => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        pendingKeyDir = null;
-        isKeyHeld = false;
+        keyStates[e.key] = false;
     }
 });
 
@@ -5085,7 +5126,6 @@ document.querySelectorAll('#dpad button').forEach(button => {
         if (!button._isMoving && !splashActive && !gameOver) {
             button._isMoving = true;
             const dir = button.id;
-            swordDir = dir;                // <‑‑ added
             const now = Date.now();
             if (now - button._lastTouchMoveTime >= 200) {
                 move(dir);
@@ -5135,35 +5175,49 @@ let lastGamepadPollTime = 0; // Throttle polling
 let movementTimer = null; // Timer for continuous movement
 let currentMoveDir = null; // Track current movement direction
 let lastMoveTime = 0; // Track last move to enforce 200ms interval
-let pendingMove = false; // Flag to prevent overlapping moves
+let gamepadMoveDir = null; // Track gamepad movement direction
+let gamepadLastMoveTime = 0; // Track last gamepad move to enforce 150ms interval
 let gamepadPollingActive = false; // Track if gamepad polling is enabled
 let hasPlayedOnce = false; // Track if player has played at least one game
+const keyStates = {
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false
+};
+let keyboardMovementTimer = null;
 
-// Handle gamepad connection
 window.addEventListener("gamepadconnected", (e) => {
     gamepadIndex = e.gamepad.index;
-        lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
+    lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
     lastGamepadPollTime = performance.now();
-    // Only start polling after user interaction (start button)
     if (!splashActive) {
         gamepadPollingActive = true;
-        updateGamepad(); // Start polling
-    } else {
-            }
+        if (!movementTimer) {
+            movementTimer = setInterval(() => {
+                if (!splashActive && !gameOver && gamepadMoveDir) {
+                    const now = Date.now();
+                    if (now - gamepadLastMoveTime >= 150) {
+                        move(gamepadMoveDir);
+                        gamepadLastMoveTime = now;
+                    }
+                }
+            }, 50); // Poll frequently, moves capped at 150ms
+        }
+        updateGamepad();
+    }
 });
 
-// Handle gamepad disconnection
 window.addEventListener("gamepaddisconnected", (e) => {
-        gamepadIndex = null;
+    gamepadIndex = null;
     lastButtonsState = [];
     gamepadPollingActive = false;
     if (movementTimer) {
         clearInterval(movementTimer);
         movementTimer = null;
-        currentMoveDir = null;
-        lastMoveTime = 0;
-        pendingMove = false;
-            }
+    }
+    gamepadMoveDir = null;
+    gamepadLastMoveTime = 0;
 });
 
 // Start game function for splash screen
@@ -5282,22 +5336,33 @@ function updateGamepad(timestamp) {
         }
     }
 
-    if (!gamepadPollingActive) {
-        // Allow Start button to work at splash screen even if polling was stopped
-        const gamepad = navigator.getGamepads()[gamepadIndex];
-        if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3] && splashActive) {
-            const nowTime = Date.now();
-            if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
-                startGame();
-                lastStartPressTime = nowTime;
-                gamepadPollingActive = true; // Resume polling after starting
-                console.log('Start button pressed at splash screen');
+if (!gamepadPollingActive) {
+    const gamepad = navigator.getGamepads()[gamepadIndex];
+    if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3] && splashActive) {
+        const nowTime = Date.now();
+        if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
+            startGame();
+            lastStartPressTime = nowTime;
+            gamepadPollingActive = true;
+            console.log('Start button pressed at splash screen');
+            // Start movementTimer for gamepad
+            if (!movementTimer) {
+                movementTimer = setInterval(() => {
+                    if (!splashActive && !gameOver && gamepadMoveDir) {
+                        const now = Date.now();
+                        if (now - gamepadLastMoveTime >= 150) {
+                            move(gamepadMoveDir);
+                            gamepadLastMoveTime = now;
+                        }
+                    }
+                }, 50); // Poll frequently, moves capped at 150ms
             }
-            lastButtonsState[3] = gamepad.buttons[3].pressed;
         }
-        requestAnimationFrame(updateGamepad);
-        return;
+        lastButtonsState[3] = gamepad.buttons[3].pressed;
     }
+    requestAnimationFrame(updateGamepad);
+    return;
+}
 
     const now = performance.now();
     if (now - lastGamepadPollTime < GAMEPAD_POLL_INTERVAL) {
@@ -5314,7 +5379,6 @@ function updateGamepad(timestamp) {
             movementTimer = null;
             currentMoveDir = null;
             lastMoveTime = 0;
-            pendingMove = false;
         }
         console.log('Gamepad disconnected');
         return;
@@ -5377,49 +5441,38 @@ function updateGamepad(timestamp) {
 // Handle D-pad (Axes 0 and 1)
 // deadZone already defined above
 
-    // --- NEW: read dpad
+// Determine current direction
+let newMoveDir = null;
+if (!splashActive && !gameOver) {
+    // Prioritize axis0 (left/right) if both active, matching touch behavior
+    if (Math.abs(axis0) > deadZone) {
+        newMoveDir = axis0 > 0 ? 'right' : 'left';
+    } else if (Math.abs(axis1) > deadZone) {
+        newMoveDir = axis1 > 0 ? 'down' : 'up';
+    }
+}
+
+// Update movement direction: instant on new direction, handled by movementTimer
+if (!splashActive && !gameOver) {
     let newMoveDir = null;
-    if (!splashActive && !gameOver) {
-        // Right stick (axes[2] = X, axes[3] = Y)
-        if (Math.abs(axis0) > deadZone) {
-            newMoveDir = axis0 > 0 ? 'right' : 'left';
-        } else if (Math.abs(axis1) > deadZone) {
-            newMoveDir = axis1 > 0 ? 'down' : 'up';
-        }
-        // Update the global swordDir so that `attack()` (and the projectile)
-        // will use the most recent aiming direction.
-        if (newMoveDir) swordDir = newMoveDir;
+    if (Math.abs(axis0) > deadZone) {
+        newMoveDir = axis0 > 0 ? 'right' : 'left';
+    } else if (Math.abs(axis1) > deadZone) {
+        newMoveDir = axis1 > 0 ? 'down' : 'up';
     }
 
-
-// Handle continuous movement
-if (newMoveDir) {
-    // New direction or continuing movement
-    if (newMoveDir !== currentMoveDir) {
-        if (movementTimer) {
-            clearInterval(movementTimer);
-            movementTimer = null;
-        }
-        // Immediate move on new direction
-        move(newMoveDir);
-        lastMoveTime = Date.now();
-        currentMoveDir = newMoveDir;
-        // Start continuous movement timer
-        movementTimer = setInterval(() => {
-            if (!splashActive && !gameOver && currentMoveDir) {
-                move(currentMoveDir);
-                lastMoveTime = Date.now();
+    if (newMoveDir !== gamepadMoveDir) {
+        gamepadMoveDir = newMoveDir;
+        if (newMoveDir) {
+            const now = Date.now();
+            if (!gamepadLastMoveTime || now - gamepadLastMoveTime >= 150) {
+                move(newMoveDir);
+                gamepadLastMoveTime = now;
             }
-        }, 200); // Move every 200ms
+        } else {
+            gamepadLastMoveTime = 0;
+        }
     }
-} else if (currentMoveDir) {
-    // D-pad released: clear timer
-    if (movementTimer) {
-        clearInterval(movementTimer);
-        movementTimer = null;
-    }
-    currentMoveDir = null;
-    lastMoveTime = 0;
 }
 
     // Update axis states
