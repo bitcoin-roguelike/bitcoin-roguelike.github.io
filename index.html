@@ -15,7 +15,7 @@
             justify-content: center; 
             align-items: center; 
             min-height: 10px; 
-            background: #222; 
+            background: #222;
             font-family: 'VT323', monospace;
             overflow: hidden;
             touch-action: pan-x pan-y; /* Prevents pinch-to-zoom */
@@ -1302,27 +1302,37 @@ canvas.addEventListener('touchmove', (e) => {
             }
 }, { passive: false });
 
-// Touch handlers for #dpad buttons
+// ----------  Dpad touch handlers  ----------
 document.querySelectorAll('#dpad button').forEach(button => {
-    button.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent scrolling
-        e.stopPropagation(); // Stop event bubbling
-        button.classList.add('pressed'); // Add visual feedback
-            }, { passive: false });
-    button.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed'); // Remove visual feedback
-            }, { passive: false });
-    button.addEventListener('touchcancel', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed'); // Ensure removal on touch cancel
-            }, { passive: false });
-    button.addEventListener('click', (e) => {
-        e.preventDefault(); // Prevent default click behavior after onclick
-            }, { passive: false });
+  button.addEventListener('touchstart', e => {
+    e.preventDefault();          // stop scrolling / zoom
+    e.stopPropagation();         // keep the event local to the button
+    button.classList.add('pressed');
+
+    // start continuous movement
+    startTouchMove(button.id);   // button.id is one of "up","down","left","right"
+  }, { passive: false });
+
+  button.addEventListener('touchend', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    button.classList.remove('pressed');
+
+    // stop continuous movement
+    stopTouchMove();
+  }, { passive: false });
+
+  button.addEventListener('touchcancel', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    button.classList.remove('pressed');
+    stopTouchMove();
+  }, { passive: false });
+
+  // keep the legacy click‑preventer so the button doesn’t trigger a mouse click
+  button.addEventListener('click', e => e.preventDefault(), { passive: false });
 });
+
 
 // Touch handlers for #actions buttons
 document.querySelectorAll('#actions button').forEach(button => {
@@ -5113,54 +5123,31 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         updateSatsDisplay();
         populateNameList();
         requestAnimationFrame(gameLoop);
-        
-document.querySelectorAll('#dpad button').forEach(button => {
-    button._touchMovementTimer = null;
-    button._lastTouchMoveTime = 0;
-    button._isMoving = false;
+ 
+// ----------  Touch‑dpad helpers  ----------
+let touchMoveDir = null;          // direction currently being held
+let touchMoveInterval = null;     // global interval for continuous movement
 
-    button._touchstartHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.add('pressed');
-        if (!button._isMoving && !splashActive && !gameOver) {
-            button._isMoving = true;
-            const dir = button.id;
-            const now = Date.now();
-            if (now - button._lastTouchMoveTime >= 200) {
-                move(dir);
-                button._lastTouchMoveTime = now;
-            }
-            button._touchMovementTimer = setInterval(() => {
-                if (!splashActive && !gameOver && button._isMoving) {
-                    const now = Date.now();
-                    if (now - button._lastTouchMoveTime >= 200) {
-                        move(dir);
-                        button._lastTouchMoveTime = now;
-                    }
-                }
-            }, 200);
-        }
-    };
+function startTouchMove(dir) {
+  if (splashActive || gameOver) return;   // nothing to do while the UI is frozen
 
-    button._touchendHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed');
-        if (button._touchMovementTimer) {
-            clearInterval(button._touchMovementTimer);
-            button._touchMovementTimer = null;
-        }
-        button._isMoving = false;
-        button._lastTouchMoveTime = 0;
-    };
+  touchMoveDir = dir;
+  move(dir);                               // one instant move on touch start
 
-    button._touchcancelHandler = button._touchendHandler;
+  // start a single interval that keeps moving every 150 ms
+  if (touchMoveInterval) clearInterval(touchMoveInterval);
+  touchMoveInterval = setInterval(() => {
+    if (!splashActive && !gameOver) move(dir);
+  }, 150);
+}
 
-    button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
-    button.addEventListener('touchend', button._touchendHandler, { passive: false });
-    button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
-});
+function stopTouchMove() {
+  touchMoveDir = null;
+  if (touchMoveInterval) {
+    clearInterval(touchMoveInterval);
+    touchMoveInterval = null;
+  }
+}
 
 //////////////////////
 // Gamepad support //
