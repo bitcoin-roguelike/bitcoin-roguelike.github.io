@@ -15,7 +15,7 @@
             justify-content: center; 
             align-items: center; 
             min-height: 10px; 
-            background: #222;
+            background: #222; 
             font-family: 'VT323', monospace;
             overflow: hidden;
             touch-action: pan-x pan-y; /* Prevents pinch-to-zoom */
@@ -1302,38 +1302,27 @@ canvas.addEventListener('touchmove', (e) => {
             }
 }, { passive: false });
 
-// ─────────────────────────────────────────────────────────────
-//  Dpad touch handlers – use the single global interval
-// ─────────────────────────────────────────────────────────────
+// Touch handlers for #dpad buttons
 document.querySelectorAll('#dpad button').forEach(button => {
-  button.addEventListener('touchstart', e => {
-    e.preventDefault();          // stop scrolling / zoom
-    e.stopPropagation();         // keep the event local to the button
-    button.classList.add('pressed');
-
-    startTouchMove(button.id);   // button.id is one of "up","down","left","right"
-  }, { passive: false });
-
-  button.addEventListener('touchend', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    button.classList.remove('pressed');
-
-    stopTouchMove();             // kill the global interval
-  }, { passive: false });
-
-  button.addEventListener('touchcancel', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    button.classList.remove('pressed');
-    stopTouchMove();
-  }, { passive: false });
-
-  // keep the legacy click‑preventer so the button doesn’t trigger a mouse click
-  button.addEventListener('click', e => e.preventDefault(), { passive: false });
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Prevent scrolling
+        e.stopPropagation(); // Stop event bubbling
+        button.classList.add('pressed'); // Add visual feedback
+            }, { passive: false });
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed'); // Remove visual feedback
+            }, { passive: false });
+    button.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed'); // Ensure removal on touch cancel
+            }, { passive: false });
+    button.addEventListener('click', (e) => {
+        e.preventDefault(); // Prevent default click behavior after onclick
+            }, { passive: false });
 });
-
-
 
 // Touch handlers for #actions buttons
 document.querySelectorAll('#actions button').forEach(button => {
@@ -4443,14 +4432,7 @@ function cleanupEventListeners() {
 }
 
 function restart() {
-    cleanupEventListeners();          // removes the old per‑button listeners
-    stopTouchMove();                  // ← new line – kill the global interval
-    if (keyboardMovementTimer) {
-        clearInterval(keyboardMovementTimer);
-        keyboardMovementTimer = null;
-    }
-    currentMoveDir = null;
-    lastMoveTime = 0;
+    cleanupEventListeners();
     floor = 1;
     inHideout = false;
     previousFloorState = null;
@@ -5131,34 +5113,54 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         updateSatsDisplay();
         populateNameList();
         requestAnimationFrame(gameLoop);
- 
-// ─────────────────────────────────────────────────────────────
-//  Touch‑dpad helpers – only one interval runs at a time
-// ─────────────────────────────────────────────────────────────
-let touchMoveDir = null;        // current direction being held
-let touchMoveInterval = null;   // the global interval that keeps moving
+        
+document.querySelectorAll('#dpad button').forEach(button => {
+    button._touchMovementTimer = null;
+    button._lastTouchMoveTime = 0;
+    button._isMoving = false;
 
-function startTouchMove(dir) {
-  if (splashActive || gameOver) return;   // nothing to do while the UI is frozen
+    button._touchstartHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.add('pressed');
+        if (!button._isMoving && !splashActive && !gameOver) {
+            button._isMoving = true;
+            const dir = button.id;
+            const now = Date.now();
+            if (now - button._lastTouchMoveTime >= 200) {
+                move(dir);
+                button._lastTouchMoveTime = now;
+            }
+            button._touchMovementTimer = setInterval(() => {
+                if (!splashActive && !gameOver && button._isMoving) {
+                    const now = Date.now();
+                    if (now - button._lastTouchMoveTime >= 200) {
+                        move(dir);
+                        button._lastTouchMoveTime = now;
+                    }
+                }
+            }, 200);
+        }
+    };
 
-  touchMoveDir = dir;
-  move(dir);                               // the first instant move
+    button._touchendHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        button.classList.remove('pressed');
+        if (button._touchMovementTimer) {
+            clearInterval(button._touchMovementTimer);
+            button._touchMovementTimer = null;
+        }
+        button._isMoving = false;
+        button._lastTouchMoveTime = 0;
+    };
 
-  // start a single interval that keeps moving every 150 ms
-  if (touchMoveInterval) clearInterval(touchMoveInterval);
-  touchMoveInterval = setInterval(() => {
-    if (!splashActive && !gameOver) move(dir);
-  }, 150);
-}
+    button._touchcancelHandler = button._touchendHandler;
 
-function stopTouchMove() {
-  touchMoveDir = null;
-  if (touchMoveInterval) {
-    clearInterval(touchMoveInterval);
-    touchMoveInterval = null;
-  }
-}
-
+    button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
+    button.addEventListener('touchend', button._touchendHandler, { passive: false });
+    button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
+});
 
 //////////////////////
 // Gamepad support //
