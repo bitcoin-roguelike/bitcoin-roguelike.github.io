@@ -4413,26 +4413,81 @@ function usePotion() {
     needsRedraw = true;
 }
 
-// Add at the top of the script section
 let dpadButtons = document.querySelectorAll('#dpad button');
 let actionsButtons = document.querySelectorAll('#actions button');
-function cleanupEventListeners() {
+
+/* initialise all touch listeners (called on load and after a restart) */
+function initTouchControls() {
+    /* ----- D‑pad -------------------------------------------------- */
     dpadButtons.forEach(button => {
-        button.removeEventListener('touchstart', button._touchstartHandler);
-        button.removeEventListener('touchend', button._touchendHandler);
-        button.removeEventListener('touchcancel', button._touchcancelHandler);
-        button.removeEventListener('click', button._clickHandler);
-    });
-    actionsButtons.forEach(button => {
-        button.removeEventListener('touchstart', button._touchstartHandler);
-        button.removeEventListener('touchend', button._touchendHandler);
-        button.removeEventListener('touchcancel', button._touchcancelHandler);
-        button.removeEventListener('click', button._clickHandler);
+        /* store the handlers so they can be removed later */
+        button._touchstartHandler = function (e) {
+            e.preventDefault(); e.stopPropagation();
+            if (inputBlocked || splashActive || gameOver) return;
+
+            button.classList.add('pressed');
+
+            /* move immediately */
+            move(button.id);
+
+            /* continuous movement – 150 ms between steps */
+            button._touchMovementTimer = setInterval(() => {
+                if (!splashActive && !gameOver) move(button.id);
+            }, 150);
+        };
+
+        button._touchendHandler = function (e) {
+            e.preventDefault(); e.stopPropagation();
+            button.classList.remove('pressed');
+            if (button._touchMovementTimer) {
+                clearInterval(button._touchMovementTimer);
+                button._touchMovementTimer = null;
+            }
+        };
+
+        button._touchcancelHandler = button._touchendHandler;
+        button._clickHandler = function (e) { e.preventDefault(); };
+
+        button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
+        button.addEventListener('touchend', button._touchendHandler, { passive: false });
+        button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
+        button.addEventListener('click', button._clickHandler, { passive: false });
     });
 }
 
+function cleanupEventListeners() {
+    dpadButtons.forEach(button => {
+        if (button._touchstartHandler) button.removeEventListener('touchstart', button._touchstartHandler);
+        if (button._touchendHandler) button.removeEventListener('touchend', button._touchendHandler);
+        if (button._touchcancelHandler) button.removeEventListener('touchcancel', button._touchcancelHandler);
+        if (button._clickHandler) button.removeEventListener('click', button._clickHandler);
+        /* stop any running interval */
+        if (button._touchMovementTimer) {
+            clearInterval(button._touchMovementTimer);
+            button._touchMovementTimer = null;
+        }
+    });
+
+    actionsButtons.forEach(button => {
+        if (button._touchstartHandler) button.removeEventListener('touchstart', button._touchstartHandler);
+        if (button._touchendHandler) button.removeEventListener('touchend', button._touchendHandler);
+        if (button._touchcancelHandler) button.removeEventListener('touchcancel', button._touchcancelHandler);
+        if (button._clickHandler) button.removeEventListener('click', button._clickHandler);
+    });
+}
+
+
+/* ------------------------------------------------------------------
+   Restart the game – reset state & re‑initialise listeners
+   ------------------------------------------------------------------ */
 function restart() {
+    /* ------------------------------------------------------------------
+       1. Clean up old listeners/timers
+       ------------------------------------------------------------------ */
     cleanupEventListeners();
+    /* ------------------------------------------------------------------
+       2. Reset all game state variables
+       ------------------------------------------------------------------ */
     floor = 1;
     inHideout = false;
     previousFloorState = null;
@@ -4441,10 +4496,9 @@ function restart() {
     waypointPos = null;
     p.hasDiamondArmor = false;
     p.perfectlyCutDiamonds = 0;
-    currentTheme = 'dungeon'; // Reset to default theme
-    p.maxHP = 24; // Reset max HP to default
-    document.documentElement.style.setProperty('--text-color', '#ff8c00'); // Reset to orange
-    document.documentElement.style.setProperty('--text-shadow', '-1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000'); // Reset outlined font
+    currentTheme = 'dungeon';            // default theme
+    p.maxHP = 24;                       // default max HP
+    document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
     wave = 1;
     document.getElementById('wave').textContent = wave;
     p.hp = 24;
@@ -4463,8 +4517,8 @@ function restart() {
     gameOverSoundPlayed = false;
     autoSubmitTriggered = false;
     enemiesSpawnedThisFloor = 0;
-    whalesSpawnedThisFloor = 0; // Added
-    scrollDroppedThisFloor = false; // Reset scroll drop flag
+    whalesSpawnedThisFloor = 0;
+    scrollDroppedThisFloor = false;
     initialSpawnDoneThisFloor = false;
     initialWaveSpawned = false;
     waveActive = false;
@@ -4474,26 +4528,22 @@ function restart() {
     killsLog = [];
     satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
     kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-satoshiDrops = [];
-scrollDrops = [];
-portals = [];
-swordDir = 'right';
+    satoshiDrops = [];
+    scrollDrops = [];
+    portals = [];
+    swordDir = 'right';
     swordActive = false;
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
-    hasPlayedOnce = true; // Ensure Enter key is enabled for splash screen after restart
+    hasPlayedOnce = true;  // allow the “Enter” key to start the next game
     populateNameList();
-    projectiles = []; // Reset projectiles
-    runeDrops = [];
-    p.runes = [];
-    p.runewords = [];
-    p.immortal = false;
-    p.ripBlast = false; // Reset RIP blast flag
-    document.getElementById('runes').textContent = 'None';
 
+    /* ------------------------------------------------------------------
+       3. Reset UI elements
+       ------------------------------------------------------------------ */
     const whaleHashIdsDiv = document.getElementById('whale-hash-ids');
-    whaleHashIdsDiv.innerHTML = ''; // Clear existing content
+    whaleHashIdsDiv.innerHTML = ''; // clear
     const newDiv = document.createElement('div');
     newDiv.innerHTML = whaleHashIds.join('<br>');
     whaleHashIdsDiv.appendChild(newDiv);
@@ -4518,92 +4568,40 @@ swordDir = 'right';
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
 
-// Re-attach event listeners for dpadButtons only
-dpadButtons.forEach(button => {
-    button._touchstartHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (inputBlocked || splashActive || gameOver) return;
-        button.classList.add('pressed');
-        if (!button._isMoving && !splashActive && !gameOver) {
-            button._isMoving = true;
-            const dir = button.id;
-            swordDir = dir;                // <‑‑ added
-            if (Date.now() - button._lastTouchMoveTime >= 200) {
-                move(dir);
-                button._lastTouchMoveTime = Date.now();
-            }
-            button._touchMovementTimer = setInterval(() => {
-                if (!splashActive && !gameOver && button._isMoving) {
+    /* ------------------------------------------------------------------
+       4. Re‑attach touch listeners
+       ------------------------------------------------------------------ */
+    initTouchControls();
+
+    /* ------------------------------------------------------------------
+       5. Reset audio & gamepad polling
+       ------------------------------------------------------------------ */
+    if (apiTimeoutId) clearTimeout(apiTimeoutId);
+    if (movementTimer) clearInterval(movementTimer);
+    movementTimer = null;
+    gamepadMoveDir = null;
+    gamepadLastMoveTime = 0;
+    lastButtonsState = [];
+    lastAxesState = { axis0: 0, axis1: 0 };
+    if (gamepadIndex !== null) {
+        gamepadPollingActive = true;
+        if (!movementTimer) {
+            movementTimer = setInterval(() => {
+                if (!splashActive && !gameOver && gamepadMoveDir) {
                     const now = Date.now();
-                    if (now - button._lastTouchMoveTime >= 200) {
-                        move(dir);
-                        button._lastTouchMoveTime = now;
+                    if (now - gamepadLastMoveTime >= 150) {
+                        move(gamepadMoveDir);
+                        gamepadLastMoveTime = now;
                     }
                 }
-            }, 200);
+            }, 50);
         }
-    };
-    button._touchendHandler = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        button.classList.remove('pressed');
-        if (button._touchMovementTimer) {
-            clearInterval(button._touchMovementTimer);
-            button._touchMovementTimer = null;
-        }
-        button._isMoving = false;
-        button._lastTouchMoveTime = 0;
-    };
-    button._touchcancelHandler = button._touchendHandler;
-    button._clickHandler = (e) => e.preventDefault();
-    button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
-    button.addEventListener('touchend', button._touchendHandler, { passive: false });
-    button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
-    button.addEventListener('click', button._clickHandler, { passive: false });
-    button._lastTouchMoveTime = 0;
-    button._isMoving = false;
-});
-
-    const battleEvents = document.getElementById('battle-events');
-    battleEvents.style.transform = 'translateX(-100%)';
-    battleEvents.style.opacity = '0';
-    splashActive = true;
-
-    // Pause and reset music without clearing Web Audio buffers
-    sounds.music.pause();
-    sounds.music.currentTime = 0;
-
-    if (apiTimeoutId) {
-        clearTimeout(apiTimeoutId);
-        apiTimeoutId = null;
+        requestAnimationFrame(updateGamepad);
     }
 
-// Preserve gamepad and action button states, but reinitialize gamepad polling
-if (movementTimer) {
-    clearInterval(movementTimer);
-    movementTimer = null;
-}
-currentMoveDir = null;
-gamepadMoveDir = null;
-gamepadLastMoveTime = 0;
-lastButtonsState = [];
-lastAxesState = { axis0: 0, axis1: 0 };
-if (gamepadIndex !== null) {
-    gamepadPollingActive = true;
-    // Start movementTimer for gamepad
-    movementTimer = setInterval(() => {
-        if (!splashActive && !gameOver && gamepadMoveDir) {
-            const now = Date.now();
-            if (now - gamepadLastMoveTime >= 150) {
-                move(gamepadMoveDir);
-                gamepadLastMoveTime = now;
-            }
-        }
-    }, 50); // Poll frequently, moves capped at 150ms
-    requestAnimationFrame(updateGamepad);
-}
-
+    /* ------------------------------------------------------------------
+       6. Reset visual state
+       ------------------------------------------------------------------ */
     resetSplashScreen();
     initMap();
     updatePlayerState();
@@ -5485,3 +5483,4 @@ if (!splashActive && !gameOver) {
     </script>
 </body>
 </html>
+
