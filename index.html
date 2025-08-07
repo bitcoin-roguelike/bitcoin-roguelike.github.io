@@ -1302,14 +1302,15 @@ canvas.addEventListener('touchmove', (e) => {
             }
 }, { passive: false });
 
-// ----------  Dpad touch handlers  ----------
+// ─────────────────────────────────────────────────────────────
+//  Dpad touch handlers – use the single global interval
+// ─────────────────────────────────────────────────────────────
 document.querySelectorAll('#dpad button').forEach(button => {
   button.addEventListener('touchstart', e => {
     e.preventDefault();          // stop scrolling / zoom
     e.stopPropagation();         // keep the event local to the button
     button.classList.add('pressed');
 
-    // start continuous movement
     startTouchMove(button.id);   // button.id is one of "up","down","left","right"
   }, { passive: false });
 
@@ -1318,8 +1319,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
     e.stopPropagation();
     button.classList.remove('pressed');
 
-    // stop continuous movement
-    stopTouchMove();
+    stopTouchMove();             // kill the global interval
   }, { passive: false });
 
   button.addEventListener('touchcancel', e => {
@@ -1332,6 +1332,7 @@ document.querySelectorAll('#dpad button').forEach(button => {
   // keep the legacy click‑preventer so the button doesn’t trigger a mouse click
   button.addEventListener('click', e => e.preventDefault(), { passive: false });
 });
+
 
 
 // Touch handlers for #actions buttons
@@ -4442,7 +4443,14 @@ function cleanupEventListeners() {
 }
 
 function restart() {
-    cleanupEventListeners();
+    cleanupEventListeners();          // removes the old per‑button listeners
+    stopTouchMove();                  // ← new line – kill the global interval
+    if (keyboardMovementTimer) {
+        clearInterval(keyboardMovementTimer);
+        keyboardMovementTimer = null;
+    }
+    currentMoveDir = null;
+    lastMoveTime = 0;
     floor = 1;
     inHideout = false;
     previousFloorState = null;
@@ -5124,15 +5132,17 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         populateNameList();
         requestAnimationFrame(gameLoop);
  
-// ----------  Touch‑dpad helpers  ----------
-let touchMoveDir = null;          // direction currently being held
-let touchMoveInterval = null;     // global interval for continuous movement
+// ─────────────────────────────────────────────────────────────
+//  Touch‑dpad helpers – only one interval runs at a time
+// ─────────────────────────────────────────────────────────────
+let touchMoveDir = null;        // current direction being held
+let touchMoveInterval = null;   // the global interval that keeps moving
 
 function startTouchMove(dir) {
   if (splashActive || gameOver) return;   // nothing to do while the UI is frozen
 
   touchMoveDir = dir;
-  move(dir);                               // one instant move on touch start
+  move(dir);                               // the first instant move
 
   // start a single interval that keeps moving every 150 ms
   if (touchMoveInterval) clearInterval(touchMoveInterval);
@@ -5148,6 +5158,7 @@ function stopTouchMove() {
     touchMoveInterval = null;
   }
 }
+
 
 //////////////////////
 // Gamepad support //
