@@ -255,9 +255,19 @@ button:hover {
         #start-button:hover {
             background: #00b7ef;
         }
-#dpad button:active, #dpad button.pressed {
-    background: rgba(224, 123, 0, 0.7);
-    transition: none; /* Instant change for pressed state */
+#dpad button {
+    -webkit-tap-highlight-color: transparent; /* Remove browser default highlight */
+    touch-action: none; /* Prevent browser touch interference */
+    user-select: none; /* Prevent text selection */
+    background: transparent; /* Default background */
+    transition: background 0.1s ease-out; /* Brief flash for press */
+}
+
+#dpad button:active {
+    background: rgba(224, 123, 0, 0.7); /* Orange flash on press */
+}
+#dpad button.pressed {
+    background: rgba(224, 123, 0, 0.2); /* Subtle feedback for held state */
 }
 
 #submit-score, #view-leaderboard, #restart-game {
