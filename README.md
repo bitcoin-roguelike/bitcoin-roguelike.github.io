@@ -15,6 +15,19 @@ A button = potion<br/>
 Select button = mute music<br/>
 Start button = start the game / restart the game<br/>
 <br/>
+Or use a Playstation usb gamepad<br/>
+D-pad to move around<br/>
+○ button = attack<br/>
+× button = potion<br/>
+□ = mute music<br/>
+△ = start the game / restart the game<br/>
+<br/>
+Or use a XBOX usb gamepad<br/>
+D-pad to move around<br/>
+B button = attack<br/>
+A button = potion<br/>
+Y = mute music<br/>
+X = start the game / restart the game<br/>
 Note! At startup, (one time only) you need to click or touch the "Start button" on screen to start the game<br/>
 This is a compability limitation due to Safari on IOS requiring audio to be activated by click or touch<br/>
 <br/>
