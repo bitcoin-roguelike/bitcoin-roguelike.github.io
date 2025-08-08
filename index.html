@@ -5287,6 +5287,7 @@ let currentMoveDir = null; // Track current movement direction
 let lastMoveTime = 0; // Track last move to enforce 200ms interval
 let gamepadMoveDir = null; // Track gamepad movement direction
 let gamepadLastMoveTime = 0; // Track last gamepad move to enforce 200ms interval
+let lastKeySimulationTime = 0; // Track last simulated key press to prevent sleep mode
 let gamepadPollingActive = false; // Track if gamepad polling is enabled
 let hasPlayedOnce = false; // Track if player has played at least one game
 const keyStates = {
@@ -5550,7 +5551,18 @@ function updateGamepad(timestamp) {
     // Check for actual gamepad input (buttons or axes)
     const buttons = gamepad.buttons;
     const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
-
+    
+    // Simulate a keyboard key press to prevent sleep mode when gamepad is active
+    if (hasInput && !splashActive && !gameOver) {
+        const now = performance.now();
+        if (!lastKeySimulationTime || now - lastKeySimulationTime >= 30000) { // Simulate every 30 seconds
+            const keyEvent = new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32 });
+            document.dispatchEvent(keyEvent);
+            console.log('Simulated spacebar key press to prevent sleep mode at', now);
+            lastKeySimulationTime = now;
+        }
+    }
+    
     if (!splashActive && !gameOver && inputBlocked) {
         // Just return, don't process movement
         requestAnimationFrame(updateGamepad);
