@@ -5433,41 +5433,53 @@ function startGame() {
     }, 2000); // Match original start-button delay
 }
 
-
 window.addEventListener("gamepadconnected", (e) => {
-    gamepadIndex = e.gamepad.index;
-    lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
-    lastGamepadPollTime = performance.now();
-    console.log('Gamepad connected:', e.gamepad.id);
-    
-    if (!splashActive) {
-        gamepadPollingActive = true;
-        if (!movementTimer) {
-            movementTimer = setInterval(() => {
-                if (!splashActive && !gameOver && gamepadMoveDir) {
-                    const now = Date.now();
-                    if (now - gamepadLastMoveTime >= 150) {
-                        move(gamepadMoveDir);
-                        gamepadLastMoveTime = now;
+    // Only connect if no gamepad is currently connected or if it's a different gamepad
+    if (gamepadIndex === null) {
+        gamepadIndex = e.gamepad.index;
+        lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
+        lastGamepadPollTime = performance.now();
+        console.log('Gamepad connected:', e.gamepad.id);
+        
+        if (!splashActive) {
+            gamepadPollingActive = true;
+            if (!movementTimer) {
+                movementTimer = setInterval(() => {
+                    if (!splashActive && !gameOver && gamepadMoveDir) {
+                        const now = Date.now();
+                        if (now - gamepadLastMoveTime >= 150) {
+                            move(gamepadMoveDir);
+                            gamepadLastMoveTime = now;
+                        }
                     }
-                }
-            }, 50);
+                }, 50);
+            }
+            updateGamepad();
         }
-        updateGamepad();
+    } else {
+        console.log('Gamepad connected but already tracking:', e.gamepad.id);
     }
 });
 
 window.addEventListener("gamepaddisconnected", (e) => {
-    gamepadIndex = null;
-    lastButtonsState = [];
-    gamepadPollingActive = false;
-    if (movementTimer) {
-        clearInterval(movementTimer);
-        movementTimer = null;
+    // Only handle disconnection if this is the same gamepad we were tracking
+    if (gamepadIndex === e.gamepad.index) {
+        gamepadIndex = null;
+        lastButtonsState = [];
+        gamepadPollingActive = false;
+        
+        // Clear movement timer if active
+        if (movementTimer) {
+            clearInterval(movementTimer);
+            movementTimer = null;
+        }
+        
+        // Reset gamepad movement tracking
+        gamepadMoveDir = null;
+        gamepadLastMoveTime = 0;
+        
+        console.log('Gamepad disconnected:', e.gamepad.id);
     }
-    gamepadMoveDir = null;
-    gamepadLastMoveTime = 0;
-    console.log('Gamepad disconnected:', e.gamepad.id);
 });
 
 // Modified updateGamepad function to use the axes class
