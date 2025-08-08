@@ -1306,16 +1306,20 @@ let touchTimeout = null; // Global variable for touch timeout
 let dpadButtons = document.querySelectorAll('#dpad button');
 let actionsButtons = document.querySelectorAll('#actions button');
 
-// Block canvas touch interference
+// Improved canvas touch handling to prevent interference with dpad
 canvas.addEventListener('touchstart', (e) => {
+    // Only prevent default if not targeting dpad or actions
     if (e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
     } else if (!e.target.closest('#dpad, #actions')) {
+        // Prevent default only for non-dpad touches
         e.preventDefault();
     }
 }, { passive: false });
+
 canvas.addEventListener('touchmove', (e) => {
+    // Only prevent default if not targeting dpad or actions
     if (e.scale !== 1 || e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
@@ -1323,7 +1327,9 @@ canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
     }
 }, { passive: false });
+
 canvas.addEventListener('touchend', (e) => {
+    // Only prevent default if not targeting dpad or actions
     if (e.touches.length === 0 && !e.target.closest('#dpad, #actions')) {
         e.preventDefault();
     }
