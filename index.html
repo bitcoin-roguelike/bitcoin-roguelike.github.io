@@ -4482,12 +4482,16 @@ function cleanupEventListeners() {
     });
 }
 
-/* initialise all touch listeners (called on load and after a restart) */
+// Replace the existing touch handling code with this improved version:
+/* ------------------------------------------------------------------
+   Improved touch controls for continuous movement
+   ------------------------------------------------------------------ */
 function initTouchControls() {
     /* ----- D-pad -------------------------------------------------- */
-    let activeTouchId = null; // Track the active touch identifier
+    let activeTouchId = null;
     let currentTouchDir = null;
     let lastTouchMoveTime = 0;
+    let touchMoveInterval = null;
 
     // Use the global dpadButtons
     dpadButtons.forEach(button => {
@@ -4512,9 +4516,9 @@ function initTouchControls() {
                     clearInterval(touchMoveInterval);
                 }
                 
-                // Set up continuous movement
+                // Set up continuous movement with proper debounce
                 touchMoveInterval = setInterval(() => {
-                    if (activeTouchId && currentTouchDir && !inputBlocked) {
+                    if (activeTouchId && currentTouchDir && !inputBlocked && !gameOver) {
                         move(currentTouchDir);
                     }
                 }, 150); // Move every 150ms for consistent movement
