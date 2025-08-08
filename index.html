@@ -1307,25 +1307,24 @@ let dpadButtons = document.querySelectorAll('#dpad button');
 let actionsButtons = document.querySelectorAll('#actions button');
 
 // Block canvas touch interference
-canvas.addEventListener('touchstart', (e) => {
+document.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-    } else if (!e.target.closest('#dpad, #actions')) {
-        e.preventDefault();
     }
 }, { passive: false });
-canvas.addEventListener('touchmove', (e) => {
+
+document.addEventListener('touchmove', (e) => {
     if (e.scale !== 1 || e.touches.length > 1) {
         e.preventDefault();
         e.stopPropagation();
-    } else if (!e.target.closest('#dpad, #actions')) {
-        e.preventDefault();
     }
 }, { passive: false });
-canvas.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0 && !e.target.closest('#dpad, #actions')) {
+
+document.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
         e.preventDefault();
+        e.stopPropagation();
     }
 }, { passive: false });
 
