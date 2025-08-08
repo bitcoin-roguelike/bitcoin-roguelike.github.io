@@ -657,6 +657,12 @@ button:hover {
             <div id="splash-screen">
     		<canvas id="splash-canvas" width="320" height="320"></canvas>
     	    <button id="start-button">START</button>
+    	    <div id="info-icon" onclick="showInfo()" style="position: absolute; top: 50px; right: 20px; width: 30px; height: 30px; background: #00e8d8; color: #fff; border: 2px solid #ff8c00; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-family: 'VT323', monospace; font-size: 24px; cursor: pointer; z-index: 50;">i</div>
+    	    <!-- Add info message display -->
+<div id="info-message" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 20px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; display: none; z-index: 60; max-width: 80vw; border-radius: 5px;">
+    Hey listen! ;)<br><br>
+    If you are using a Gamepad, connect it after you have pressed the START button on the screen.
+</div>
 	    </div>
 <div id="game-over">
     <pre id="leaderboard-output"></pre>
@@ -958,6 +964,15 @@ const names = [
     "Zero",
     "Zoar"
 ];
+
+// Show info message
+function showInfo() {
+    const infoMessage = document.getElementById('info-message');
+    infoMessage.style.display = 'block';
+    setTimeout(() => {
+        infoMessage.style.display = 'none';
+    }, 10000); // Auto-hide after 10 seconds
+}
 
 function populateNameList() {
     const datalist = document.getElementById('name-list');
@@ -2228,7 +2243,7 @@ if (inHideout) {
     map[jewellerPos.y][jewellerPos.x] = 14;
 
     // Place blacksmith at a fixed position in the left room
-    const blacksmithX = leftRoomX + 3;
+    const blacksmithX = leftRoomX + 4;
     const blacksmithY = leftRoomY + 3;
     if (map[blacksmithY][blacksmithX] === 0) {
         map[blacksmithY][blacksmithX] = 15; // Blacksmith
@@ -3698,11 +3713,11 @@ if (map[ny][nx] === 14 && inHideout) { // Jeweller
     if (diamonds >= 3) {
         diamonds -= 3;
         p.perfectlyCutDiamonds++;
-        logBattleEvent(`Hideout - Jeweller refined 3 diamonds into a Perfectly Cut Diamond!`);
+        logBattleEvent(`Jeweller refined 3 diamonds into a Perfectly Cut Diamond!`);
         playWebAudioSound(sounds.pickup);
         updatePlayerState();
     } else {
-        logBattleEvent(`Hideout - Jeweller requires 3 diamonds to refine!`);
+        logBattleEvent(`Jeweller requires 3 diamonds to refine!`);
     }
 }
 if (map[ny][nx] === 15 && inHideout) { // Blacksmith
@@ -3711,13 +3726,13 @@ if (map[ny][nx] === 15 && inHideout) { // Blacksmith
         p.hasDiamondArmor = true;
         p.hasArmor = false; // Remove regular armor
         p.hp += 1000;
-        logBattleEvent(`Hideout - Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
+        logBattleEvent(`Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
         playWebAudioSound(sounds.pickup);
         updatePlayerState();
     } else if (p.hasDiamondArmor) {
-        logBattleEvent(`Hideout - Blacksmith: You already have Diamond Armor!`);
+        logBattleEvent(`Blacksmith: You already have Diamond Armor!`);
     } else {
-        logBattleEvent(`Hideout - Blacksmith requires a Perfectly Cut Diamond!`);
+        logBattleEvent(`Blacksmith requires a Perfectly Cut Diamond!`);
     }
 }
 
@@ -4685,8 +4700,18 @@ function restart() {
     gamepadMoveDir = null;
     gamepadLastMoveTime = 0;
     lastButtonsState = [];
-    lastAxesState = { axis0: 0, axis1: 0 };
     if (gamepadIndex !== null) {
+        // Check for gamepad at restart
+        if (navigator.getGamepads) {
+            const gamepads = navigator.getGamepads();
+            for (let i = 0; i < gamepads.length; i++) {
+                if (gamepads[i]) {
+                    gamepadIndex = i;
+                    console.log('Gamepad detected at restart:', gamepads[i].id);
+                    break;
+                }
+            }
+        }
         gamepadPollingActive = true;
         if (!movementTimer) {
             movementTimer = setInterval(() => {
@@ -5273,10 +5298,148 @@ const keyStates = {
 };
 let keyboardMovementTimer = null;
 
+// Simplified gamepad axis handling class without excessive profiling
+class GamepadAxes {
+    constructor(gamepad) {
+        this.gamepad = gamepad;
+        this.axis0 = 0;
+        this.axis1 = 0;
+    }
+    
+    // Update axes with current state
+    update() {
+        if (this.gamepad.axes.length >= 2) {
+            this.axis0 = this.gamepad.axes[0];
+            this.axis1 = this.gamepad.axes[1];
+        }
+    }
+    
+    // Get direction based on buttons or axes
+    getDirection() {
+        let newMoveDir = null;
+        const deadZone = 0.2;
+        
+        // First check if we have a valid gamepad
+        if (!this.gamepad) return null;
+        
+        // Check button-based D-pad (indices 12-15 for standard mapping)
+        if (this.gamepad.buttons.length >= 16) {
+            const upBtn = this.gamepad.buttons[12];
+            const downBtn = this.gamepad.buttons[13];
+            const leftBtn = this.gamepad.buttons[14];
+            const rightBtn = this.gamepad.buttons[15];
+            
+            // Check each button individually
+            if (leftBtn.pressed) {
+                newMoveDir = 'left';
+            } else if (rightBtn.pressed) {
+                newMoveDir = 'right';
+            } else if (upBtn.pressed) {
+                newMoveDir = 'up';
+            } else if (downBtn.pressed) {
+                newMoveDir = 'down';
+            }
+        }
+        
+        // If no button direction, check axes 0 and 1
+        if (!newMoveDir) {
+            if (Math.abs(this.axis0) > deadZone) {
+                newMoveDir = this.axis0 > 0 ? 'right' : 'left';
+            } else if (Math.abs(this.axis1) > deadZone) {
+                newMoveDir = this.axis1 > 0 ? 'down' : 'up';
+            }
+        }
+        
+        return newMoveDir;
+    }
+    
+    // Check if D-pad is active (button-based or axis-based)
+    isDpadActive() {
+        const deadZone = 0.2;
+        
+        // Check button-based D-pad
+        if (this.gamepad.buttons.length >= 16) {
+            const upBtn = this.gamepad.buttons[12];
+            const downBtn = this.gamepad.buttons[13];
+            const leftBtn = this.gamepad.buttons[14];
+            const rightBtn = this.gamepad.buttons[15];
+            
+            if (upBtn.pressed || downBtn.pressed || leftBtn.pressed || rightBtn.pressed) {
+                return true;
+            }
+        }
+        
+        // Check axis-based D-pad
+        return Math.abs(this.axis0) > deadZone || Math.abs(this.axis1) > deadZone;
+    }
+}
+
+// Global instance for current gamepad axes
+let currentAxes = null;
+
+// Start game function for splash screen
+function startGame() {
+    if (!splashActive) {
+        return;
+    }
+    const startButton = document.getElementById('start-button');
+    startButton.style.background = '#00b7ef'; // Mimic hover
+    setTimeout(() => {
+        startButton.style.background = '#00e8d8'; // Revert
+    }, 200);
+    
+    // Check for gamepad at game start
+    if (navigator.getGamepads) {
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                gamepadIndex = i;
+                console.log('Gamepad detected at game start:', gamepads[i].id);
+                break;
+            }
+        }
+    }
+    
+    // Resume AudioContext
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+        }).catch(e => console.error('Failed to resume AudioContext:', e));
+    }
+    preloadSounds(); // Preload sounds after user interaction
+    
+    if (!musicMuted) {
+        sounds.music.pause();
+        sounds.music.currentTime = 0;
+        sounds.music.play().catch(e => console.error('Music play failed on gamepad START:', e));
+    }
+    fadeSplash();
+    
+    // Start gamepad polling if gamepad is connected
+    if (gamepadIndex !== null) {
+        gamepadPollingActive = true;
+        updateGamepad();
+    }
+    
+    hasPlayedOnce = true; // Mark that the player has started a game
+    
+    // Ensure fetchTxs is triggered after splash fade
+    setTimeout(() => {
+        if (!gameOver && !splashActive && floor > 0) {
+            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
+            fetchTxs();
+        } else {
+            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
+        }
+    }, 2000); // Match original start-button delay
+}
+
+
 window.addEventListener("gamepadconnected", (e) => {
     gamepadIndex = e.gamepad.index;
     lastButtonsState = new Array(e.gamepad.buttons.length).fill(false);
     lastGamepadPollTime = performance.now();
+    console.log('Gamepad connected:', e.gamepad.id);
+    
     if (!splashActive) {
         gamepadPollingActive = true;
         if (!movementTimer) {
@@ -5288,7 +5451,7 @@ window.addEventListener("gamepadconnected", (e) => {
                         gamepadLastMoveTime = now;
                     }
                 }
-            }, 50); // Poll frequently, moves capped at 150ms
+            }, 50);
         }
         updateGamepad();
     }
@@ -5304,108 +5467,11 @@ window.addEventListener("gamepaddisconnected", (e) => {
     }
     gamepadMoveDir = null;
     gamepadLastMoveTime = 0;
+    console.log('Gamepad disconnected:', e.gamepad.id);
 });
 
-// Start game function for splash screen
-function startGame() {
-    if (!splashActive) {
-                return;
-    }
-        const startButton = document.getElementById('start-button');
-    startButton.style.background = '#00b7ef'; // Mimic hover
-    setTimeout(() => {
-        startButton.style.background = '#00e8d8'; // Revert
-    }, 200);
-    // Resume AudioContext
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-                    }).catch(e => console.error('Failed to resume AudioContext:', e));
-    }
-    preloadSounds(); // Preload sounds after user interaction
-    if (!musicMuted) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
-        sounds.music.play().catch(e => console.error('Music play failed on gamepad START:', e));
-    }
-    fadeSplash();
-    // Start gamepad polling if gamepad is connected
-    if (gamepadIndex !== null) {
-        gamepadPollingActive = true;
-        updateGamepad();
-            }
-    hasPlayedOnce = true; // Mark that the player has started a game
-    // Ensure fetchTxs is triggered after splash fade
-    setTimeout(() => {
-        if (!gameOver && !splashActive && floor > 0) {
-            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
-            fetchTxs();
-        } else {
-            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
-        }
-    }, 2000); // Match original start-button delay
-}
-
-// Modify start-button click handler to enable gamepad polling
-document.getElementById('start-button').addEventListener('click', () => {
-    if (splashActive) {
-                // Resume AudioContext
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                            }).catch(e => console.error('Failed to resume AudioContext:', e));
-        }
-        preloadSounds();
-        // Preload player animation frames
-        const imagesToLoad = [
-            p.anim.frames.front[0], p.anim.frames.front[1],
-            p.anim.frames.back[0], p.anim.frames.back[1],
-            p.anim.frames.right[0], p.anim.frames.right[1],
-            p.anim.frames.armor_front[0], p.anim.frames.armor_front[1],
-            p.anim.frames.armor_back[0], p.anim.frames.armor_back[1],
-            p.anim.frames.armor_right[0], p.anim.frames.armor_right[1]
-        ];
-        let loadedCount = 0;
-        imagesToLoad.forEach(img => {
-            if (img.complete) {
-                loadedCount++;
-                if (loadedCount === imagesToLoad.length) {
-                                    }
-            } else {
-                img.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === imagesToLoad.length) {
-                                            }
-                };
-                img.onerror = () => console.error(`Failed to load image: ${img.src}`);
-            }
-        });
-        if (!musicMuted) {
-            sounds.music.pause();
-            sounds.music.currentTime = 0;
-            sounds.music.play().then(() => {
-                            }).catch(e => console.error('Music play failed on START:', e));
-        }
-        fadeSplash();
-        // Start gamepad polling if gamepad is connected
-        if (gamepadIndex !== null) {
-            gamepadPollingActive = true;
-            updateGamepad();
-                    }
-        hasPlayedOnce = true; // Mark that the player has started a game
-        setTimeout(() => {
-            if (!gameOver && !splashActive) {
-                fetchTxs();
-                lastUpdate = Date.now();
-                console.log('Initial fetchTxs triggered after splash, wave=', wave);
-            }
-        }, 2000);
-    }
-});
-
-// Poll gamepad state
+// Modified updateGamepad function to use the axes class
 function updateGamepad(timestamp) {
-    // Debug log to track gamepad state
-    //console.log(`updateGamepad: gamepadIndex=${gamepadIndex}, gamepadPollingActive=${gamepadPollingActive}, splashActive=${splashActive}`);
-
     if (gamepadIndex === null) {
         // Try to find a connected gamepad
         const gamepads = navigator.getGamepads();
@@ -5413,7 +5479,6 @@ function updateGamepad(timestamp) {
             if (gamepads[i]) {
                 gamepadIndex = i;
                 gamepadPollingActive = true;
-                console.log(`Gamepad reconnected: index=${i}`);
                 break;
             }
         }
@@ -5422,33 +5487,31 @@ function updateGamepad(timestamp) {
         }
     }
 
-if (!gamepadPollingActive) {
-    const gamepad = navigator.getGamepads()[gamepadIndex];
-    if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3] && splashActive) {
-        const nowTime = Date.now();
-        if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
-            startGame();
-            lastStartPressTime = nowTime;
-            gamepadPollingActive = true;
-            console.log('Start button pressed at splash screen');
-            // Start movementTimer for gamepad
-            if (!movementTimer) {
-                movementTimer = setInterval(() => {
-                    if (!splashActive && !gameOver && gamepadMoveDir) {
-                        const now = Date.now();
-                        if (now - gamepadLastMoveTime >= 150) {
-                            move(gamepadMoveDir);
-                            gamepadLastMoveTime = now;
+    if (!gamepadPollingActive) {
+        const gamepad = navigator.getGamepads()[gamepadIndex];
+        if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3] && splashActive) {
+            const nowTime = Date.now();
+            if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
+                startGame();
+                lastStartPressTime = nowTime;
+                gamepadPollingActive = true;
+                if (!movementTimer) {
+                    movementTimer = setInterval(() => {
+                        if (!splashActive && !gameOver && gamepadMoveDir) {
+                            const now = Date.now();
+                            if (now - gamepadLastMoveTime >= 150) {
+                                move(gamepadMoveDir);
+                                gamepadLastMoveTime = now;
+                            }
                         }
-                    }
-                }, 50); // Poll frequently, moves capped at 150ms
+                    }, 50);
+                }
             }
+            lastButtonsState[3] = gamepad.buttons[3].pressed;
         }
-        lastButtonsState[3] = gamepad.buttons[3].pressed;
+        requestAnimationFrame(updateGamepad);
+        return;
     }
-    requestAnimationFrame(updateGamepad);
-    return;
-}
 
     const now = performance.now();
     if (now - lastGamepadPollTime < GAMEPAD_POLL_INTERVAL) {
@@ -5466,29 +5529,21 @@ if (!gamepadPollingActive) {
             currentMoveDir = null;
             lastMoveTime = 0;
         }
-        console.log('Gamepad disconnected');
         return;
     }
 
+    // Update axes with new state
+    currentAxes = new GamepadAxes(gamepad);
+    currentAxes.update();
+
     // Check for actual gamepad input (buttons or axes)
     const buttons = gamepad.buttons;
-    const axis0 = gamepad.axes[0];
-    const axis1 = gamepad.axes[1];
-    const deadZone = 0.2;
-    const hasInput = buttons.some(b => b.pressed) || Math.abs(axis0) > deadZone || Math.abs(axis1) > deadZone;
-
-setInterval(() => {
-    // Simulate user activity only if there's gamepad input and no D-pad button is pressed
-    if (hasInput && !document.querySelector('#dpad button.pressed')) {
-        const activityEvent = new KeyboardEvent('keydown', { key: 'Shift' });
-        document.dispatchEvent(activityEvent);
-    }
-}, 30000); // Every 30 seconds to prevent sleep
+    const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
 
     if (!splashActive && !gameOver && inputBlocked) {
-    // Just return, don't process movement
-    requestAnimationFrame(updateGamepad);
-    return;
+        // Just return, don't process movement
+        requestAnimationFrame(updateGamepad);
+        return;
     }
 
     // Handle buttons (A=0, B=1, Select=2, Start=3)
@@ -5516,7 +5571,6 @@ setInterval(() => {
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (splashActive) {
             startGame();
-            console.log('Start button triggered startGame');
         } else if (gameOver) {
             restart();
         }
@@ -5526,46 +5580,28 @@ setInterval(() => {
     // Update button states
     lastButtonsState = buttons.map(b => b.pressed);
 
-// Handle D-pad (Axes 0 and 1)
-// deadZone already defined above
-
-// Determine current direction
-let newMoveDir = null;
-if (!splashActive && !gameOver) {
-    // Prioritize axis0 (left/right) if both active, matching touch behavior
-    if (Math.abs(axis0) > deadZone) {
-        newMoveDir = axis0 > 0 ? 'right' : 'left';
-    } else if (Math.abs(axis1) > deadZone) {
-        newMoveDir = axis1 > 0 ? 'down' : 'up';
-    }
-}
-
-// Update movement direction: instant on new direction, handled by movementTimer
-if (!splashActive && !gameOver) {
-    let newMoveDir = null;
-    if (Math.abs(axis0) > deadZone) {
-        newMoveDir = axis0 > 0 ? 'right' : 'left';
-    } else if (Math.abs(axis1) > deadZone) {
-        newMoveDir = axis1 > 0 ? 'down' : 'up';
-    }
-
-    if (newMoveDir !== gamepadMoveDir) {
-        gamepadMoveDir = newMoveDir;
-        if (newMoveDir) {
-            const now = Date.now();
-            if (!gamepadLastMoveTime || now - gamepadLastMoveTime >= 150) {
-                move(newMoveDir);
-                gamepadLastMoveTime = now;
-            }
-        } else {
+    // Update movement direction using the new axes class
+    if (!splashActive && !gameOver) {
+        let newMoveDir = currentAxes.getDirection();
+        gamepadMoveDir = newMoveDir; // Always update gamepadMoveDir
+        
+        // Rely on movementTimer for continuous movement
+        if (newMoveDir && !movementTimer) {
+            movementTimer = setInterval(() => {
+                if (!splashActive && !gameOver && gamepadMoveDir) {
+                    const now = Date.now();
+                    if (now - gamepadLastMoveTime >= 150) {
+                        move(gamepadMoveDir);
+                        gamepadLastMoveTime = now;
+                    }
+                }
+            }, 50);
+        } else if (!newMoveDir && movementTimer) {
+            clearInterval(movementTimer);
+            movementTimer = null;
             gamepadLastMoveTime = 0;
         }
     }
-}
-
-    // Update axis states
-    lastAxesState.axis0 = Math.abs(axis0) > deadZone ? axis0 : 0;
-    lastAxesState.axis1 = Math.abs(axis1) > deadZone ? axis1 : 0;
 
     // Continue polling
     requestAnimationFrame(updateGamepad);
