@@ -4488,48 +4488,53 @@ function cleanupEventListeners() {
     });
 }
 
-// Replace the existing touch handling code with this improved version:
 /* ------------------------------------------------------------------
-   Improved touch controls for continuous movement
+   Enhanced touch controls with 150ms movement delay
    ------------------------------------------------------------------ */
 function initTouchControls() {
-    /* ----- D-pad -------------------------------------------------- */
     let activeTouchId = null;
     let currentTouchDir = null;
-    let lastTouchMoveTime = 0;
-    let touchMoveInterval = null;
+    let isMoving = false;
 
     // Use the global dpadButtons
     dpadButtons.forEach(button => {
-        /* Store handlers for later removal */
-        button._touchstartHandler = function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (inputBlocked || splashActive || gameOver) return;
+button._touchstartHandler = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (inputBlocked || splashActive || gameOver) return;
 
-            const touch = e.changedTouches[0];
-            // Only set new direction if no active touch or this touch is taking over
-            if (!activeTouchId) {
-                activeTouchId = touch.identifier;
-                button.classList.add('pressed');
-                currentTouchDir = button.id;
+    const touch = e.changedTouches[0];
+    if (!activeTouchId) {
+        activeTouchId = touch.identifier;
+        button.classList.add('pressed');
+        currentTouchDir = button.id;
+        isMoving = true;
+
+        // Start continuous movement with 150ms delay
+        let lastMoveTime = 0;
+        const moveLoop = () => {
+            if (isMoving && currentTouchDir && !inputBlocked && !gameOver) {
                 const now = Date.now();
-                move(currentTouchDir); // Immediate move on touch start
-                lastTouchMoveTime = now;
-                
-                // Clear any existing interval
-                if (touchMoveInterval) {
-                    clearInterval(touchMoveInterval);
+                if (now - lastMoveTime >= 150) { // Enforce 150ms delay
+                    move(currentTouchDir);
+                    lastMoveTime = now;
                 }
-                
-                // Set up continuous movement with proper debounce
-                touchMoveInterval = setInterval(() => {
-                    if (activeTouchId && currentTouchDir && !inputBlocked && !gameOver) {
-                        move(currentTouchDir);
-                    }
-                }, 150); // Move every 150ms for consistent movement
+                requestAnimationFrame(moveLoop);
             }
         };
+        requestAnimationFrame(moveLoop);
+    }
+};
+
+button._touchmoveHandler = function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Keep touch active but don't trigger move
+    const touch = Array.from(e.changedTouches).find(t => t.identifier === activeTouchId);
+    if (touch && currentTouchDir && !inputBlocked && !gameOver) {
+        // No move call here; let moveLoop handle movement
+    }
+};
 
         button._touchendHandler = function (e) {
             e.preventDefault();
@@ -4539,13 +4544,7 @@ function initTouchControls() {
                 button.classList.remove('pressed');
                 activeTouchId = null;
                 currentTouchDir = null;
-                lastTouchMoveTime = 0;
-                
-                // Clear continuous movement
-                if (touchMoveInterval) {
-                    clearInterval(touchMoveInterval);
-                    touchMoveInterval = null;
-                }
+                isMoving = false;
             }
         };
 
@@ -4560,6 +4559,7 @@ function initTouchControls() {
         };
 
         button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
+        button.addEventListener('touchmove', button._touchmoveHandler, { passive: false });
         button.addEventListener('touchend', button._touchendHandler, { passive: false });
         button.addEventListener('touchcancel', button._touchcancelHandler, { passive: false });
         button.addEventListener('contextmenu', button._contextmenuHandler, { passive: false });
@@ -4568,20 +4568,10 @@ function initTouchControls() {
 
     /* Clean up on restart */
     document.addEventListener('restart', () => {
-        // Clear any remaining intervals
-        if (touchMoveInterval) {
-            clearInterval(touchMoveInterval);
-            touchMoveInterval = null;
-        }
-        if (touchTimeout) {
-            clearTimeout(touchTimeout);
-            touchTimeout = null;
-        }
-        
         dpadButtons.forEach(button => {
             button.classList.remove('pressed');
-            // Remove all event listeners
             if (button._touchstartHandler) button.removeEventListener('touchstart', button._touchstartHandler);
+            if (button._touchmoveHandler) button.removeEventListener('touchmove', button._touchmoveHandler);
             if (button._touchendHandler) button.removeEventListener('touchend', button._touchendHandler);
             if (button._touchcancelHandler) button.removeEventListener('touchcancel', button._touchcancelHandler);
             if (button._clickHandler) button.removeEventListener('click', button._clickHandler);
@@ -4589,9 +4579,8 @@ function initTouchControls() {
         });
         activeTouchId = null;
         currentTouchDir = null;
-        lastTouchMoveTime = 0;
-        // Re-attach listeners after cleanup
-        initTouchControls();
+        isMoving = false;
+        initTouchControls(); // Re-attach listeners
     });
 }
 
