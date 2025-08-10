@@ -689,7 +689,7 @@ button:hover {
 <div id="inventory" style="-webkit-nbsp-mode: normal;">
     <span id="wave" style="display: none;">1</span>
     Health: <span id="health">24</span><br>
-    Armor: <span id="armorStatus">Cloth</span><br>
+    Armor: <span id="armorStatus">Leather</span><br>
     Potions: <span id="potions">0</span><br>
     Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
     Diamonds: <span id="diamonds">0</span><br>   <!-- NEW -->
@@ -1371,11 +1371,11 @@ let map = [],
     p = {
         x: 2,
         y: 2,
-        hp: 24,
+        hp: 36,
         potions: 0,
         atk: 2,
         pickaxes: 0,
-        hasArmor: false,
+        hasArmor: true,
         hasDiamondArmor: false, // Track diamond armor
     	perfectlyCutDiamonds: 0, // Track perfectly cut diamonds
         runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
@@ -1580,6 +1580,7 @@ const assets = {
     jeweller: new Image(),
     blacksmith: new Image(),
     waypoint: new Image(),
+    rune_whisperer: new Image(),
     runes: {
         on_floor: new Image(),
         a: new Image(), b: new Image(), c: new Image(), d: new Image(), e: new Image(),
@@ -1694,6 +1695,7 @@ const assets = {
 	assets.jeweller.src = 'jeweller.png';
 	assets.blacksmith.src = 'blacksmith.png';
 	assets.waypoint.src = 'waypoint.png';
+	assets.rune_whisperer.src = 'rune_whisperer.png';
 	assets.player_diamond_armor.src = 'player_diamond_armor.png';
 	p.anim.frames.diamond_armor_front = [new Image(), new Image()];
 	p.anim.frames.diamond_armor_front[0].src = 'player_diamond_armor-front1.png';
@@ -1806,7 +1808,8 @@ const sounds = {
     pond: { buffer: null, url: 'pond.wav', isPlaying: false, duration: 500 },
     rune: { buffer: null, url: 'rune.wav', isPlaying: false, duration: 2000 },
     rune_drop: { buffer: null, url: 'rune_drop.wav', isPlaying: false, duration: 1000 },
-    hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 745 }
+    hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 745 },
+    town_portal: { buffer: null, url: 'town_portal.wav', isPlaying: false, duration: 535 }
 };
 
 sounds.music.loop = true;
@@ -1831,6 +1834,7 @@ loadSoundBuffer('pond.wav', 'pond');
 loadSoundBuffer('rune.wav', 'rune');
 loadSoundBuffer('rune_drop.wav', 'rune_drop');
 loadSoundBuffer('hole.wav', 'hole');
+loadSoundBuffer('town_portal.wav', 'town_portal');
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -1848,7 +1852,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole') return; // Skip music and Web Audio sounds
+            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -1864,7 +1868,7 @@ function preloadSounds() {
 } else {
     // Non-iOS: Existing preload logic
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole') return; // Skip music and Web Audio sounds
+        if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
@@ -2259,14 +2263,23 @@ if (inHideout) {
     }
 
     // Place waypoint at a fixed position in the right room
-    const waypointX = rightRoomX + 3;
-    const waypointY = rightRoomY + 3;
-    if (map[waypointY][waypointX] === 0) {
-        map[waypointY][waypointX] = 16; // Waypoint
-        waypointPos = { x: waypointX, y: waypointY };
-    } else {
-        console.warn('Failed to place waypoint: tile occupied at', waypointX, waypointY);
-    }
+const waypointX = rightRoomX + 3;
+const waypointY = rightRoomY + 3;
+if (map[waypointY][waypointX] === 0) {
+    map[waypointY][waypointX] = 16; // Waypoint
+    waypointPos = { x: waypointX, y: waypointY };
+} else {
+    console.warn('Failed to place waypoint: tile occupied at', waypointX, waypointY);
+}
+// Place rune whisperer at a fixed position in the right room
+const runeWhispererX = rightRoomX + 1;
+const runeWhispererY = rightRoomY + 5;
+if (map[runeWhispererY][runeWhispererX] === 0) {
+    map[runeWhispererY][runeWhispererX] = 17; // Rune Whisperer
+    runeWhispererPos = { x: runeWhispererX, y: runeWhispererY };
+} else {
+    console.warn('Failed to place rune whisperer: tile occupied at', runeWhispererX, runeWhispererY);
+}
 
     p.x = mainRoomX + 3;
     p.y = mainRoomY + 6;
@@ -3279,18 +3292,32 @@ if (currentTheme === 'ruins') {
                 p.hp += healthGain;
                 logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
                 playWebAudioSound(sounds.heads); // Play heads.wav
-            } else {
-                // Remove excess health
-                const currentMaxHP = p.hasArmor ? 36 : 24;
-                if (p.hp > currentMaxHP) {
-                    const healthLost = p.hp - currentMaxHP;
-                    p.hp = currentMaxHP;
-                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! (HP now: ${p.hp})`);
-                } else {
-                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
-                }
-                playWebAudioSound(sounds.tails); // Play tails.wav
-            }
+} else {
+    // Remove excess health and adjust armor
+    let currentMaxHP = 24; // Base HP
+    let newArmorStatus = 'Cloth';
+    if (p.hp > 1000) {
+        currentMaxHP = 1000; // Diamond armor max
+        newArmorStatus = 'Diamond';
+    } else if (p.hp > 36) {
+        currentMaxHP = 36; // Leather armor max
+        newArmorStatus = 'Leather';
+    } else if (p.hp > 24) {
+        currentMaxHP = 24; // Cloth max
+        newArmorStatus = 'Cloth';
+    }
+    if (p.hp > currentMaxHP) {
+        const healthLost = p.hp - currentMaxHP;
+        p.hp = currentMaxHP;
+        p.hasDiamondArmor = currentMaxHP >= 1000;
+        p.hasArmor = currentMaxHP === 36;
+        document.getElementById('armorStatus').textContent = newArmorStatus;
+        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
+    } else {
+        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
+    }
+    playWebAudioSound(sounds.tails); // Play tails.wav
+}
             p.potions = 0;
             map[ny][nx] = 0;
             updatePlayerState();
@@ -3663,11 +3690,13 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
 }
 
 if (map[ny][nx] === 12) { // Portal tile in normal floor
+    playWebAudioSound(sounds.town_portal);
     inHideout = true;
     initMap();
     return;
 }
 if (map[ny][nx] === 16 && inHideout) {
+    playWebAudioSound(sounds.town_portal);
     if (previousFloorState) {
         // Restore previous floor state
         map = previousFloorState.map.map(row => [...row]);
@@ -3739,6 +3768,29 @@ if (map[ny][nx] === 15 && inHideout) { // Blacksmith
         logBattleEvent(`Blacksmith: You already have Diamond Armor!`);
     } else {
         logBattleEvent(`Blacksmith requires a Perfectly Cut Diamond!`);
+    }
+}
+
+if (map[ny][nx] === 17 && inHideout) { // Rune Whisperer
+    if (p.runes.length > 0) {
+        const runeCount = p.runes.length;
+        const healthGain = runeCount * 2;
+        p.hp += healthGain;
+        p.runes = [];
+        runeDrops = runeDrops.filter(r => !r.specific);
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                if (map[y][x] === 9) {
+                    map[y][x] = 0; // Clear specific rune tiles
+                }
+            }
+        }
+        logBattleEvent(`Rune Whisperer traded ${runeCount} runes for +${healthGain} HP! (HP now: ${p.hp})`);
+        playWebAudioSound(sounds.pickup);
+        checkRunewords();
+        updatePlayerState();
+    } else {
+        logBattleEvent(`Rune Whisperer: No runes to trade!`);
     }
 }
 
@@ -4162,18 +4214,29 @@ function checkRunewordsAtFloorStart() {
                 activatedRunewords.push(runeword.name.toUpperCase());
             }
         }
-    }
 
-    // Display activated runewords and play sound if any were found
-    if (activatedRunewords.length > 0) {
-        document.getElementById('floor-indicator').textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
-        if (!specialSoundsPlayedThisFloor.rune) {
-            playWebAudioSound(sounds.rune);
-            specialSoundsPlayedThisFloor.rune = true;
-        }
-        setTimeout(() => {
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-        }, 5000);
+
+
+let isRunewordMessageDisplayed = false;
+if (activatedRunewords.length > 0) {
+    const floorIndicator = document.getElementById('floor-indicator');
+    floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
+    if (!specialSoundsPlayedThisFloor.rune) {
+        playWebAudioSound(sounds.rune);
+        specialSoundsPlayedThisFloor.rune = true;
+    }
+    isRunewordMessageDisplayed = true;
+    setTimeout(() => {
+        isRunewordMessageDisplayed = false;
+        floorIndicator.textContent = `Floor ${floor}`;
+    }, 5000);
+}
+
+// When you want to update the floor indicator text
+if (!isRunewordMessageDisplayed) {
+    const floorIndicator = document.getElementById('floor-indicator');
+    floorIndicator.textContent = `Floor ${floor}`;
+}
 
         // Remove used runes
         usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
@@ -4841,6 +4904,9 @@ if (map[y][x] === 15) { // Blacksmith
 if (map[y][x] === 16) { // Waypoint
     c.drawImage(assets.waypoint, x * S, y * S, S, S);
 }
+if (map[y][x] === 17) { // Rune Whisperer
+    c.drawImage(assets.rune_whisperer, x * S, y * S, S, S);
+}
 
 if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
         }
@@ -4977,6 +5043,12 @@ function punchHoleThroughRed(imageData) {
     }
 }
 
+// Pulsating animation timing
+const pulsePeriod = 200; // 200 ms cycle
+const pulseAlphaMin = 0.5;
+const pulseAlphaMax = 1;
+const pulseAlpha = pulseAlphaMin + (pulseAlphaMax - pulseAlphaMin) * (Math.sin(Date.now() / pulsePeriod * Math.PI) + 1) / 2;
+
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
     if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
@@ -5007,64 +5079,86 @@ enemies.forEach(e => {
             img = e.type.img;
         }
         
-        // Draw the sprite on the temporary canvas
-        tempCtx.imageSmoothingEnabled = false;
-        tempCtx.drawImage(img, 0, 0, S, S);
-        
-        // Apply theme-based effects
-        if (isVisible) {
-if (currentTheme === 'desert') {
-    const imageData = tempCtx.getImageData(0, 0, S, S);
-    const data = imageData.data;
-    punchHoleThroughRed(imageData); // Mark eye pixels
-    for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] === 1) { // Eye pixel
-            data[i] = 255;     // Red
-            data[i + 1] = 0;   // Green
-            data[i + 2] = 0;   // Blue
-            data[i + 3] = 255; // Full opacity
-        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-            data[i] = 255;     // Red
-            data[i + 1] = 242; // Green
-            data[i + 2] = 230; // Blue
-            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-        }
-    }
-    tempCtx.putImageData(imageData, 0, 0);
-} else if (currentTheme === 'ruins') {
-    const imageData = tempCtx.getImageData(0, 0, S, S);
-    const data = imageData.data;
-    punchHoleThroughRed(imageData); // Mark eye pixels
-    for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] === 1) { // Eye pixel
-            data[i] = 255;     // Red
-            data[i + 1] = 0;   // Green
-            data[i + 2] = 0;   // Blue
-            data[i + 3] = 255; // Full opacity
-        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-            data[i] = 144;     // Red
-            data[i + 1] = 126; // Green
-            data[i + 2] = 105; // Blue
-            data[i + 3] = 255; // Full opacity (removed 95% opacity)
-        }
-    }
-    tempCtx.putImageData(imageData, 0, 0);
-} else if (currentTheme === 'hell') {
-                // Apply red tint for hell theme
-                tempCtx.globalCompositeOperation = 'source-atop';
-                tempCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-                tempCtx.fillRect(0, 0, S, S);
-            } else if (currentTheme === 'paradise') {
-                // Apply purple tint for paradise theme
-                tempCtx.globalCompositeOperation = 'source-atop';
-                tempCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
-                tempCtx.fillRect(0, 0, S, S);
+let spriteCanvas, spriteCtx;
+if (isVisible) {
+    spriteCanvas = document.createElement('canvas');
+    spriteCanvas.width = S;
+    spriteCanvas.height = S;
+    spriteCtx = spriteCanvas.getContext('2d');
+    spriteCtx.imageSmoothingEnabled = false;
+    spriteCtx.drawImage(img, 0, 0, S, S);
+    
+    // Apply theme-based effects to the sprite canvas
+    if (currentTheme === 'desert') {
+        const imageData = spriteCtx.getImageData(0, 0, S, S);
+        const data = imageData.data;
+        punchHoleThroughRed(imageData); // Mark eye pixels
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] === 1) { // Eye pixel
+                data[i] = 255;     // Red
+                data[i + 1] = 0;   // Green
+                data[i + 2] = 0;   // Blue
+                data[i + 3] = 255; // Full opacity
+            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                data[i] = 255;     // Red
+                data[i + 1] = 242; // Green
+                data[i + 2] = 230; // Blue
+                data[i + 3] = Math.round(0.95 * 255); // 95% opacity
             }
-        } else {
-            // Outside fog of war, draw original sprite to show red eyes
-            tempCtx.clearRect(0, 0, S, S);
-            tempCtx.drawImage(img, 0, 0, S, S);
         }
+        spriteCtx.putImageData(imageData, 0, 0);
+    } else if (currentTheme === 'ruins') {
+        const imageData = spriteCtx.getImageData(0, 0, S, S);
+        const data = imageData.data;
+        punchHoleThroughRed(imageData); // Mark eye pixels
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] === 1) { // Eye pixel
+                data[i] = 255;     // Red
+                data[i + 1] = 0;   // Green
+                data[i + 2] = 0;   // Blue
+                data[i + 3] = 255; // Full opacity
+            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                data[i] = 144;     // Red
+                data[i + 1] = 126; // Green
+                data[i + 2] = 105; // Blue
+                data[i + 3] = 255; // Full opacity (removed 95% opacity)
+            }
+        }
+        spriteCtx.putImageData(imageData, 0, 0);
+    } else if (currentTheme === 'hell') {
+        // Apply red tint for hell theme
+        spriteCtx.globalCompositeOperation = 'source-atop';
+        spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        spriteCtx.fillRect(0, 0, S, S);
+        spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+    } else if (currentTheme === 'paradise') {
+        // Apply purple tint for paradise theme
+        spriteCtx.globalCompositeOperation = 'source-atop';
+        spriteCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
+        spriteCtx.fillRect(0, 0, S, S);
+        spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+    }
+}
+        
+// Draw the sprite on the temporary canvas
+if (isVisible) {
+    tempCtx.globalAlpha = pulseAlpha;
+    tempCtx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red
+    const centerX = S / 2;
+    const centerY = S / 2;
+    const radius = S / 2;
+    tempCtx.beginPath();
+    tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    tempCtx.fill();
+    tempCtx.globalAlpha = 1.0;
+}
+tempCtx.imageSmoothingEnabled = false;
+if (isVisible) {
+    tempCtx.drawImage(spriteCanvas, 0, 0, S, S);
+} else {
+    // Outside fog of war, draw original sprite to show red eyes
+    tempCtx.drawImage(img, 0, 0, S, S);
+}
         
         // Draw the processed sprite to the main canvas
         c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
@@ -5421,7 +5515,7 @@ function startGame() {
     }
     
     hasPlayedOnce = true; // Mark that the player has started a game
-    
+        
     // Ensure fetchTxs is triggered after splash fade
     setTimeout(() => {
         if (!gameOver && !splashActive && floor > 0) {
@@ -5551,11 +5645,11 @@ function updateGamepad(timestamp) {
     // Check for actual gamepad input (buttons or axes)
     const buttons = gamepad.buttons;
     const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
-    
+
     // Simulate a keyboard key press to prevent sleep mode when gamepad is active
     if (hasInput && !splashActive && !gameOver) {
         const now = performance.now();
-        if (!lastKeySimulationTime || now - lastKeySimulationTime >= 30000) { // Simulate every 30 seconds
+        if (!lastKeySimulationTime || now - lastKeySimulationTime >= 10000) { // Simulate every 10 seconds
             const keyEvent = new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32 });
             document.dispatchEvent(keyEvent);
             console.log('Simulated spacebar key press to prevent sleep mode at', now);
