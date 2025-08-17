@@ -1367,6 +1367,7 @@ function selectNewTheme(current) {
 }
 
 let currentRuneTile = null; // Track current rune tile position
+let highlightTiles = [];
 let map = [],
     p = {
         x: 2,
@@ -1400,7 +1401,9 @@ let map = [],
             frameIndex: 0,
             lastFrameTime: 0,
             frameDuration: 200
-        }
+        },
+        // Add diamond hand properties
+        hasDiamondHand: false, // Track if player has diamond hand
     }, 
     enemies = [], 
     rooms = [];
@@ -1654,7 +1657,10 @@ const assets = {
 	assets.player_armor.src = 'player_armor.png';
         assets.stairs.src = 'stairs.png'; 
         assets.bitcoin.src = 'bitcoin.png';
-        assets.gameOver.src = 'gameover.png'; assets.sword.src = 'sword.png';
+        assets.gameOver.src = 'gameover.png';
+        assets.sword.src = 'sword.png';
+        assets.diamond_hand = new Image(); // Add diamond hand asset
+        assets.diamond_hand.src = 'diamond_hand.png';
         assets.pickaxe_sword.src = 'pickaxe-sword.png';
         assets.shoot_sword.src = 'shoot_sword.png';        
         assets.runes.on_floor.src = 'rune_on_floor.png';
@@ -2717,13 +2723,34 @@ function updatePlayerState() {
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
     }
 
+// Check if player is on blacksmith tile and can get diamond armor or diamond hand
+if (map[p.y][p.x] === 15 && p.perfectlyCutDiamonds > 0) {
+    if (!p.hasDiamondArmor) {
+        p.hasDiamondArmor = true;
+        p.perfectlyCutDiamonds--;
+        logBattleEvent(`Floor ${floor} - Diamond Armor acquired from Blacksmith!`);
+        document.getElementById('armorStatus').textContent = 'Diamond';
+    } else if (!p.hasDiamondHand) {
+        p.hasDiamondHand = true;
+        p.perfectlyCutDiamonds--;
+        p.atk = 3; // Increase attack power for diamond hand
+        logBattleEvent(`Floor ${floor} - Diamond Hand acquired from Blacksmith!`);
+    }
+}
+
+// Check if player lost diamond armor and should lose diamond hand
+if (!p.hasDiamondArmor && p.hasDiamondHand) {
+    p.hasDiamondHand = false;
+    logBattleEvent(`Floor ${floor} - Diamond Hand lost! Back to normal sword.`);
+    p.atk = 2; // Reset attack power
+}
+
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('diamonds').textContent = diamonds;
     document.getElementById('perfectlyCutDiamonds').textContent = p.perfectlyCutDiamonds;
     needsRedraw = true;
 }
-
 
 function updateFogMap(px, py) {
     const radius = 4; // Visibility radius
@@ -4298,13 +4325,13 @@ function debugRuneword(runewordKey) {
 }
 */
 
-
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
     if (gameOver || splashActive) return;
     swordActive = true;
     swordStart = Date.now();
     sounds.attack.play().catch(e => console.error('Attack sound error:', e));
+    
     // Update player direction
     let newDirection = p.anim.direction;
     if (swordDir === 'up') newDirection = 'back';
@@ -4312,6 +4339,7 @@ function attack() {
     if (swordDir === 'left') newDirection = 'left';
     if (swordDir === 'right') newDirection = 'right';
     p.anim.direction = newDirection;
+    
     const initialPickaxes = p.pickaxes;
     
     // Check for enemy or wall one tile away in swordDir
@@ -4320,30 +4348,298 @@ function attack() {
     if (swordDir === 'down') sy++;
     if (swordDir === 'left') sx--;
     if (swordDir === 'right') sx++;
+    
     const isEnemyNearby = enemies.some(e => e.x === sx && e.y === sy);
     const isWallNearby = sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1;
     
     if (initialPickaxes > 0 || isEnemyNearby || isWallNearby) {
         usePickaxeSword = initialPickaxes > 0;
         let hit = enemies.find(e => e.x === sx && e.y === sy);
-        if (hit) {
-            const damage = p.atk; // Remove armor bonus
-            hit.hp -= damage;
-            logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
-            playWebAudioSound(sounds.hit);
-            if (hit.hp <= 0) {
-                kills[hit.type.name]++;
-                let dropPlaced = false;
+        
+if (hit) {
+    if (p.hasDiamondHand && !(p.pickaxes > 0 && usePickaxeSword)) {
+        // Diamond hand AOE damage - updated to match the specified pattern
+        const damageArea = [];
+        
+        // Determine damage tiles based on direction
+        if (swordDir === 'up') {
+            const close_y = p.y - 1;
+            const far_y = p.y - 2;
+            for (let dx = -1; dx <= 1; dx++) {
+                damageArea.push({x: p.x + dx, y: close_y});
+            }
+            for (let dx = -2; dx <= 2; dx++) {
+                damageArea.push({x: p.x + dx, y: far_y});
+            }
+        } else if (swordDir === 'down') {
+            const close_y = p.y + 1;
+            const far_y = p.y + 2;
+            for (let dx = -1; dx <= 1; dx++) {
+                damageArea.push({x: p.x + dx, y: close_y});
+            }
+            for (let dx = -2; dx <= 2; dx++) {
+                damageArea.push({x: p.x + dx, y: far_y});
+            }
+        } else if (swordDir === 'left') {
+            const close_x = p.x - 1;
+            const far_x = p.x - 2;
+            for (let dy = -1; dy <= 1; dy++) {
+                damageArea.push({x: close_x, y: p.y + dy});
+            }
+            for (let dy = -2; dy <= 2; dy++) {
+                damageArea.push({x: far_x, y: p.y + dy});
+            }
+        } else if (swordDir === 'right') {
+            const close_x = p.x + 1;
+            const far_x = p.x + 2;
+            for (let dy = -1; dy <= 1; dy++) {
+                damageArea.push({x: close_x, y: p.y + dy});
+            }
+            for (let dy = -2; dy <= 2; dy++) {
+                damageArea.push({x: far_x, y: p.y + dy});
+            }
+        }
+        
+        // Apply damage to all valid tiles in the area
+        const damage = 3; // Diamond hand AOE damage
+        let enemiesHit = 0;
+        let totalDamage = 0;
+        
+        highlightTiles = []; // Clear previous highlights
+        for (const tile of damageArea) {
+            const {x, y} = tile;
+            
+            // Check if tile is within bounds and not a wall
+            if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
+                highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
+                // Check if there's an enemy at this tile
+                const enemy = enemies.find(e => e.x === x && e.y === y);
+                
+                if (enemy) {
+                    // Apply damage to enemy
+                    enemy.hp -= damage;
+                    logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${damage} DMG (HP: ${enemy.hp})`);
+                    playWebAudioSound(sounds.hit);
+                    
+                    if (enemy.hp <= 0) {
+                        kills[enemy.type.name]++;
+                        let dropPlaced = false;
+                        
+                        // Drop satoshi
+                        if (map[enemy.y][enemy.x] === 0) {
+                            map[enemy.y][enemy.x] = 3;
+                            satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                            dropPlaced = true;
+                        } else {
+                            const adjacent = [
+                                {x: enemy.x, y: enemy.y - 1},
+                                {x: enemy.x, y: enemy.y + 1},
+                                {x: enemy.x - 1, y: enemy.y},
+                                {x: enemy.x + 1, y: enemy.y}
+                            ];
+                            for (const pos of adjacent) {
+                                const nx = pos.x, ny = pos.y;
+                                if (
+                                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                    map[ny][nx] === 0 &&
+                                    !enemies.some(e => e.x === nx && e.y === ny)
+                                ) {
+                                    map[ny][nx] = 3;
+                                    satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                                    dropPlaced = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!dropPlaced) {
+                            // No space for satoshi drop
+                        }
+
+                        // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
+                        if (!scrollDroppedThisFloor && Math.random() < 1/25) {
+                            let scrollPlaced = false;
+                            scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 11; // Scroll tile
+                                scrollDrops.push({ x: enemy.x, y: enemy.y });
+                                scrollPlaced = true;
+                            } else {
+                                const adjacent = [
+                                    { x: enemy.x, y: enemy.y - 1 },
+                                    { x: enemy.x, y: enemy.y + 1 },
+                                    { x: enemy.x - 1, y: enemy.y },
+                                    { x: enemy.x + 1, y: enemy.y }
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny) &&
+                                        !scrollDrops.some(s => s.x === nx && s.y === ny)
+                                    ) {
+                                        map[ny][nx] = 11; // Scroll tile
+                                        scrollDrops.push({ x: nx, y: ny });
+                                        scrollPlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (scrollPlaced) {
+                                logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a scroll!`);
+                                playWebAudioSound(sounds.pickup);
+                            }
+                        }
+
+                        // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
+                        if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                            let runeLetter;
+                            if (enemy.type.name === 'Shrimp' && currentTheme === 'hell') {
+                                // Hell Shrimp: Use specific rune letters
+                                const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
+                                runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                            } else {
+                                // Regular rune drop
+                                const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                                runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                            }
+                            let runePlaced = false;
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 8; // Generic rune on floor
+                                runeDrops.push({ x: enemy.x, y: enemy.y, letter: runeLetter });
+                                runePlaced = true;
+                            } else {
+                                const adjacent = [
+                                    { x: enemy.x, y: enemy.y - 1 },
+                                    { x: enemy.x, y: enemy.y + 1 },
+                                    { x: enemy.x - 1, y: enemy.y },
+                                    { x: enemy.x + 1, y: enemy.y }
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny)
+                                    ) {
+                                        map[ny][nx] = 8; // Generic rune on floor
+                                        runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                                        runePlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (runePlaced) {
+                                logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a mysterious rune!`);
+                                playWebAudioSound(sounds.rune_drop);
+                            }
+                        }
+
+                        enemies = enemies.filter(en => en !== enemy);
+                        enemiesHit++;
+                    }
+                    totalDamage += damage;
+                }
+            }
+        }
+    } else {
+        // Regular sword attack
+        const damage = p.atk; // Remove armor bonus
+        hit.hp -= damage;
+        logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
+        playWebAudioSound(sounds.hit);
+        if (hit.hp <= 0) {
+            kills[hit.type.name]++;
+            let dropPlaced = false;
+            if (map[hit.y][hit.x] === 0) {
+                map[hit.y][hit.x] = 3;
+                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                dropPlaced = true;
+            } else {
+                const adjacent = [
+                    {x: hit.x, y: hit.y - 1},
+                    {x: hit.x, y: hit.y + 1},
+                    {x: hit.x - 1, y: hit.y},
+                    {x: hit.x + 1, y: hit.y}
+                ];
+                for (const pos of adjacent) {
+                    const nx = pos.x, ny = pos.y;
+                    if (
+                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                        map[ny][nx] === 0 &&
+                        !enemies.some(e => e.x === nx && e.y === ny)
+                    ) {
+                        map[ny][nx] = 3;
+                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                        dropPlaced = true;
+                        break;
+                    }
+                }
+            }
+            if (!dropPlaced) {
+                // No space for satoshi drop
+            }
+
+            // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
+            if (!scrollDroppedThisFloor && Math.random() < 1/25) {
+                let scrollPlaced = false;
+                scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
                 if (map[hit.y][hit.x] === 0) {
-                    map[hit.y][hit.x] = 3;
-                    satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                    dropPlaced = true;
+                    map[hit.y][hit.x] = 11; // Scroll tile
+                    scrollDrops.push({ x: hit.x, y: hit.y });
+                    scrollPlaced = true;
                 } else {
                     const adjacent = [
-                        {x: hit.x, y: hit.y - 1},
-                        {x: hit.x, y: hit.y + 1},
-                        {x: hit.x - 1, y: hit.y},
-                        {x: hit.x + 1, y: hit.y}
+                        { x: hit.x, y: hit.y - 1 },
+                        { x: hit.x, y: hit.y + 1 },
+                        { x: hit.x - 1, y: hit.y },
+                        { x: hit.x + 1, y: hit.y }
+                    ];
+                    for (const pos of adjacent) {
+                        const nx = pos.x, ny = pos.y;
+                        if (
+                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                            map[ny][nx] === 0 &&
+                            !enemies.some(e => e.x === nx && e.y === ny) &&
+                            !scrollDrops.some(s => s.x === nx && s.y === ny)
+                        ) {
+                            map[ny][nx] = 11; // Scroll tile
+                            scrollDrops.push({ x: nx, y: ny });
+                            scrollPlaced = true;
+                            break;
+                        }
+                    }
+                }
+                if (scrollPlaced) {
+                    logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a scroll!`);
+                    playWebAudioSound(sounds.pickup);
+                }
+            }
+
+            // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
+            if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                let runeLetter;
+                if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
+                    // Hell Shrimp: Use specific rune letters
+                    const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
+                    runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                } else {
+                    // Regular rune drop
+                    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                    runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                }
+                let runePlaced = false;
+                if (map[hit.y][hit.x] === 0) {
+                    map[hit.y][hit.x] = 8; // Generic rune on floor
+                    runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
+                    runePlaced = true;
+                } else {
+                    const adjacent = [
+                        { x: hit.x, y: hit.y - 1 },
+                        { x: hit.x, y: hit.y + 1 },
+                        { x: hit.x - 1, y: hit.y },
+                        { x: hit.x + 1, y: hit.y }
                     ];
                     for (const pos of adjacent) {
                         const nx = pos.x, ny = pos.y;
@@ -4352,122 +4648,51 @@ function attack() {
                             map[ny][nx] === 0 &&
                             !enemies.some(e => e.x === nx && e.y === ny)
                         ) {
-                            map[ny][nx] = 3;
-                            satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                            dropPlaced = true;
+                            map[ny][nx] = 8; // Generic rune on floor
+                            runeDrops.push({ x: nx, y: ny, letter: runeLetter });
+                            runePlaced = true;
                             break;
                         }
                     }
                 }
-                if (!dropPlaced) {
-                    // No space for satoshi drop
+                if (runePlaced) {
+                    logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+                    playWebAudioSound(sounds.rune_drop);
                 }
+            }
 
-// Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
-if (!scrollDroppedThisFloor && Math.random() < 1/25) {
-    let scrollPlaced = false;
-    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 11; // Scroll tile
-        scrollDrops.push({ x: hit.x, y: hit.y });
-        scrollPlaced = true;
-    } else {
-        const adjacent = [
-            { x: hit.x, y: hit.y - 1 },
-            { x: hit.x, y: hit.y + 1 },
-            { x: hit.x - 1, y: hit.y },
-            { x: hit.x + 1, y: hit.y }
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny) &&
-                !scrollDrops.some(s => s.x === nx && s.y === ny)
-            ) {
-                map[ny][nx] = 11; // Scroll tile
-                scrollDrops.push({ x: nx, y: ny });
-                scrollPlaced = true;
-                break;
+            enemies = enemies.filter(en => en !== hit);
+            if (exit && enemies.length === 0) {
+                updateSatsDisplay();
             }
         }
     }
-    if (scrollPlaced) {
-        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a scroll!`);
-        playWebAudioSound(sounds.pickup);
+} else if (initialPickaxes > 0 && isWallNearby) {
+    p.pickaxes--;
+    sounds.secret.play().catch(e => console.error('Secret sound error:', e));
+    logBattleEvent(`Floor ${floor} - Wall Broken!`);
+    createSecretRoom(sx, sy, p.x, p.y, swordDir);
+}
+
+    }
+    
+// Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
+if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
+    let sx = p.x, sy = p.y; // Start at player's position
+    if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
+        projectiles.push({ x: sx, y: sy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
+        sounds.shoot_sword.pause();
+        sounds.shoot_sword.currentTime = 0;
+        sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
     }
 }
-                
-                // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
-                if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
-                    let runeLetter;
-                    if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
-                        // Hell Shrimp: Use specific rune letters
-                        const hellShrimpRunes = ['b', 't', 'c', 'h', 'o', 'd', 'l'];
-                        runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
-                    } else {
-                        // Regular rune drop
-                        const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
-                        runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
-                    }
-                    let runePlaced = false;
-                    if (map[hit.y][hit.x] === 0) {
-                        map[hit.y][hit.x] = 8; // Generic rune on floor
-                        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
-                        runePlaced = true;
-                    } else {
-                        const adjacent = [
-                            { x: hit.x, y: hit.y - 1 },
-                            { x: hit.x, y: hit.y + 1 },
-                            { x: hit.x - 1, y: hit.y },
-                            { x: hit.x + 1, y: hit.y }
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny)
-                            ) {
-                                map[ny][nx] = 8; // Generic rune on floor
-                                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
-                                runePlaced = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (runePlaced) {
-                        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
-                        playWebAudioSound(sounds.rune_drop);
-                    }
-                }
-                
-                enemies = enemies.filter(en => en !== hit);
-                if (exit && enemies.length === 0) {
-                    updateSatsDisplay();
-                }
-            }
-        } else if (initialPickaxes > 0 && isWallNearby) {
-            p.pickaxes--;
-            sounds.secret.play().catch(e => console.error('Secret sound error:', e));
-            logBattleEvent(`Floor ${floor} - Wall Broken!`);
-            createSecretRoom(sx, sy, p.x, p.y, swordDir);
-        }
-    } else if (p.hp >= 24 && projectiles.length === 0) {
-        let sx = p.x, sy = p.y; // Start at player's position
-        if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
-            projectiles.push({ x: sx, y: sy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
-            sounds.shoot_sword.pause();
-            sounds.shoot_sword.currentTime = 0;
-            sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
-        }
-    }
+    
     moveEnemies();
     needsRedraw = true;
     setTimeout(() => {
         swordActive = false;
         usePickaxeSword = false;
+        highlightTiles = []; // Clear highlights after flash
         needsRedraw = true;
     }, 200);
 }
@@ -4829,35 +5054,7 @@ function draw() {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 1) c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
     }
-    // Draw floors, items, stairs, and runes
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-        const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
-        if (isVisible && map[y][x] !== 1) {
-            c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
-            if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
-            if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
-            if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
-            if (map[y][x] === 5) c.drawImage(assets.armor, x * S, y * S, S, S);
-            if (map[y][x] === 6 && currentTheme !== 'dungeon') c.drawImage(assets.themes[currentTheme].special, x * S, y * S, S, S);
-            if (map[y][x] === 7) c.drawImage(assets.gnome, x * S, y * S, S, S);
-            if (map[y][x] === 8) c.drawImage(assets.runes.on_floor, x * S, y * S, S, S);
-            if (map[y][x] === 9) {
-                const rune = runeDrops.find(r => r.x === x && r.y === y && r.specific);
-                if (rune && assets.runes[rune.letter]) {
-                    c.globalAlpha = 0.9; // Apply 10% transparency
-                    c.drawImage(assets.runes[rune.letter], x * S, y * S, S, S);
-                    c.globalAlpha = 1; // Restore full opacity
-                }
-            }
-if (map[y][x] === 10) { // diamond tile
-    c.drawImage(assets.diamond, x * S, y * S, S, S);
-}
-if (map[y][x] === 11) { // scroll tile
-    c.drawImage(assets.scroll, x * S, y * S, S, S);
-}
-
-// Save floor state before entering hideout
+// Save floor state before entering hideout (moved here to run once per draw)
 if (!inHideout) {
     previousFloorState = {
         map: map.map(row => [...row]),
@@ -4879,39 +5076,77 @@ if (!inHideout) {
     };
 }
 
-if (map[y][x] === 12) { // portal tile
-    const portal = portals.find(p => p.x === x && p.y === y);
-    if (portal) {
-        const now = performance.now();
-        if (now - portal.lastFrameTime >= portal.frameDuration) {
-            portal.frameIndex = (portal.frameIndex + 1) % assets.town_portal.length;
-            portal.lastFrameTime = now;
-            needsRedraw = true; // Ensure redraw for animation
+// Draw floors, items, stairs, and runes
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+    const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
+    if (isVisible && map[y][x] !== 1) {
+        c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+        if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
+        if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
+        if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
+        if (map[y][x] === 5) c.drawImage(assets.armor, x * S, y * S, S, S);
+        if (map[y][x] === 6 && currentTheme !== 'dungeon') c.drawImage(assets.themes[currentTheme].special, x * S, y * S, S, S);
+        if (map[y][x] === 7) c.drawImage(assets.gnome, x * S, y * S, S, S);
+        if (map[y][x] === 8) c.drawImage(assets.runes.on_floor, x * S, y * S, S, S);
+        if (map[y][x] === 9) {
+            const rune = runeDrops.find(r => r.x === x && r.y === y && r.specific);
+            if (rune && assets.runes[rune.letter]) {
+                c.globalAlpha = 0.9; // Apply 10% transparency
+                c.drawImage(assets.runes[rune.letter], x * S, y * S, S, S);
+                c.globalAlpha = 1; // Restore full opacity
+            }
         }
-        c.drawImage(assets.town_portal[portal.frameIndex], x * S, y * S, S, S);
+        if (map[y][x] === 10) { // diamond tile
+            c.drawImage(assets.diamond, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 11) { // scroll tile
+            c.drawImage(assets.scroll, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 12) { // portal tile
+            const portal = portals.find(p => p.x === x && p.y === y);
+            if (portal) {
+                const now = performance.now();
+                if (now - portal.lastFrameTime >= portal.frameDuration) {
+                    portal.frameIndex = (portal.frameIndex + 1) % assets.town_portal.length;
+                    portal.lastFrameTime = now;
+                    needsRedraw = true; // Ensure redraw for animation
+                }
+                c.drawImage(assets.town_portal[portal.frameIndex], x * S, y * S, S, S);
+            }
+        }
+        if (map[y][x] === 13) { // Diamond wall
+            c.drawImage(assets.themes.hideout.diamond_wall, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 14) { // Jeweller
+            c.drawImage(assets.jeweller, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 15) { // Blacksmith
+            c.drawImage(assets.blacksmith, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 16) { // Waypoint
+            c.drawImage(assets.waypoint, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 17) { // Rune Whisperer
+            c.drawImage(assets.rune_whisperer, x * S, y * S, S, S);
+        }
+        if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
     }
 }
-
-if (map[y][x] === 13) { // Diamond wall
-    c.drawImage(assets.themes.hideout.diamond_wall, x * S, y * S, S, S);
-}
-if (map[y][x] === 14) { // Jeweller
-    c.drawImage(assets.jeweller, x * S, y * S, S, S);
-}
-if (map[y][x] === 15) { // Blacksmith
-    c.drawImage(assets.blacksmith, x * S, y * S, S, S);
-}
-if (map[y][x] === 16) { // Waypoint
-    c.drawImage(assets.waypoint, x * S, y * S, S, S);
-}
-if (map[y][x] === 17) { // Rune Whisperer
-    c.drawImage(assets.rune_whisperer, x * S, y * S, S, S);
-}
-
-if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
+// Draw flash effect for diamond hand AOE damage
+highlightTiles.forEach(tile => {
+    if (Date.now() - tile.highlightStart < 200 && tile.x >= 0 && tile.x < W && tile.y >= 0 && tile.y < H && map[tile.y][tile.x] !== 1) {
+        const dist = Math.sqrt((tile.x - p.x) ** 2 + (tile.y - p.y) ** 2);
+        const isVisible = fogMap[tile.y][tile.x] === 1 || dist <= radius;
+        if (isVisible) {
+            c.save();
+            c.fillStyle = 'rgba(247, 147, 26, 0.5)'; // Bitcoin orange flash
+            c.fillRect(tile.x * S, tile.y * S, S, S);
+            c.restore();
         }
     }
-    // Draw projectiles, skipping player's position
+});
+// Draw projectiles, skipping player's position
     projectiles.forEach(proj => {
         if (proj.x >= 0 && proj.x < W && proj.y >= 0 && proj.y < H && 
             (proj.x !== p.x || proj.y !== p.y)) {
@@ -4948,23 +5183,33 @@ if (p.isFalling) {
         }
         c.restore();
     }
-    // Draw sword or pickaxe-sword
-    if (swordActive && Date.now() - swordStart < 200) {
-        let sx = p.x, sy = p.y;
-        if (swordDir === 'up') sy--;
-        if (swordDir === 'down') sy++;
-        if (swordDir === 'left') sx--;
-        if (swordDir === 'right') sx++;
-        if (sx >= 0 && sx < W && sy >= 0 && sy < H && Math.sqrt((sx - p.x) ** 2 + (sy - p.y) ** 2) <= radius) {
-            c.save();
-            c.translate(sx * S + S / 2, sy * S + S / 2);
-            if (swordDir === 'up') c.rotate(-Math.PI / 2);
-            if (swordDir === 'down') c.rotate(Math.PI / 2);
-            if (swordDir === 'left') c.rotate(Math.PI);
-            c.drawImage(usePickaxeSword ? assets.pickaxe_sword : assets.sword, -S / 2, -S / 2, S, S);
-            c.restore();
+// Draw sword or pickaxe-sword or diamond hand
+if (swordActive && Date.now() - swordStart < 200) {
+    let sx = p.x, sy = p.y;
+    if (swordDir === 'up') sy--;
+    if (swordDir === 'down') sy++;
+    if (swordDir === 'left') sx--;
+    if (swordDir === 'right') sx++;
+    if (sx >= 0 && sx < W && sy >= 0 && sy < H && Math.sqrt((sx - p.x) ** 2 + (sy - p.y) ** 2) <= radius) {
+        c.save();
+        c.translate(sx * S + S / 2, sy * S + S / 2);
+        if (swordDir === 'up') c.rotate(-Math.PI / 2);
+        if (swordDir === 'down') c.rotate(Math.PI / 2);
+        if (swordDir === 'left') c.rotate(Math.PI);
+        // Prioritize pickaxe sword if player has pickaxes and is using it, then diamond hand, then regular sword
+        if (p.pickaxes > 0 && usePickaxeSword) {
+            c.drawImage(assets.pickaxe_sword, -S / 2, -S / 2, S, S);
+            p.atk = 2; // Reset attack power
+        } else if (p.hasDiamondHand) {
+            c.drawImage(assets.diamond_hand, -S / 2, -S / 2, S, S);
+            p.atk = 3; // diamond hand attack power
+        } else {
+            c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
+            p.atk = 2; // Reset attack power
         }
+        c.restore();
     }
+}
     
 // Add rune tile indicator when player is on a rune tile
 if (currentRuneTile && map[p.y][p.x] === 9) {
@@ -5749,3 +5994,4 @@ document.addEventListener('contextmenu', function(e) {
     </script>
 </body>
 </html>
+
