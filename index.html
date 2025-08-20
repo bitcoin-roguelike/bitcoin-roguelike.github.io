@@ -1863,25 +1863,35 @@ class MusicManager {
       audio.onerror = () => console.error(`Failed to load music: ${audio.src}`);
     });
   }
-  play(theme) {
+play(theme) {
     if (!this.audios[theme]) return;
     const audio = this.audios[theme];
+    if (audio.readyState < 2) { // Check if audio is not yet loaded
+        audio.load(); // Force reload
+        audio.oncanplaythrough = () => {
+            this._playAudio(theme, audio);
+        };
+    } else {
+        this._playAudio(theme, audio);
+    }
+}
+_playAudio(theme, audio) {
     if (this.current === theme) {
-      if (audio.paused && !this.muted) {
-        audio.play().catch(e => console.error('Music play failed:', e));
-      }
-      return;
+        if (audio.paused && !this.muted) {
+            audio.play().catch(e => console.error('Music play failed:', e));
+        }
+        return;
     }
     if (this.current) {
-      this.fadeOut(this.audios[this.current]);
+        this.fadeOut(this.audios[this.current]);
     }
     audio.volume = 0;
     audio.muted = this.muted;
     audio.play().then(() => {
-      this.fadeIn(audio);
+        this.fadeIn(audio);
     }).catch(e => console.error('Music play failed:', e));
     this.current = theme;
-  }
+}
   fadeOut(audio) {
     let vol = audio.volume;
     const interval = setInterval(() => {
@@ -5821,7 +5831,8 @@ document.getElementById('mute').textContent = '♪'; // Update mute button UI
         }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
     preloadSounds(); // Preload sounds after user interaction
-    
+
+/*    
 currentTheme = currentTheme || 'dungeon'; // Set default theme if undefined
 musicMuted = false; // Reset mute state
 document.getElementById('mute').textContent = '♪'; // Update mute button UI
@@ -5830,6 +5841,19 @@ musicManager.play(currentTheme); // Play the music
 if (musicManager.current) {
     musicManager.audios[musicManager.current].currentTime = 0;
 }
+*/
+
+currentTheme = currentTheme || 'dungeon'; // Set default theme if undefined
+musicMuted = false; // Reset mute state
+document.getElementById('mute').textContent = '♪'; // Update mute button UI
+musicManager.mute(false); // Ensure MusicManager is unmuted
+if (musicManager.current) {
+    musicManager.fadeOut(musicManager.audios[musicManager.current]); // Stop current track and reset to start
+}
+setTimeout(() => {
+    musicManager.play(currentTheme); // Play the music with a slight delay
+}, 100); // 100ms delay to ensure audio context is ready
+
     fadeSplash();
     
     // Start gamepad polling if gamepad is connected
