@@ -1875,11 +1875,12 @@ class MusicManager {
     if (this.current) {
       this.fadeOut(this.audios[this.current]);
     }
-    audio.volume = 0;
-    audio.muted = this.muted;
-    audio.play().then(() => {
-      this.fadeIn(audio);
-    }).catch(e => console.error('Music play failed:', e));
+audio.volume = this.muted ? 0 : 1; // Set initial volume based on muted state
+audio.muted = this.muted;
+audio.play().catch(e => console.error('Music play failed:', e));
+if (!this.muted) {
+  this.fadeIn(audio); // Ensure fadeIn is called only if not muted
+}
     this.current = theme;
   }
   fadeOut(audio) {
@@ -2040,6 +2041,7 @@ function resetSplashScreen() {
     }
 
 document.getElementById('start-button').addEventListener('click', () => {
+currentTheme = 'dungeon'; // Force default theme on game start
     if (splashActive) {
                 preloadSounds();
         // Ensure AudioContext is resumed for iOS
