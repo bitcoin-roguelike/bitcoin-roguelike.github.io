@@ -1788,6 +1788,136 @@ function placeStairs() {
 }
 
 const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+class MusicManager {
+  constructor() {
+    this.isIOS = isIOSorSafari();
+    this.tracks = {
+      dungeon: new Audio('dungeon.mp3'),
+      desert: new Audio('desert.mp3'),
+      hell: new Audio('hell.mp3'),
+      paradise: new Audio('paradise.mp3'),
+      ruins: new Audio('ruins.mp3'),
+      hideout: new Audio('hideout.mp3')
+    };
+    this.currentTheme = null;
+    this.currentTrack = null;
+    this.previousTheme = null;
+    this.previousTime = 0;
+    this.muted = false;
+    this.fading = false;
+    Object.values(this.tracks).forEach(track => {
+      track.loop = true;
+      track.volume = 0;
+    });
+  }
+preload() {
+  // Set src for all tracks, no playback to avoid AudioContext restrictions
+  Object.values(this.tracks).forEach(track => {
+    track.volume = 1.0; // Ensure volume is set for later playback
+    track.load(); // Preload by loading the source without playing
+  });
+}
+playTheme(theme, fromPrevious = false) {
+  if (this.muted || this.fading) return;
+  if (theme === this.currentTheme && this.currentTrack && !this.currentTrack.paused) return;
+  const newTrack = this.tracks[theme];
+  if (!newTrack) return;
+  if (audioContext && audioContext.state === 'suspended') {
+    audioContext.resume().then(() => {
+      this.startThemePlayback(newTrack, theme, fromPrevious);
+    }).catch(e => console.error('AudioContext resume failed in playTheme:', e));
+  } else {
+    this.startThemePlayback(newTrack, theme, fromPrevious);
+  }
+}
+startThemePlayback(newTrack, theme, fromPrevious) {
+  if (this.currentTrack && this.currentTrack !== newTrack) {
+    this.fadeOut(this.currentTrack, true, () => {
+      this.startNewTrack(newTrack, theme, fromPrevious);
+    });
+  } else {
+    this.startNewTrack(newTrack, theme, fromPrevious);
+  }
+}
+  startNewTrack(track, theme, fromPrevious) {
+    track.volume = 0;
+    if (fromPrevious) {
+      track.currentTime = this.previousTime;
+    } else {
+      track.currentTime = 0;
+    }
+    track.play().then(() => {
+      this.fadeIn(track);
+      this.currentTrack = track;
+      this.currentTheme = theme;
+    }).catch(e => console.error(`Music play error for ${theme}: ${e}`));
+  }
+  fadeOut(track, resetTime = true, callback) {
+    this.fading = true;
+    let vol = track.volume;
+    const interval = setInterval(() => {
+      vol = Math.max(0, vol - 0.05);
+      track.volume = vol;
+      if (vol <= 0) {
+        clearInterval(interval);
+        track.pause();
+        if (resetTime) track.currentTime = 0;
+        this.fading = false;
+        if (callback) callback();
+      }
+    }, 50);
+  }
+  fadeIn(track) {
+    this.fading = true;
+    let vol = 0;
+    const interval = setInterval(() => {
+      vol = Math.min(1, vol + 0.05);
+      track.volume = vol * (this.muted ? 0 : 1);
+      if (vol >= 1) {
+        clearInterval(interval);
+        this.fading = false;
+      }
+    }, 50);
+  }
+  enterHideout() {
+    this.previousTheme = this.currentTheme;
+    this.previousTime = this.currentTrack ? this.currentTrack.currentTime : 0;
+    if (this.currentTrack) {
+      this.fadeOut(this.currentTrack, false, () => {
+        this.playTheme('hideout');
+      });
+    } else {
+      this.playTheme('hideout');
+    }
+  }
+  returnFromHideout() {
+    this.playTheme(this.previousTheme, true);
+  }
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.currentTrack) {
+      this.currentTrack.volume = this.muted ? 0 : 1;
+    }
+    if (!this.muted && this.currentTheme && !splashActive) {
+      this.playTheme(this.currentTheme);
+    }
+  }
+  stop() {
+    if (this.currentTrack) {
+      this.fadeOut(this.currentTrack, true, () => {});
+    }
+    this.currentTheme = null;
+    this.currentTrack = null;
+  }
+  setMuted(muted) {
+    this.muted = muted;
+    if (this.currentTrack) {
+      this.currentTrack.volume = muted ? 0 : 1;
+    }
+  }
+}
+
 let audioContext = null;
 function getAudioContext() {
     if (!audioContext) {
@@ -1802,7 +1932,6 @@ const sounds = {
     potion: new Audio('potion.wav'),
     hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
     pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
-    music: new Audio('music.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
     secret: new Audio('secret.wav'),
@@ -1818,7 +1947,7 @@ const sounds = {
     town_portal: { buffer: null, url: 'town_portal.wav', isPlaying: false, duration: 535 }
 };
 
-sounds.music.loop = true;
+const musicManager = new MusicManager();
 
 // Load Web Audio buffers
 function loadSoundBuffer(url, key) {
@@ -1842,8 +1971,9 @@ loadSoundBuffer('rune_drop.wav', 'rune_drop');
 loadSoundBuffer('hole.wav', 'hole');
 loadSoundBuffer('town_portal.wav', 'town_portal');
 
+
 Object.values(sounds).forEach(s => {
-    if (s instanceof Audio) {
+    if (s instanceof Audio && s !== sounds.music) {
         s.volume = 1.0;
         s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
     }
@@ -1858,7 +1988,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
+            if (key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -1874,7 +2004,7 @@ function preloadSounds() {
 } else {
     // Non-iOS: Existing preload logic
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
+        if (key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
@@ -1896,6 +2026,7 @@ function preloadSounds() {
         }
     });
 }
+musicManager.preload();
 }
 
 function playWebAudioSound(soundObj) {
@@ -2000,12 +2131,16 @@ document.getElementById('start-button').addEventListener('click', () => {
                 img.onerror = () => console.error(`Failed to load image: ${img.src}`);
             }
         });
-        if (!musicMuted) {
-            sounds.music.pause();
-            sounds.music.currentTime = 0;
-            sounds.music.play().then(() => {
-                            }).catch(e => console.error('Music play failed on START:', e));
-        }
+        if (audioContext && audioContext.state === 'suspended') {
+  audioContext.resume().then(() => {
+    if (!musicMuted) { musicManager.playTheme(currentTheme); }
+  }).catch(e => console.error('AudioContext resume failed:', e));
+} else if (!audioContext) {
+  audioContext = new AudioContext();
+  if (!musicMuted) { musicManager.playTheme(currentTheme); }
+} else {
+  if (!musicMuted) { musicManager.playTheme(currentTheme); }
+}
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -2019,11 +2154,10 @@ document.getElementById('start-button').addEventListener('click', () => {
 
 function toggleMute() {
     musicMuted = !musicMuted;
-    sounds.music.muted = musicMuted;
+    musicManager.setMuted(musicMuted);
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
     if (!musicMuted && !splashActive) {
-        sounds.music.currentTime = 0; // Start from beginning
-        sounds.music.play().catch(e => console.error('Music play failed on unmute:', e));
+        musicManager.playTheme(currentTheme);
     }
 }
 
@@ -2182,6 +2316,7 @@ function initMap() {
     try {
 if (inHideout) {
     currentTheme = 'hideout';
+    musicManager.playTheme(currentTheme);
     document.documentElement.style.setProperty('--text-color', '#ff8c00');
     document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
         el.style.color = '#ff8c00';
@@ -2299,6 +2434,7 @@ if (map[runeWhispererY][runeWhispererX] === 0) {
         // Change theme every fourth floor
         if (floor % 3 === 0 && floor > 1) {
             currentTheme = selectNewTheme(currentTheme);
+            musicManager.playTheme(currentTheme);
         }
         // Update text color based on theme
         let textColor;
@@ -3718,6 +3854,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
 
 if (map[ny][nx] === 12) { // Portal tile in normal floor
     playWebAudioSound(sounds.town_portal);
+    musicManager.enterHideout();
     inHideout = true;
     initMap();
     return;
@@ -3742,9 +3879,11 @@ if (map[ny][nx] === 16 && inHideout) {
         initialWaveSpawned = previousFloorState.initialWaveSpawned;
         waveActive = previousFloorState.waveActive;
         currentTheme = previousFloorState.currentTheme;
+        musicManager.playTheme(currentTheme);
         const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
         p.x = portal ? portal.x : 2;
         p.y = portal ? portal.y : 2;
+        musicManager.returnFromHideout();
         inHideout = false;
         document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
         updateFogMap(p.x, p.y);
@@ -3758,6 +3897,7 @@ if (map[ny][nx] === 16 && inHideout) {
     } else {
         inHideout = false;
         initMap();
+        musicManager.playTheme(currentTheme);
         portals = [{ x: p.x, y: p.y, frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }];
         map[p.y][p.x] = 12;
         logBattleEvent(`Floor ${floor} - Returned to a new floor via waypoint!`);
@@ -4898,11 +5038,12 @@ function restart() {
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
     wave = 1;
     document.getElementById('wave').textContent = wave;
-    p.hp = 24;
+    p.hp = 36;
     p.potions = 0;
     p.pickaxes = 0;
     diamonds = 0;
-    p.hasArmor = false;
+    p.hasArmor = true;
+    p.hasDiamondHand = false;
     p.x = 2;
     p.y = 2;
     p.atk = 2;
@@ -5458,8 +5599,7 @@ function gameLoop(timestamp) {
         needsRedraw = true;
     }
     if (gameOver) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
+	musicManager.stop();
         if (!gameOverSoundPlayed) {
             sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
             gameOverSoundPlayed = true;
@@ -5511,12 +5651,16 @@ document.addEventListener('keydown', e => {
                 startButton.style.background = '#00e8d8'; // Revert to original color
             }, 200); // Short duration to simulate tap
             preloadSounds(); // Initialize all sounds except music
-            if (!musicMuted) {
-                sounds.music.pause(); // Ensure clean state
-                sounds.music.currentTime = 0;
-                sounds.music.play().then(() => {
-                }).catch(e => console.error('Music play failed on Enter:', e));
-            }
+            if (audioContext && audioContext.state === 'suspended') {
+  audioContext.resume().then(() => {
+    if (!musicMuted) { musicManager.playTheme(currentTheme); }
+  }).catch(e => console.error('AudioContext resume failed:', e));
+} else if (!audioContext) {
+  audioContext = new AudioContext();
+  if (!musicMuted) { musicManager.playTheme(currentTheme); }
+} else {
+  if (!musicMuted) { musicManager.playTheme(currentTheme); }
+}
             fadeSplash();
             setTimeout(() => {
                 if (!gameOver && !splashActive) {
@@ -5746,11 +5890,16 @@ function startGame() {
     }
     preloadSounds(); // Preload sounds after user interaction
     
-    if (!musicMuted) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
-        sounds.music.play().catch(e => console.error('Music play failed on gamepad START:', e));
-    }
+    if (audioContext && audioContext.state === 'suspended') {
+  audioContext.resume().then(() => {
+    if (!musicMuted) { musicManager.playTheme(currentTheme); }
+  }).catch(e => console.error('AudioContext resume failed:', e));
+} else if (!audioContext) {
+  audioContext = new AudioContext();
+  if (!musicMuted) { musicManager.playTheme(currentTheme); }
+} else {
+  if (!musicMuted) { musicManager.playTheme(currentTheme); }
+}
     fadeSplash();
     
     // Start gamepad polling if gamepad is connected
@@ -5994,4 +6143,3 @@ document.addEventListener('contextmenu', function(e) {
     </script>
 </body>
 </html>
-
