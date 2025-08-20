@@ -1802,7 +1802,12 @@ const sounds = {
     potion: new Audio('potion.wav'),
     hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
     pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
-    music: new Audio('music.mp3'),
+    dungeon: new Audio('dungeon.mp3'),
+desert: new Audio('desert.mp3'),
+hell: new Audio('hell.mp3'),
+paradise: new Audio('paradise.mp3'),
+ruins: new Audio('ruins.mp3'),
+hideout: new Audio('hideout.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
     secret: new Audio('secret.wav'),
@@ -1817,8 +1822,6 @@ const sounds = {
     hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 745 },
     town_portal: { buffer: null, url: 'town_portal.wav', isPlaying: false, duration: 535 }
 };
-
-sounds.music.loop = true;
 
 // Load Web Audio buffers
 function loadSoundBuffer(url, key) {
@@ -1842,6 +1845,74 @@ loadSoundBuffer('rune_drop.wav', 'rune_drop');
 loadSoundBuffer('hole.wav', 'hole');
 loadSoundBuffer('town_portal.wav', 'town_portal');
 
+class MusicManager {
+  constructor() {
+    this.audios = {
+      dungeon: sounds.dungeon,
+      desert: sounds.desert,
+      hell: sounds.hell,
+      paradise: sounds.paradise,
+      ruins: sounds.ruins,
+      hideout: sounds.hideout
+    };
+    this.current = null;
+    this.muted = false;
+    this.volume = 1.0;
+    Object.values(this.audios).forEach(audio => {
+      audio.loop = true;
+      audio.onerror = () => console.error(`Failed to load music: ${audio.src}`);
+    });
+  }
+  play(theme) {
+    if (!this.audios[theme]) return;
+    const audio = this.audios[theme];
+    if (this.current === theme) {
+      if (audio.paused && !this.muted) {
+        audio.play().catch(e => console.error('Music play failed:', e));
+      }
+      return;
+    }
+    if (this.current) {
+      this.fadeOut(this.audios[this.current]);
+    }
+    audio.volume = 0;
+    audio.muted = this.muted;
+    audio.play().then(() => {
+      this.fadeIn(audio);
+    }).catch(e => console.error('Music play failed:', e));
+    this.current = theme;
+  }
+  fadeOut(audio) {
+    let vol = audio.volume;
+    const interval = setInterval(() => {
+      vol = Math.max(0, vol - 0.1);
+      audio.volume = vol;
+      if (vol <= 0) {
+        clearInterval(interval);
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    }, 100);
+  }
+  fadeIn(audio) {
+    let vol = 0;
+    const interval = setInterval(() => {
+      vol = Math.min(this.volume, vol + 0.1);
+      audio.volume = vol;
+      if (vol >= this.volume) {
+        clearInterval(interval);
+      }
+    }, 100);
+  }
+  mute(muted) {
+    this.muted = muted;
+    if (this.current) {
+      this.audios[this.current].muted = muted;
+    }
+  }
+}
+const musicManager = new MusicManager();
+
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
         s.volume = 1.0;
@@ -1858,7 +1929,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
+            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -1874,7 +1945,7 @@ function preloadSounds() {
 } else {
     // Non-iOS: Existing preload logic
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'music' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
+        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
@@ -1969,6 +2040,7 @@ function resetSplashScreen() {
     }
 
 document.getElementById('start-button').addEventListener('click', () => {
+currentTheme = 'dungeon'; // Force default theme on game start
     if (splashActive) {
                 preloadSounds();
         // Ensure AudioContext is resumed for iOS
@@ -2000,12 +2072,9 @@ document.getElementById('start-button').addEventListener('click', () => {
                 img.onerror = () => console.error(`Failed to load image: ${img.src}`);
             }
         });
-        if (!musicMuted) {
-            sounds.music.pause();
-            sounds.music.currentTime = 0;
-            sounds.music.play().then(() => {
-                            }).catch(e => console.error('Music play failed on START:', e));
-        }
+if (!musicMuted) {
+    musicManager.play(currentTheme);
+}
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -2019,11 +2088,10 @@ document.getElementById('start-button').addEventListener('click', () => {
 
 function toggleMute() {
     musicMuted = !musicMuted;
-    sounds.music.muted = musicMuted;
+    musicManager.mute(musicMuted);
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
     if (!musicMuted && !splashActive) {
-        sounds.music.currentTime = 0; // Start from beginning
-        sounds.music.play().catch(e => console.error('Music play failed on unmute:', e));
+        musicManager.play(currentTheme);
     }
 }
 
@@ -2488,6 +2556,9 @@ for (let r of selectedRooms) {
         checkRunewordsAtFloorStart();
         // Update rune display
         checkRunewords();
+        if (!musicMuted) {
+    musicManager.play(currentTheme);
+}
     } catch (e) {
         console.error('initMap Error:', e, e.stack);
         throw e;
@@ -3771,6 +3842,10 @@ if (map[ny][nx] === 16 && inHideout) {
     }
 }
 
+if (!musicMuted) {
+    musicManager.play(currentTheme);
+}
+
 if (map[ny][nx] === 14 && inHideout) { // Jeweller
     if (diamonds >= 3) {
         diamonds -= 3;
@@ -4898,11 +4973,12 @@ function restart() {
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
     wave = 1;
     document.getElementById('wave').textContent = wave;
-    p.hp = 24;
+    p.hp = 36;
     p.potions = 0;
     p.pickaxes = 0;
     diamonds = 0;
-    p.hasArmor = false;
+    p.hasArmor = true;
+    hasDiamondHand: false;
     p.x = 2;
     p.y = 2;
     p.atk = 2;
@@ -5458,8 +5534,8 @@ function gameLoop(timestamp) {
         needsRedraw = true;
     }
     if (gameOver) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
+        musicManager.mute(true);
+        musicManager.play(currentTheme);
         if (!gameOverSoundPlayed) {
             sounds.gameover.play().catch(e => console.error('Gameover sound error:', e));
             gameOverSoundPlayed = true;
@@ -5512,10 +5588,8 @@ document.addEventListener('keydown', e => {
             }, 200); // Short duration to simulate tap
             preloadSounds(); // Initialize all sounds except music
             if (!musicMuted) {
-                sounds.music.pause(); // Ensure clean state
-                sounds.music.currentTime = 0;
-                sounds.music.play().then(() => {
-                }).catch(e => console.error('Music play failed on Enter:', e));
+                musicManager.mute(true);
+                musicManager.play(currentTheme);
             }
             fadeSplash();
             setTimeout(() => {
@@ -5718,6 +5792,8 @@ let currentAxes = null;
 
 // Start game function for splash screen
 function startGame() {
+musicMuted = false;
+document.getElementById('mute').textContent = '♪'; // Update mute button UI
     if (!splashActive) {
         return;
     }
@@ -5746,11 +5822,14 @@ function startGame() {
     }
     preloadSounds(); // Preload sounds after user interaction
     
-    if (!musicMuted) {
-        sounds.music.pause();
-        sounds.music.currentTime = 0;
-        sounds.music.play().catch(e => console.error('Music play failed on gamepad START:', e));
-    }
+currentTheme = currentTheme || 'dungeon'; // Set default theme if undefined
+musicMuted = false; // Reset mute state
+document.getElementById('mute').textContent = '♪'; // Update mute button UI
+musicManager.mute(false); // Ensure MusicManager is unmuted
+musicManager.play(currentTheme); // Play the music
+if (musicManager.current) {
+    musicManager.audios[musicManager.current].currentTime = 0;
+}
     fadeSplash();
     
     // Start gamepad polling if gamepad is connected
