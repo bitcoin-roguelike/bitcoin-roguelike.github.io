@@ -5822,7 +5822,7 @@ document.getElementById('mute').textContent = '♪'; // Update mute button UI
     }
     preloadSounds(); // Preload sounds after user interaction
     
-currentTheme = currentTheme || 'dungeon'; // Force default theme on game start
+currentTheme = 'dungeon'; // Force default theme on game start
 musicMuted = false; // Reset mute state
 document.getElementById('mute').textContent = '♪'; // Update mute button UI
 musicManager.mute(false); // Ensure MusicManager is unmuted
