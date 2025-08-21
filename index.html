@@ -4984,6 +4984,7 @@ function restart() {
     fogMap = [];
     scoreSubmitted = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
+    musicManager.play(currentTheme);
     populateNameList();
 
     /* ------------------------------------------------------------------
