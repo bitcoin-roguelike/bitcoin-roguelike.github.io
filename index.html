@@ -2249,121 +2249,121 @@ function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer
 
 function initMap() {
     try {
-if (inHideout) {
-    currentTheme = 'hideout';
-    document.documentElement.style.setProperty('--text-color', '#ff8c00');
-    document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
-        el.style.color = '#ff8c00';
-    });
-    enemies = [];
-    enemiesSpawnedThisFloor = 0;
-    whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
-    initialSpawnDoneThisFloor = false;
-    initialWaveSpawned = false;
-    map = Array(H).fill().map(() => Array(W).fill(1));
-    fogMap = Array(H).fill().map(() => Array(W).fill(0));
-    rooms = [];
-    satoshiDrops = [];
-    runeDrops = runeDrops.filter(r => !r.specific);
-    scrollDrops = [];
-    portals = [];
-    currentRuneTile = null;
-    jewellerPos = null;
-    blacksmithPos = null;
-    waypointPos = null;
-    exit = null; // Prevent stairs and related enemy spawning
+        if (inHideout) {
+            currentTheme = 'hideout';
+            document.documentElement.style.setProperty('--text-color', '#ff8c00');
+            document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
+                el.style.color = '#ff8c00';
+            });
+            enemies = [];
+            enemiesSpawnedThisFloor = 0;
+            whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
+            initialSpawnDoneThisFloor = false;
+            initialWaveSpawned = false;
+            map = Array(H).fill().map(() => Array(W).fill(1));
+            fogMap = Array(H).fill().map(() => Array(W).fill(0));
+            rooms = [];
+            satoshiDrops = [];
+            runeDrops = runeDrops.filter(r => !r.specific);
+            scrollDrops = [];
+            portals = [];
+            currentRuneTile = null;
+            jewellerPos = null;
+            blacksmithPos = null;
+            waypointPos = null;
+            exit = null; // Prevent stairs and related enemy spawning
 
-    dpadButtons = document.querySelectorAll('#dpad button');
-    actionsButtons = document.querySelectorAll('#actions button');
+            dpadButtons = document.querySelectorAll('#dpad button');
+            actionsButtons = document.querySelectorAll('#actions button');
 
-    rooms = [];
-    const roomSize = 7;
-    const gap = 2;
+            rooms = [];
+            const roomSize = 7;
+            const gap = 2;
 
-    const mainRoomX = Math.floor((W - roomSize) / 2);
-    const mainRoomY = Math.floor((H - roomSize) / 2);
-    rooms.push({ x: mainRoomX, y: mainRoomY, w: roomSize, h: roomSize });
-    for (let y = mainRoomY; y < mainRoomY + roomSize; y++) {
-        for (let x = mainRoomX; x < mainRoomX + roomSize; x++) {
-            map[y][x] = 0;
+            const mainRoomX = Math.floor((W - roomSize) / 2);
+            const mainRoomY = Math.floor((H - roomSize) / 2);
+            rooms.push({ x: mainRoomX, y: mainRoomY, w: roomSize, h: roomSize });
+            for (let y = mainRoomY; y < mainRoomY + roomSize; y++) {
+                for (let x = mainRoomX; x < mainRoomX + roomSize; x++) {
+                    map[y][x] = 0;
+                }
+            }
+
+            const leftRoomX = mainRoomX - roomSize - gap;
+            const leftRoomY = mainRoomY;
+            rooms.push({ x: leftRoomX, y: leftRoomY, w: roomSize, h: roomSize });
+            for (let y = leftRoomY; y < leftRoomY + roomSize; y++) {
+                for (let x = leftRoomX; x < leftRoomX + roomSize; x++) {
+                    map[y][x] = 0;
+                }
+            }
+
+            const rightRoomX = mainRoomX + roomSize + gap;
+            const rightRoomY = mainRoomY;
+            rooms.push({ x: rightRoomX, y: rightRoomY, w: roomSize, h: roomSize });
+            for (let y = rightRoomY; y < rightRoomY + roomSize; y++) {
+                for (let x = rightRoomX; x < rightRoomX + roomSize; x++) {
+                    map[y][x] = 0;
+                }
+            }
+
+            for (let x = leftRoomX + roomSize; x < mainRoomX; x++) {
+                map[mainRoomY + 3][x] = 0;
+            }
+            for (let x = mainRoomX + roomSize; x < rightRoomX; x++) {
+                map[mainRoomY + 3][x] = 0;
+            }
+
+            jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+            const diamondWallTiles = [
+                {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
+                {x: mainRoomX + 2, y: mainRoomY + 3}, {x: mainRoomX + 4, y: mainRoomY + 3},
+                {x: mainRoomX + 2, y: mainRoomY + 4}, {x: mainRoomX + 4, y: mainRoomY + 4}
+            ];
+            diamondWallTiles.forEach(pos => {
+                if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
+                    map[pos.y][pos.x] = 13;
+                }
+            });
+            map[jewellerPos.y][jewellerPos.x] = 14;
+
+            // Place blacksmith at a fixed position in the left room
+            const blacksmithX = leftRoomX + 4;
+            const blacksmithY = leftRoomY + 3;
+            if (map[blacksmithY][blacksmithX] === 0) {
+                map[blacksmithY][blacksmithX] = 15; // Blacksmith
+                blacksmithPos = { x: blacksmithX, y: blacksmithY };
+            } else {
+                console.warn('Failed to place blacksmith: tile occupied at', blacksmithX, blacksmithY);
+            }
+
+            // Place waypoint at a fixed position in the right room
+            const waypointX = rightRoomX + 3;
+            const waypointY = rightRoomY + 3;
+            if (map[waypointY][waypointX] === 0) {
+                map[waypointY][waypointX] = 16; // Waypoint
+                waypointPos = { x: waypointX, y: waypointY };
+            } else {
+                console.warn('Failed to place waypoint: tile occupied at', waypointX, waypointY);
+            }
+            // Place rune whisperer at a fixed position in the right room
+            const runeWhispererX = rightRoomX + 1;
+            const runeWhispererY = rightRoomY + 5;
+            if (map[runeWhispererY][runeWhispererX] === 0) {
+                map[runeWhispererY][runeWhispererX] = 17; // Rune Whisperer
+                runeWhispererPos = { x: runeWhispererX, y: runeWhispererY };
+            } else {
+                console.warn('Failed to place rune whisperer: tile occupied at', runeWhispererX, runeWhispererY);
+            }
+
+            p.x = mainRoomX + 3;
+            p.y = mainRoomY + 6;
+            updateFogMap(p.x, p.y);
+            needsRedraw = true;
+            logBattleEvent(`Hideout - Entered the secret hideout!`);
+            document.getElementById('floor-indicator').textContent = `Hideout`;
+            return;
         }
-    }
-
-    const leftRoomX = mainRoomX - roomSize - gap;
-    const leftRoomY = mainRoomY;
-    rooms.push({ x: leftRoomX, y: leftRoomY, w: roomSize, h: roomSize });
-    for (let y = leftRoomY; y < leftRoomY + roomSize; y++) {
-        for (let x = leftRoomX; x < leftRoomX + roomSize; x++) {
-            map[y][x] = 0;
-        }
-    }
-
-    const rightRoomX = mainRoomX + roomSize + gap;
-    const rightRoomY = mainRoomY;
-    rooms.push({ x: rightRoomX, y: rightRoomY, w: roomSize, h: roomSize });
-    for (let y = rightRoomY; y < rightRoomY + roomSize; y++) {
-        for (let x = rightRoomX; x < rightRoomX + roomSize; x++) {
-            map[y][x] = 0;
-        }
-    }
-
-    for (let x = leftRoomX + roomSize; x < mainRoomX; x++) {
-        map[mainRoomY + 3][x] = 0;
-    }
-    for (let x = mainRoomX + roomSize; x < rightRoomX; x++) {
-        map[mainRoomY + 3][x] = 0;
-    }
-
-    jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
-    const diamondWallTiles = [
-        {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
-        {x: mainRoomX + 2, y: mainRoomY + 3}, {x: mainRoomX + 4, y: mainRoomY + 3},
-        {x: mainRoomX + 2, y: mainRoomY + 4}, {x: mainRoomX + 4, y: mainRoomY + 4}
-    ];
-    diamondWallTiles.forEach(pos => {
-        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
-            map[pos.y][pos.x] = 13;
-        }
-    });
-    map[jewellerPos.y][jewellerPos.x] = 14;
-
-    // Place blacksmith at a fixed position in the left room
-    const blacksmithX = leftRoomX + 4;
-    const blacksmithY = leftRoomY + 3;
-    if (map[blacksmithY][blacksmithX] === 0) {
-        map[blacksmithY][blacksmithX] = 15; // Blacksmith
-        blacksmithPos = { x: blacksmithX, y: blacksmithY };
-    } else {
-        console.warn('Failed to place blacksmith: tile occupied at', blacksmithX, blacksmithY);
-    }
-
-    // Place waypoint at a fixed position in the right room
-const waypointX = rightRoomX + 3;
-const waypointY = rightRoomY + 3;
-if (map[waypointY][waypointX] === 0) {
-    map[waypointY][waypointX] = 16; // Waypoint
-    waypointPos = { x: waypointX, y: waypointY };
-} else {
-    console.warn('Failed to place waypoint: tile occupied at', waypointX, waypointY);
-}
-// Place rune whisperer at a fixed position in the right room
-const runeWhispererX = rightRoomX + 1;
-const runeWhispererY = rightRoomY + 5;
-if (map[runeWhispererY][runeWhispererX] === 0) {
-    map[runeWhispererY][runeWhispererX] = 17; // Rune Whisperer
-    runeWhispererPos = { x: runeWhispererX, y: runeWhispererY };
-} else {
-    console.warn('Failed to place rune whisperer: tile occupied at', runeWhispererX, runeWhispererY);
-}
-
-    p.x = mainRoomX + 3;
-    p.y = mainRoomY + 6;
-    updateFogMap(p.x, p.y);
-    needsRedraw = true;
-    logBattleEvent(`Hideout - Entered the secret hideout!`);
-    document.getElementById('floor-indicator').textContent = `Hideout`;
-    return;
-}
 
         // Change theme every fourth floor
         if (floor % 3 === 0 && floor > 1) {
@@ -2390,33 +2390,33 @@ if (map[runeWhispererY][runeWhispererX] === 0) {
         });
         // Reset enemy spawning variables
         enemies = [];
-	enemiesSpawnedThisFloor = 0;
-	whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
-	initialSpawnDoneThisFloor = false;
+        enemiesSpawnedThisFloor = 0;
+        whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
+        initialSpawnDoneThisFloor = false;
         initialWaveSpawned = false;
         map = Array(H).fill().map(() => Array(W).fill(1));
         fogMap = Array(H).fill().map(() => Array(W).fill(0));
         rooms = [];
-satoshiDrops = [];
-runeDrops = []; // Clear rune drops on map, but keep p.runes, p.runewords, p.immortal
-scrollDrops = []; // Clear scroll drops
-portals = []; // Clear portals
-// Reset rune tracking
-currentRuneTile = null;
+        satoshiDrops = [];
+        runeDrops = []; // Clear rune drops on map, but keep p.runes, p.runewords, p.immortal
+        scrollDrops = []; // Clear scroll drops
+        portals = []; // Clear portals
+        // Reset rune tracking
+        currentRuneTile = null;
 
-function checkCurrentRuneTile() {
-    if (map[p.y][p.x] === 9) {
-        const rune = runeDrops.find(r => r.x === p.x && r.y === p.y && r.specific);
-        if (rune) {
-            const floorIndicator = document.getElementById('floor-indicator');
-            floorIndicator.textContent = `Rune: ${rune.letter.toUpperCase()}`;
-            currentRuneTile = { x: p.x, y: p.y };
-            return true;
+        function checkCurrentRuneTile() {
+            if (map[p.y][p.x] === 9) {
+                const rune = runeDrops.find(r => r.x === p.x && r.y === p.y && r.specific);
+                if (rune) {
+                    const floorIndicator = document.getElementById('floor-indicator');
+                    floorIndicator.textContent = `Rune: ${rune.letter.toUpperCase()}`;
+                    currentRuneTile = { x: p.x, y: p.y };
+                    return true;
+                }
+            }
+            return false;
         }
-    }
-    return false;
-}
-     
+
         // Generate rooms
         let maxAttempts = 100;
         while (rooms.length < 3 && maxAttempts > 0) {
@@ -2446,7 +2446,7 @@ function checkCurrentRuneTile() {
             console.warn('Failed to generate at least 3 rooms, retrying map generation');
             return initMap();
         }
-        
+
         // Connect rooms with corridors
         for (let i = 1; i < rooms.length; i++) {
             let r1 = rooms[i - 1], r2 = rooms[i];
@@ -2455,19 +2455,19 @@ function checkCurrentRuneTile() {
             for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) map[y1][x] = 0;
             for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) map[y][x2] = 0;
         }
-        
+
         // Ensure map is valid
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
-        
+
         // Place player
         p.x = rooms[0].x + 1; p.y = rooms[0].y + 1;
         if (!map[p.y]?.[p.x] || map[p.y][p.x] !== 0) {
             for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) { p.x = x; p.y = y; break; }
         }
-        
+
         // Mark initial player area as explored
         updateFogMap(p.x, p.y);
-        
+
         // Place special tiles based on theme (pond, quicksand, lava)
         let specialPositions = [];
         if (currentTheme !== 'dungeon') {
@@ -2493,52 +2493,52 @@ function checkCurrentRuneTile() {
         } else {
         }
 
-/* -------------------------------------------------
-   Place potions – 2 total, never in the same room
-   ------------------------------------------------- */
+        /* -------------------------------------------------
+           Place potions – 2 total, never in the same room
+           ------------------------------------------------- */
 
-let potionPositions = [];                         // all potion coordinates
-let selectedRooms = rooms
-    .sort(() => 0.5 - Math.random())              // random order
-    .slice(0, Math.min(3, rooms.length));        // look at up to 3 rooms
+        let potionPositions = [];                         // all potion coordinates
+        let selectedRooms = rooms
+            .sort(() => 0.5 - Math.random())              // random order
+            .slice(0, Math.min(3, rooms.length));        // look at up to 3 rooms
 
-let proximityRange = 5;
-let potionsNeeded = 2;                             // how many potions are still missing
+        let proximityRange = 5;
+        let potionsNeeded = 2;                             // how many potions are still missing
 
-for (let r of selectedRooms) {
-    if (potionsNeeded <= 0) break;                // we already have 2
+        for (let r of selectedRooms) {
+            if (potionsNeeded <= 0) break;                // we already have 2
 
-    let x, y, attempts = 100;
+            let x, y, attempts = 100;
 
-    // try to place **one** potion in this room
-    while (attempts > 0 && potionsNeeded > 0) {
-        x = r.x + Math.floor(Math.random() * r.w);
-        y = r.y + Math.floor(Math.random() * r.h);
+            // try to place **one** potion in this room
+            while (attempts > 0 && potionsNeeded > 0) {
+                x = r.x + Math.floor(Math.random() * r.w);
+                y = r.y + Math.floor(Math.random() * r.h);
 
-        // empty tile, not the player, not too close to another potion
-        if (
-            map[y][x] === 0 &&
-            (x !== p.x || y !== p.y) &&
-            !potionPositions.some(
-                p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange
-            )
-        ) {
-            map[y][x] = 2;                        // place the potion
-            potionPositions.push({ x, y });
-            potionsNeeded--;                      // one potion placed
-            break;                                // stop – only one per room
+                // empty tile, not the player, not too close to another potion
+                if (
+                    map[y][x] === 0 &&
+                    (x !== p.x || y !== p.y) &&
+                    !potionPositions.some(
+                        p => Math.abs(p.x - x) + Math.abs(p.y - y) < proximityRange
+                    )
+                ) {
+                    map[y][x] = 2;                        // place the potion
+                    potionPositions.push({ x, y });
+                    potionsNeeded--;                      // one potion placed
+                    break;                                // stop – only one per room
+                }
+
+                attempts--;
+            }
+
+            // If we ran out of attempts in this room, warn and try again with a tighter range
+            if (attempts === 0 && potionsNeeded > 0) {
+                console.warn('Potion placement failed: room=', r, 'attempts=', 100);
+                proximityRange = Math.max(proximityRange - 1, 1);
+                attempts = 100;                           // restart attempts for the same room
+            }
         }
-
-        attempts--;
-    }
-
-    // If we ran out of attempts in this room, warn and try again with a tighter range
-    if (attempts === 0 && potionsNeeded > 0) {
-        console.warn('Potion placement failed: room=', r, 'attempts=', 100);
-        proximityRange = Math.max(proximityRange - 1, 1);
-        attempts = 100;                           // restart attempts for the same room
-    }
-}
 
         // Place pickaxe (chance to drop a pickaxe)
         let pickaxePositions = [];
@@ -2548,7 +2548,7 @@ for (let r of selectedRooms) {
             } else {
             }
         }    
-        
+
         exit = null;
         initialWaveSpawned = false;
         needsRedraw = true;
@@ -2558,8 +2558,8 @@ for (let r of selectedRooms) {
         // Update rune display
         checkRunewords();
         if (!musicMuted) {
-    musicManager.play(currentTheme);
-}
+            musicManager.play(currentTheme);
+        }
     } catch (e) {
         console.error('initMap Error:', e, e.stack);
         throw e;
@@ -4317,89 +4317,51 @@ function checkRunewordsAtFloorStart() {
                 activatedRunewords.push(runeword.name.toUpperCase());
             }
         }
-
-
-
-let isRunewordMessageDisplayed = false;
-if (activatedRunewords.length > 0) {
-    const floorIndicator = document.getElementById('floor-indicator');
-    floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
-    if (!specialSoundsPlayedThisFloor.rune) {
-        playWebAudioSound(sounds.rune);
-        specialSoundsPlayedThisFloor.rune = true;
     }
-    isRunewordMessageDisplayed = true;
-    setTimeout(() => {
-        isRunewordMessageDisplayed = false;
-        floorIndicator.textContent = `Floor ${floor}`;
-    }, 5000);
-}
 
-// When you want to update the floor indicator text
-if (!isRunewordMessageDisplayed) {
-    const floorIndicator = document.getElementById('floor-indicator');
-    floorIndicator.textContent = `Floor ${floor}`;
-}
-
-        // Remove used runes
-        usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
-        for (const index of usedIndices) {
-            p.runes.splice(index, 1);
+    let isRunewordMessageDisplayed = false;
+    if (activatedRunewords.length > 0) {
+        const floorIndicator = document.getElementById('floor-indicator');
+        floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
+        if (!specialSoundsPlayedThisFloor.rune) {
+            playWebAudioSound(sounds.rune);
+            specialSoundsPlayedThisFloor.rune = true;
         }
+        isRunewordMessageDisplayed = true;
+        setTimeout(() => {
+            isRunewordMessageDisplayed = false;
+            // Only reset to floor number if no other runeword display is active
+            const currentText = floorIndicator.textContent;
+            if (currentText.startsWith("Runeword")) {
+                floorIndicator.textContent = `Floor ${floor}`;
+            }
+        }, 5000);
+    }
 
-        // Clear specific rune drops
-        runeDrops = runeDrops.filter(r => !r.specific);
-        for (let y = 0; y < H; y++) {
-            for (let x = 0; x < W; x++) {
-                if (map[y][x] === 9) {
-                    map[y][x] = 0; // Clear specific rune tiles
-                }
+    // When you want to update the floor indicator text
+    if (!isRunewordMessageDisplayed) {
+        const floorIndicator = document.getElementById('floor-indicator');
+        floorIndicator.textContent = `Floor ${floor}`;
+    }
+
+    // Remove used runes
+    usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
+    for (const index of usedIndices) {
+        p.runes.splice(index, 1);
+    }
+
+    // Clear specific rune drops
+    runeDrops = runeDrops.filter(r => !r.specific);
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] === 9) {
+                map[y][x] = 0; // Clear specific rune tiles
             }
         }
-        checkRunewords(); // Update inventory display
-        needsRedraw = true;
     }
+    checkRunewords(); // Update inventory display
+    needsRedraw = true;
 }
-
-/*
-// DEBUG: Runeword testing function - comment out when not needed
-function debugRuneword(runewordKey) {
-    const runewordMap = {
-        '1': { name: 'btc', runes: ['b', 't', 'c'] },
-        '2': { name: 'hodl', runes: ['h', 'o', 'd', 'l'] },
-        '3': { name: 'rip', runes: ['r', 'i', 'p'] },
-        '4': { name: 'placeholder1', runes: [] },
-        '5': { name: 'placeholder2', runes: [] },
-        '6': { name: 'placeholder3', runes: [] },
-        '7': { name: 'placeholder4', runes: [] },
-        '8': { name: 'placeholder5', runes: [] },
-        '9': { name: 'placeholder6', runes: [] }
-    };
-
-    const runeword = runewordMap[runewordKey];
-    if (!runeword) {
-        console.log(`No runeword mapped to key ${runewordKey}`);
-        return;
-    }
-
-    if (runeword.runes.length === 0) {
-        console.log(`Runeword ${runeword.name} is a placeholder and has no effect`);
-        logBattleEvent(`Debug: Runeword ${runeword.name} is a placeholder and has no effect`);
-        return;
-    }
-
-    // Add required runes to player's inventory
-    p.runes = p.runes.concat(runeword.runes);
-    console.log(`Debug: Added runes ${runeword.runes} for ${runeword.name}. Current runes: ${p.runes}`);
-    logBattleEvent(`Debug: Added runes ${runeword.runes.join('')} for ${runeword.name}`);
-
-    // Update inventory display
-    checkRunewords();
-
-    // Trigger runeword activation
-    checkRunewordsAtFloorStart();
-}
-*/
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
@@ -4968,6 +4930,7 @@ function restart() {
     blacksmithPos = null;
     waypointPos = null;
     p.hasDiamondArmor = false;
+    p.hasDiamondHand = false;
     p.perfectlyCutDiamonds = 0;
     currentTheme = 'dungeon';            // default theme
     p.maxHP = 24;                       // default max HP
@@ -4979,7 +4942,17 @@ function restart() {
     p.pickaxes = 0;
     diamonds = 0;
     p.hasArmor = true;
-    hasDiamondHand: false;
+    
+    p.runes = [];
+    runeDrops = runeDrops.filter(r => !r.specific);			// maybe
+    for (let y = 0; y < H; y++) {					// \
+        for (let x = 0; x < W; x++) {					//  \
+            if (map[y][x] === 9) {					//   \
+                map[y][x] = 0; // Clear specific rune tiles		//    \
+            }								//     \
+        }								//      \
+    }									//       overkill
+    
     p.x = 2;
     p.y = 2;
     p.atk = 2;
@@ -6085,3 +6058,4 @@ document.addEventListener('contextmenu', function(e) {
     </script>
 </body>
 </html>
+
