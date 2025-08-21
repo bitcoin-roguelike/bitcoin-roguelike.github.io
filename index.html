@@ -2042,14 +2042,18 @@ function resetSplashScreen() {
 
 document.getElementById('start-button').addEventListener('click', () => {
 currentTheme = 'dungeon'; // Force default theme on game start
-musicManager.play(currentTheme);
-    if (splashActive) {
-                preloadSounds();
-        // Ensure AudioContext is resumed for iOS
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                            }).catch(e => console.error('Failed to resume AudioContext:', e));
-        }
+if (splashActive) {
+    preloadSounds();
+    // Ensure AudioContext is resumed for iOS
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play music after AudioContext is resumed
+            }
+        }).catch(e => console.error('Failed to resume AudioContext:', e));
+    } else if (!musicMuted) {
+        musicManager.play(currentTheme); // Play music if AudioContext is already running
+    }
         // Preload player animation frames
         const imagesToLoad = [
             p.anim.frames.front[0], p.anim.frames.front[1],
@@ -2074,9 +2078,6 @@ musicManager.play(currentTheme);
                 img.onerror = () => console.error(`Failed to load image: ${img.src}`);
             }
         });
-if (!musicMuted) {
-    musicManager.play(currentTheme);
-}
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
