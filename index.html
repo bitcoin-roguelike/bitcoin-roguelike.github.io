@@ -2042,6 +2042,7 @@ function resetSplashScreen() {
 
 document.getElementById('start-button').addEventListener('click', () => {
 currentTheme = 'dungeon'; // Force default theme on game start
+musicManager.play(currentTheme);
     if (splashActive) {
                 preloadSounds();
         // Ensure AudioContext is resumed for iOS
@@ -4984,7 +4985,6 @@ function restart() {
     fogMap = [];
     scoreSubmitted = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
-    musicManager.play(currentTheme);
     populateNameList();
 
     /* ------------------------------------------------------------------
