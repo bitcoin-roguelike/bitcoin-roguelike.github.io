@@ -4988,6 +4988,7 @@ function restart() {
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
     musicMuted = false;
+    musicManager.mute(false); // Ensure MusicManager is unmuted
 
     /* ------------------------------------------------------------------
        3. Reset UI elements
