@@ -320,6 +320,25 @@ button:hover {
     display: block;          /* line‑break */
     color: var(--text-color);   /* inherits the theme colour */
 }
+
+    /* Windows 95 Screensaver Styles */
+#screensaver-overlay { position: fixed; inset: 0; z-index: 99999; background: black; display: none; }   
+#screensaver-canvas { position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
+    
+.star {
+    position: absolute;
+    background-color: #ff8c00; /* Windows 95 orange */
+    border-radius: 50%;
+    box-shadow: 0 0 10px #ff8c00, 0 0 20px #ff8c00;
+    /* Add these new properties for better visual effect */
+    filter: blur(0.5px);
+    animation: pulse 2s infinite alternate;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
     
 /* Phones (320px–767px) */
 @media only screen and (min-width: 320px) and (max-width: 767px) {
@@ -702,14 +721,15 @@ button:hover {
 <div id="battle-log">
     <textarea id="battle-events" readonly>Battle Log:</textarea>
 </div>
-        <div id="controller">
+<div id="controller">
             <div id="dpad">
                 <button id="up" onclick="move('up')">↑</button>
                 <button id="left" onclick="move('left')">←</button>
                 <button id="right" onclick="move('right')">→</button>
                 <button id="down" onclick="move('down')">↓</button>
             </div>
-            <div id="actions">
+<div id="actions">
+                <button id="pause" onclick="togglePause()" style="margin-right: 10px;">☽</button>
                 <button id="mute" onclick="toggleMute()">♪</button>
                 <button id="attack" onclick="attack()">B</button>
                 <button id="potion" onclick="usePotion()">A</button>
@@ -1366,6 +1386,8 @@ function selectNewTheme(current) {
     return available[Math.floor(Math.random() * available.length)];
 }
 
+let isFetchingTxs = false; // Track if fetchTxs is currently running
+let savedPauseState = null; // remembers pause button state before screensaver
 let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
 let map = [],
@@ -1449,6 +1471,7 @@ let portals = []; // Array to store active portal positions and animation state
 let splashActive = true;
 let waveActive = false;
 let musicMuted = false;        
+let paused = false;
 let swordDir = 'right', swordActive = false, swordStart = 0;
 let gameOverSoundPlayed = false;
 let fogMap = [];
@@ -2041,43 +2064,20 @@ function resetSplashScreen() {
     }
 
 document.getElementById('start-button').addEventListener('click', () => {
-currentTheme = 'dungeon'; // Force default theme on game start
-if (splashActive) {
-    preloadSounds();
-    // Ensure AudioContext is resumed for iOS
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play music after AudioContext is resumed
-            }
-        }).catch(e => console.error('Failed to resume AudioContext:', e));
-    } else if (!musicMuted) {
-        musicManager.play(currentTheme); // Play music if AudioContext is already running
-    }
-        // Preload player animation frames
-        const imagesToLoad = [
-            p.anim.frames.front[0], p.anim.frames.front[1],
-            p.anim.frames.back[0], p.anim.frames.back[1],
-            p.anim.frames.right[0], p.anim.frames.right[1],
-            p.anim.frames.armor_front[0], p.anim.frames.armor_front[1],
-            p.anim.frames.armor_back[0], p.anim.frames.armor_back[1],
-            p.anim.frames.armor_right[0], p.anim.frames.armor_right[1]
-        ];
-        let loadedCount = 0;
-        imagesToLoad.forEach(img => {
-            if (img.complete) {
-                loadedCount++;
-                if (loadedCount === imagesToLoad.length) {
-                                    }
-            } else {
-                img.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === imagesToLoad.length) {
-                                            }
-                };
-                img.onerror = () => console.error(`Failed to load image: ${img.src}`);
-            }
-        });
+    currentTheme = 'dungeon'; // Force default theme on game start
+    if (splashActive) {
+        preloadSounds();
+        // Ensure AudioContext is resumed for iOS
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                // Only play music if it wasn't muted previously
+                if (!musicMuted) {
+                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
+                }
+            }).catch(e => console.error('Failed to resume AudioContext:', e));
+        } else if (!musicMuted) {
+            musicManager.play(currentTheme); // Play music if AudioContext is already running
+        }
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -2094,6 +2094,7 @@ function toggleMute() {
     musicManager.mute(musicMuted);
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
     if (!musicMuted && !splashActive) {
+        musicManager.current = null; // Reset MusicManager state
         musicManager.play(currentTheme);
     }
 }
@@ -2909,21 +2910,43 @@ function shouldSpawn() {
 }
 
 async function fetchTxs() {
-    if (gameOver || splashActive || floor === 0 || inHideout) {
-        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}`);
+    if (gameOver || splashActive || floor === 0 || inHideout || paused) {
+        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}, paused=${paused}`);
         return;
     }
+    
+    // Prevent duplicate calls
+    if (isFetchingTxs) {
+        console.log('fetchTxs: Already running, skipping');
+        return;
+    }
+    
+    isFetchingTxs = true; // Set flag
+    
     const now = Date.now();
+    // Prevent duplicate calls within API_INTERVAL
     if (nextApiCallTime && now < nextApiCallTime) {
+        console.log(`fetchTxs: Already scheduled, skipping`);
+        isFetchingTxs = false;
         return;
     }
+    
+    // Prevent concurrent calls to the same function
     if (apiTimeoutId) {
         clearTimeout(apiTimeoutId);
         apiTimeoutId = null;
     }
+    
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
         await new Promise(resolve => setTimeout(resolve, 25));
+        
+        // Check if we're still in the right state before making API call
+        if (gameOver || splashActive || floor === 0 || inHideout || paused) {
+            console.log(`fetchTxs: State changed during API call, aborting`);
+            return;
+        }
+        
         const res = await axios.get('https://mempool.space/api/mempool/recent');
         if (!res.data || res.data.length === 0) {
             console.warn(`Empty mempool response, scheduling retry in ${API_INTERVAL / 1000}s`);
@@ -2932,185 +2955,204 @@ async function fetchTxs() {
             return;
         }
         
-    // *** NEW *** Abort early if we have stepped into hideout while the request was still processing.
-    if (!shouldSpawn()) {
-      console.log('Player entered hideout while fetchTxs was in progress. Aborting enemy spawn.');
-      return;
-    }
+        // *** NEW *** Abort early if we have stepped into hideout while the request was still processing.
+        if (!shouldSpawn()) {
+          console.log('Player entered hideout while fetchTxs was in progress. Aborting enemy spawn.');
+          return;
+        }
         
         let enemyCount = 0;
         const processedTxids = new Set();
         console.warn(`[WHALE ATTEMPT] Checking ${res.data.length} transactions for Whale spawns (> 100 BTC)`);
+        
         for (const tx of res.data.slice(0, 10)) {
-      // *** NEW *** Stop the loop if hideout has been entered during this loop.
-      if (!shouldSpawn()) {
-        console.log('Player entered hideout. Stopping spawn loop.');
-        break;
-      }
-            if (processedTxids.has(tx.txid)) continue;
-            processedTxids.add(tx.txid);
-            let value = 0;
-            let address = 'Invalid address';
-            try {
-                await new Promise(resolve => setTimeout(resolve, 25));
-                const txRes = await axios.get(`https://mempool.space/api/tx/${tx.txid}`);
-                if (txRes.data.vout && Array.isArray(txRes.data.vout)) {
-                    value = txRes.data.vout.reduce((sum, out) => sum + (Number.isFinite(out.value) ? out.value : 0), 0);
-                    address = txRes.data.vout?.map(v => v.scriptpubkey_address).filter(Boolean)[0] || 'Invalid address';
-                } else {
-                    continue;
-                }
-            } catch (e) {
-                continue;
-            }
-            if (value <= 0) {
-                continue;
-            }
-            const btc = value / 1e8;
-            const type = types.find(t => btc > t.min && btc <= t.max);
-            if (!type) {
-                continue;
-            }
+          // *** NEW *** Stop the loop if hideout has been entered during this loop.
+          if (!shouldSpawn()) {
+            console.log('Player entered hideout. Stopping spawn loop.');
+            break;
+          }
+          
+          if (processedTxids.has(tx.txid)) continue;
+          processedTxids.add(tx.txid);
+          
+          let value = 0;
+          let address = 'Invalid address';
+          try {
+              await new Promise(resolve => setTimeout(resolve, 25));
+              const txRes = await axios.get(`https://mempool.space/api/tx/${tx.txid}`);
+              if (txRes.data.vout && Array.isArray(txRes.data.vout)) {
+                  value = txRes.data.vout.reduce((sum, out) => sum + (Number.isFinite(out.value) ? out.value : 0), 0);
+                  address = txRes.data.vout?.map(v => v.scriptpubkey_address).filter(Boolean)[0] || 'Invalid address';
+              } else {
+                  continue;
+              }
+          } catch (e) {
+              continue;
+          }
+          
+          if (value <= 0) {
+              continue;
+          }
+          
+          const btc = value / 1e8;
+          const type = types.find(t => btc > t.min && btc <= t.max);
+          if (!type) {
+              continue;
+          }
 
-            // Handle initial spawn (up to 10 enemies, including Whales)
-            if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10 && enemies.length < 10) {
-                if (type.name !== 'Whale' && exit) {
-                    continue;
-                }
-                console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
-                const r = rooms[Math.floor(Math.random() * rooms.length)];
-                let x, y, attempts = 50;
-                const auraRadius = 2; // 5x5 grid
-                let validPosition = false;
-                do {
-                    x = r.x + Math.floor(Math.random() * r.w);
-                    y = r.y + Math.floor(Math.random() * r.h);
-                    validPosition = (
-                        map[y][x] === 0 &&
-                        !(x === p.x && y === p.y) &&
-                        !enemies.some(e => e.x === x && e.y === y) &&
-                        Math.abs(x - p.x) > auraRadius &&
-                        Math.abs(y - p.y) > auraRadius
-                    );
-                    attempts--;
-                } while (attempts > 0 && !validPosition);
-                const newEnemy = { 
-                    x, 
-                    y, 
-                    type, 
-                    hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp, 
-                    address, 
-                    sats: Math.round(btc * 1e8) 
-                };
-                if (!validPosition) {
-                    // Fallback: try any floor tile in any room
-                    for (let r of rooms) {
-                        for (let y = r.y; y < r.y + r.h; y++) {
-                            for (let x = r.x; x < r.x + r.w; x++) {
-                                if (
-                                    map[y][x] === 0 &&
-                                    !(x === p.x && y === p.y) &&
-                                    Math.abs(x - p.x) > auraRadius &&
-                                    Math.abs(y - p.y) > auraRadius &&
-                                    !enemies.some(e => e.x === x && e.y === y)
-                                ) {
-                                    newEnemy.x = x;
-                                    newEnemy.y = y;
-                                    validPosition = true;
-                                    break;
-                                }
-                            }
-                            if (validPosition) break;
-                        }
-                        if (validPosition) break;
-                    }
-                }
-                if (!validPosition) {
-                    console.log(`No valid spawn position found for tx ${tx.txid}, skipping`);
-                    continue;
-                }
-      // *** NEW *** Check again before pushing the new enemy.
-      if (!shouldSpawn()) {
-        console.log('Player entered hideout. Skipping enemy spawn.');
-        continue;
-      }
-                enemies.push(newEnemy);
-                const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
-                logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
-                enemiesSpawnedThisFloor++;
-                enemyCount++;
-                if (type.name === 'Whale') {
-                    console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
-                    logWhaleHashId(tx.txid);
-                    document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
-                    setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
-                }
-                if (enemiesSpawnedThisFloor >= 10) {
-                    initialSpawnDoneThisFloor = true;
-                }
-            } else if (type.name === 'Whale') {
-                console.log(`[WHALE SPAWN ATTEMPT] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}`);
-                const r = rooms[Math.floor(Math.random() * rooms.length)];
-                let x, y, attempts = 50;
-                const auraRadius = 2; // 5x5 grid
-                let validPosition = false;
-                do {
-                    x = r.x + Math.floor(Math.random() * r.w);
-                    y = r.y + Math.floor(Math.random() * r.h);
-                    validPosition = (
-                        map[y][x] === 0 &&
-                        !(x === p.x && y === p.y) &&
-                        !enemies.some(e => e.x === x && e.y === y) &&
-                        Math.abs(x - p.x) > auraRadius &&
-                        Math.abs(y - p.y) > auraRadius
-                    );
-                    attempts--;
-                } while (attempts > 0 && !validPosition);
-                if (!validPosition) {
-                    // Fallback: try any floor tile in any room
-                    for (let r of rooms) {
-                        for (let y = r.y; y < r.y + r.h; y++) {
-                            for (let x = r.x; x < r.x + r.w; x++) {
-                                if (
-                                    map[y][x] === 0 &&
-                                    !(x === p.x && y === p.y) &&
-                                    Math.abs(x - p.x) > auraRadius &&
-                                    Math.abs(y - p.y) > auraRadius &&
-                                    !enemies.some(e => e.x === x && e.y === y)
-                                ) {
-                                    x = x;
-                                    y = y;
-                                    validPosition = true;
-                                    break;
-                                }
-                            }
-                            if (validPosition) break;
-                        }
-                        if (validPosition) break;
-                    }
-                }
-		if (!validPosition) {
-		    console.log(`No valid spawn position found for Whale tx ${tx.txid}, skipping`);
-		    continue;
-		}
-		if (type.name === 'Whale' && whalesSpawnedThisFloor >= 10) {
-		    console.log(`Whale spawn skipped: reached cap of 10 Whales on floor ${floor}`);
-		    continue;
-		}
-                const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
-                enemies.push(newEnemy);
-		if (type.name === 'Whale') {
-		    whalesSpawnedThisFloor++; // Increment Whale counter
-		}
-                const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
-                logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
-                console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
-                logWhaleHashId(tx.txid);
-                document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
-                setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
-                enemyCount++;
-            }
+          // Handle initial spawn (up to 10 enemies, including Whales)
+          if (!initialSpawnDoneThisFloor && enemiesSpawnedThisFloor < 10 && enemies.length < 10) {
+              if (type.name !== 'Whale' && exit) {
+                  continue;
+              }
+              console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
+              const r = rooms[Math.floor(Math.random() * rooms.length)];
+              let x, y, attempts = 50;
+              const auraRadius = 2; // 5x5 grid
+              let validPosition = false;
+              do {
+                  x = r.x + Math.floor(Math.random() * r.w);
+                  y = r.y + Math.floor(Math.random() * r.h);
+                  validPosition = (
+                      map[y][x] === 0 &&
+                      !(x === p.x && y === p.y) &&
+                      !enemies.some(e => e.x === x && e.y === y) &&
+                      Math.abs(x - p.x) > auraRadius &&
+                      Math.abs(y - p.y) > auraRadius
+                  );
+                  attempts--;
+              } while (attempts > 0 && !validPosition);
+              
+              const newEnemy = { 
+                  x, 
+                  y, 
+                  type, 
+                  hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp, 
+                  address, 
+                  sats: Math.round(btc * 1e8) 
+              };
+              
+              if (!validPosition) {
+                  // Fallback: try any floor tile in any room
+                  for (let r of rooms) {
+                      for (let y = r.y; y < r.y + r.h; y++) {
+                          for (let x = r.x; x < r.x + r.w; x++) {
+                              if (
+                                  map[y][x] === 0 &&
+                                  !(x === p.x && y === p.y) &&
+                                  Math.abs(x - p.x) > auraRadius &&
+                                  Math.abs(y - p.y) > auraRadius &&
+                                  !enemies.some(e => e.x === x && e.y === y)
+                              ) {
+                                  newEnemy.x = x;
+                                  newEnemy.y = y;
+                                  validPosition = true;
+                                  break;
+                              }
+                          }
+                          if (validPosition) break;
+                      }
+                      if (validPosition) break;
+                  }
+              }
+              
+              if (!validPosition) {
+                  console.log(`No valid spawn position found for tx ${tx.txid}, skipping`);
+                  continue;
+              }
+              
+              // *** NEW *** Check again before pushing the new enemy.
+              if (!shouldSpawn()) {
+                console.log('Player entered hideout. Skipping enemy spawn.');
+                continue;
+              }
+              
+              enemies.push(newEnemy);
+              const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
+              logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+              enemiesSpawnedThisFloor++;
+              enemyCount++;
+              
+              if (type.name === 'Whale') {
+                  console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
+                  logWhaleHashId(tx.txid);
+                  document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
+                  setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
+              }
+              
+              if (enemiesSpawnedThisFloor >= 10) {
+                  initialSpawnDoneThisFloor = true;
+              }
+          } else if (type.name === 'Whale') {
+              console.log(`[WHALE SPAWN ATTEMPT] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}`);
+              const r = rooms[Math.floor(Math.random() * rooms.length)];
+              let x, y, attempts = 50;
+              const auraRadius = 2; // 5x5 grid
+              let validPosition = false;
+              do {
+                  x = r.x + Math.floor(Math.random() * r.w);
+                  y = r.y + Math.floor(Math.random() * r.h);
+                  validPosition = (
+                      map[y][x] === 0 &&
+                      !(x === p.x && y === p.y) &&
+                      !enemies.some(e => e.x === x && e.y === y) &&
+                      Math.abs(x - p.x) > auraRadius &&
+                      Math.abs(y - p.y) > auraRadius
+                  );
+                  attempts--;
+              } while (attempts > 0 && !validPosition);
+              
+              if (!validPosition) {
+                  // Fallback: try any floor tile in any room
+                  for (let r of rooms) {
+                      for (let y = r.y; y < r.y + r.h; y++) {
+                          for (let x = r.x; x < r.x + r.w; x++) {
+                              if (
+                                  map[y][x] === 0 &&
+                                  !(x === p.x && y === p.y) &&
+                                  Math.abs(x - p.x) > auraRadius &&
+                                  Math.abs(y - p.y) > auraRadius &&
+                                  !enemies.some(e => e.x === x && e.y === y)
+                              ) {
+                                  x = x;
+                                  y = y;
+                                  validPosition = true;
+                                  break;
+                              }
+                          }
+                          if (validPosition) break;
+                      }
+                      if (validPosition) break;
+                  }
+              }
+              
+              if (!validPosition) {
+                  console.log(`No valid spawn position found for Whale tx ${tx.txid}, skipping`);
+                  continue;
+              }
+              
+              if (type.name === 'Whale' && whalesSpawnedThisFloor >= 10) {
+                  console.log(`Whale spawn skipped: reached cap of 10 Whales on floor ${floor}`);
+                  continue;
+              }
+              
+              const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
+              enemies.push(newEnemy);
+              
+              if (type.name === 'Whale') {
+                  whalesSpawnedThisFloor++; // Increment Whale counter
+              }
+              
+              const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
+              logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+              console.log(`[WHALE SPAWNED] Tx: ${tx.txid}, BTC: ${btc.toFixed(2)}, Floor: ${floor}, Position: (${x}, ${y})`);
+              logWhaleHashId(tx.txid);
+              document.getElementById('floor-indicator').textContent = `Floor ${floor} - Whale Alert! ${btc.toFixed(2)} BTC`;
+              setTimeout(() => document.getElementById('floor-indicator').textContent = `Floor ${floor}`, 5000);
+              enemyCount++;
+          }
         }
+        
         // Apply RIP blast to all on-screen enemies if active
         if (p.ripBlast && enemies.length > 0) {
             logBattleEvent(`Floor ${floor} - RIP Blast annihilates all enemies!`);
@@ -3122,6 +3164,7 @@ async function fetchTxs() {
                 kills[enemy.type.name]++;
                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
                 let dropPlaced = false;
+                
                 if (map[enemy.y][enemy.x] === 0) {
                     map[enemy.y][enemy.x] = 3;
                     satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -3148,41 +3191,41 @@ async function fetchTxs() {
                     }
                 }
 
-// Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
-if (!scrollDroppedThisFloor && Math.random() < 1/25) {
-    let scrollPlaced = false;
-    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
-    if (map[enemy.y][enemy.x] === 0) {
-        map[enemy.y][enemy.x] = 11; // Scroll tile
-        scrollDrops.push({ x: enemy.x, y: enemy.y });
-        scrollPlaced = true;
-    } else {
-        const adjacent = [
-            { x: enemy.x, y: enemy.y - 1 },
-            { x: enemy.x, y: enemy.y + 1 },
-            { x: enemy.x - 1, y: enemy.y },
-            { x: enemy.x + 1, y: enemy.y }
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny) &&
-                !scrollDrops.some(s => s.x === nx && s.y === ny)
-            ) {
-                map[ny][nx] = 11; // Scroll tile
-                scrollDrops.push({ x: nx, y: ny });
-                scrollPlaced = true;
-                break;
-            }
-        }
-    }
-    if (scrollPlaced) {
-        logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a scroll!`);
-        playWebAudioSound(sounds.pickup);
-    }
-}
+                // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
+                if (!scrollDroppedThisFloor && Math.random() < 1/25) {
+                    let scrollPlaced = false;
+                    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
+                    if (map[enemy.y][enemy.x] === 0) {
+                        map[enemy.y][enemy.x] = 11; // Scroll tile
+                        scrollDrops.push({ x: enemy.x, y: enemy.y });
+                        scrollPlaced = true;
+                    } else {
+                        const adjacent = [
+                            { x: enemy.x, y: enemy.y - 1 },
+                            { x: enemy.x, y: enemy.y + 1 },
+                            { x: enemy.x - 1, y: enemy.y },
+                            { x: enemy.x + 1, y: enemy.y }
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny) &&
+                                !scrollDrops.some(s => s.x === nx && s.y === ny)
+                            ) {
+                                map[ny][nx] = 11; // Scroll tile
+                                scrollDrops.push({ x: nx, y: ny });
+                                scrollPlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (scrollPlaced) {
+                        logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a scroll!`);
+                        playWebAudioSound(sounds.pickup);
+                    }
+                }
                 
                 // Rune drop logic (20% for Hell Shrimp, 10% for others)
                 if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
@@ -3226,6 +3269,7 @@ if (!scrollDroppedThisFloor && Math.random() < 1/25) {
                     }
                 }
             });
+            
             enemies = enemies.filter(e => e.hp > 0); // Remove dead enemies
             // Delay stairs placement until fire wave animation completes
             if (enemies.length === 0 && !exit && waveActive) {
@@ -3239,29 +3283,30 @@ if (!scrollDroppedThisFloor && Math.random() < 1/25) {
             p.ripBlast = false; // Consume RIP even if no enemies
             needsRedraw = true;
         }
-        if (enemiesSpawnedThisFloor > 0 && enemiesSpawnedThisFloor < 10 && !initialSpawnDoneThisFloor) {
-            console.warn(`Only spawned ${enemiesSpawnedThisFloor} enemies due to insufficient valid blockchain data`);
-        }
-if (enemyCount > 0 && enemies.length > 0 && !exit) {
-    if (!waveActive) {
-        initialWaveSpawned = true;
-        waveActive = true;
-        document.getElementById('wave').textContent = wave;
-        logBattleEvent(`Floor ${floor} - Wave ${wave} Started!`);
-        console.log(`New wave started: wave=${wave}, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
-    } else {
-        console.log(`Additional enemies added to wave ${wave}, enemies=${enemies.length}, waveActive=${waveActive}`);
-    }
-    needsRedraw = true;
-} else {
+        
+        if (enemyCount > 0 && enemies.length > 0 && !exit) {
+            if (!waveActive) {
+                initialWaveSpawned = true;
+                waveActive = true;
+                document.getElementById('wave').textContent = wave;
+                logBattleEvent(`Floor ${floor} - Wave ${wave} Started!`);
+                console.log(`New wave started: wave=${wave}, enemies=${enemies.length}, waveActive=${waveActive}, initialWaveSpawned=${initialWaveSpawned}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}`);
+            } else {
+                console.log(`Additional enemies added to wave ${wave}, enemies=${enemies.length}, waveActive=${waveActive}`);
+            }
+            needsRedraw = true;
+        } else {
             console.log(`No enemies spawned, wave=${wave}, scheduling retry in ${API_INTERVAL / 1000}s`);
         }
-    } catch (e) {
-        console.error('fetchTxs Error:', e, e.stack);
-    } finally {
-        nextApiCallTime = now + API_INTERVAL;
-        apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
-    }
+        
+} catch (e) {
+    console.error('fetchTxs Error:', e, e.stack);
+} finally {
+    // Set next API call time after successful execution
+    nextApiCallTime = now + API_INTERVAL;
+    apiTimeoutId = setTimeout(fetchTxs, API_INTERVAL);
+    isFetchingTxs = false; // Clear flag when done
+}
 }
 
 function isSolid(x, y) {
@@ -3270,6 +3315,11 @@ function isSolid(x, y) {
 
 function move(dir) {
     if (gameOver || splashActive || inputBlocked) return;
+    // Check if player is in hideout and trying to pause from waypoint tile
+    if (inHideout && map[p.y][p.x] === 16 && !paused) {
+    // Allow pausing when on waypoint in hideout
+    // This is handled by the existing logic but we want to ensure it works properly
+    }
     swordDir = dir;
     let nx = p.x, ny = p.y;
     let newDirection = p.anim.direction; // Default to current direction
@@ -3732,8 +3782,8 @@ if (
     return; // Exit move early to prevent further movement
 }
 
+// Add this after the stairs logic in move function:
 if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
-
     // NEW: make sure the scroll flag is reset for the next floor
     scrollDroppedThisFloor = false;
 
@@ -3741,7 +3791,14 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     if (p.immortal) {
         p.immortal = false;
         logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
-            }
+    }
+    
+    // Prevent duplicate API calls by checking if we're already in a transition
+    if (isFetchingTxs) {
+        console.log('Skipping fetchTxs: already fetching');
+        return;
+    }
+    
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     enemies = [];
@@ -3782,6 +3839,8 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     battleEvents.value = '';
     battleEvents.style.transform = 'translateX(-100%)';
     battleEvents.style.opacity = '0';
+    
+    // Only trigger fetchTxs if not already running
     setTimeout(() => {
         if (!gameOver && !splashActive && floor > 0) {
             fetchTxs();
@@ -3790,12 +3849,14 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     }, 1000);
 }
 
-if (map[ny][nx] === 12) { // Portal tile in normal floor
+// In move function - before calling fetchTxs
+if (map[ny][nx] === 12 && !inHideout) { // Portal tile in normal floor
     playWebAudioSound(sounds.town_portal);
     inHideout = true;
     initMap();
     return;
 }
+
 if (map[ny][nx] === 16 && inHideout) {
     playWebAudioSound(sounds.town_portal);
     if (previousFloorState) {
@@ -4046,7 +4107,10 @@ if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActiv
         logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
     }
 }
+
 }
+
+
 
 // Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
 function updateProjectiles() {
@@ -4921,6 +4985,9 @@ function restart() {
        ------------------------------------------------------------------ */
     cleanupEventListeners();
     document.dispatchEvent(new Event('restart')); // Trigger custom restart event
+
+    // Reset fetch flag
+    isFetchingTxs = false;
     
     /* ------------------------------------------------------------------
        2. Reset all game state variables
@@ -4987,8 +5054,10 @@ function restart() {
     scoreSubmitted = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
-    musicMuted = false;
-    musicManager.mute(false); // Ensure MusicManager is unmuted
+//    musicMuted = true;
+//    paused = false;
+//    musicManager.mute(true); // Ensure MusicManager is muted
+    musicManager.current = null; // Reset MusicManager state
 
     /* ------------------------------------------------------------------
        3. Reset UI elements
@@ -5018,6 +5087,7 @@ function restart() {
     document.getElementById('submit-score').disabled = false;
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
+    document.getElementById('pause').textContent = '☽';
 
     /* ------------------------------------------------------------------
        4. Re-initialize button variables and touch listeners
@@ -5511,6 +5581,10 @@ function gameLoop(timestamp) {
         initMap();
         needsRedraw = true;
     }
+    
+    // Handle gamepad pause state changes
+    handleGamepadPause();
+    
     if (gameOver) {
         musicManager.mute(true);
         musicManager.play(currentTheme);
@@ -5566,8 +5640,12 @@ document.addEventListener('keydown', e => {
             }, 200); // Short duration to simulate tap
             preloadSounds(); // Initialize all sounds except music
             if (!musicMuted) {
-                musicManager.mute(true);
-                musicManager.play(currentTheme);
+                // Preserve the current mute state when starting from splash screen
+                const shouldUnmute = !musicMuted;
+                musicManager.mute(shouldUnmute);
+                if (shouldUnmute) {
+                    musicManager.play(currentTheme);
+                }
             }
             fadeSplash();
             setTimeout(() => {
@@ -5579,10 +5657,14 @@ document.addEventListener('keydown', e => {
             }, 2000); // Match delay in start-button and startGame
             return;
         }
-        if (gameOver && hasPlayedOnce) {
-            restart();
-            return;
-        }
+if (gameOver && hasPlayedOnce) {
+    // Don't allow pausing from game over screen - just restart
+    if (paused) {
+        togglePause(); // Toggle to ensure clean state
+    }
+    restart();
+    return;
+}
     }
     if (gameOver || splashActive) return;
 
@@ -5652,7 +5734,12 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         !document.getElementById('restart-game').contains(event.target) &&
         !document.getElementById('leaderboard-output').contains(event.target)
     ) {
-        // No action on canvas click; restart only via button
+        // Prevent pause from being triggered on game over screen
+        if (!paused) {
+            // Don't allow pausing from game over screen
+            return;
+        }
+        // If already paused, allow normal behavior
     }
 });
 
@@ -5681,6 +5768,8 @@ let gamepadLastMoveTime = 0; // Track last gamepad move to enforce 200ms interva
 let lastKeySimulationTime = 0; // Track last simulated key press to prevent sleep mode
 let gamepadPollingActive = false; // Track if gamepad polling is enabled
 let hasPlayedOnce = false; // Track if player has played at least one game
+
+
 const keyStates = {
     ArrowUp: false,
     ArrowDown: false,
@@ -5770,11 +5859,11 @@ let currentAxes = null;
 
 // Start game function for splash screen
 function startGame() {
-musicMuted = false;
-document.getElementById('mute').textContent = '♪'; // Update mute button UI
+    document.getElementById('mute').textContent = '♪'; // Update mute button UI
     if (!splashActive) {
         return;
     }
+    
     const startButton = document.getElementById('start-button');
     startButton.style.background = '#00b7ef'; // Mimic hover
     setTimeout(() => {
@@ -5800,25 +5889,33 @@ document.getElementById('mute').textContent = '♪'; // Update mute button UI
     }
     preloadSounds(); // Preload sounds after user interaction
     
-currentTheme = 'dungeon'; // Force default theme on game start
-musicMuted = false; // Reset mute state
-document.getElementById('mute').textContent = '♪'; // Update mute button UI
-musicManager.mute(false); // Ensure MusicManager is unmuted
-musicManager.current = null; // Reset MusicManager state
-musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
-musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is loaded
-    console.log('Playing music from start:', currentTheme); // Debug log
-    musicManager.play(currentTheme); // Play the music immediately
-} else {
-    console.log('Audio not ready, waiting for', currentTheme); // Debug log
-    musicManager.audios[currentTheme].load(); // Force reload
-    musicManager.audios[currentTheme].oncanplaythrough = () => {
-        console.log('Audio ready, playing from start:', currentTheme); // Debug log
-        musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-        musicManager.play(currentTheme); // Play once ready
-    };
-}
+    currentTheme = 'dungeon'; // Force default theme on game start
+    // Only unmute if music wasn't previously muted (preserve previous mute state)
+    const shouldUnmute = !musicMuted;
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
+    if (shouldUnmute) {
+        musicManager.mute(false); // Ensure MusicManager is unmuted only if it wasn't muted before
+        musicMuted = false; // Reset mute state flag
+    }
+    musicManager.current = null; // Reset MusicManager state
+    musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
+    musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+    
+    if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is loaded
+        console.log('Playing music from start:', currentTheme); // Debug log
+        musicManager.play(currentTheme); // Play the music immediately
+    } else {
+        console.log('Audio not ready, waiting for', currentTheme); // Debug log
+        musicManager.audios[currentTheme].load(); // Force reload
+        musicManager.audios[currentTheme].oncanplaythrough = () => {
+            console.log('Audio ready, playing from start:', currentTheme); // Debug log
+            musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+            if (shouldUnmute) {
+                musicManager.play(currentTheme); // Play once ready only if we should unmute
+            }
+        };
+    }
+    
     fadeSplash();
     
     // Start gamepad polling if gamepad is connected
@@ -5828,7 +5925,7 @@ if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is lo
     }
     
     hasPlayedOnce = true; // Mark that the player has started a game
-        
+    
     // Ensure fetchTxs is triggered after splash fade
     setTimeout(() => {
         if (!gameOver && !splashActive && floor > 0) {
@@ -5889,7 +5986,7 @@ window.addEventListener("gamepaddisconnected", (e) => {
     }
 });
 
-// Modified updateGamepad function to use the axes class
+// Modify the updateGamepad function to handle start button press for pausing
 function updateGamepad(timestamp) {
     if (gamepadIndex === null) {
         // Try to find a connected gamepad
@@ -5979,30 +6076,33 @@ function updateGamepad(timestamp) {
     // Handle buttons (A=0, B=1, Select=2, Start=3)
     const nowTime = Date.now();
 
-    // A Button (0) - usePotion
-    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
+    // A Button (0) - usePotion - only when not paused
+    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver && !paused) {
         usePotion();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // B Button (1) - attack
-    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
+    // B Button (1) - attack - only when not paused
+    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver && !paused) {
         attack();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // Select Button (2) - toggleMute
-    if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
+    // Select Button (2) - toggleMute - only when not paused
+    if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS && !paused) {
         toggleMute();
         lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
     }
 
-    // Start Button (3) - startGame or restart
+// Start Button (3) - startGame, restart, or toggle pause
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (splashActive) {
             startGame();
         } else if (gameOver) {
             restart();
+        } else {
+            // Toggle pause when game is running
+            togglePause();
         }
         lastStartPressTime = nowTime;
     }
@@ -6018,7 +6118,7 @@ function updateGamepad(timestamp) {
         // Rely on movementTimer for continuous movement
         if (newMoveDir && !movementTimer) {
             movementTimer = setInterval(() => {
-                if (!splashActive && !gameOver && gamepadMoveDir) {
+                if (!splashActive && !gameOver && gamepadMoveDir && !paused) {
                     const now = Date.now();
                     if (now - gamepadLastMoveTime >= 200) {
                         move(gamepadMoveDir);
@@ -6059,6 +6159,357 @@ document.addEventListener('contextmenu', function(e) {
         return false;
     }
 }, { passive: false });
+
+
+// Screen saver
+let screensaverActive = false;
+let screensaverCanvas = null;
+let screensaverCtx = null;
+let stars = [];
+const STAR_COUNT = 200;
+
+let screensaverInitialized = false;
+let screensaverLoopId = null; // holds requestAnimationFrame id
+
+// Ensure overlay exists immediately (prevents race with pause button)
+(function ensureScreensaverOverlay() {
+    if (!document.getElementById('screensaver-overlay')) {
+        const newOverlay = document.createElement('div');
+        newOverlay.id = 'screensaver-overlay';
+        newOverlay.style.display = 'none';
+        newOverlay.style.position = 'fixed';
+        newOverlay.style.left = '0';
+        newOverlay.style.top = '0';
+        newOverlay.style.width = '100%';
+        newOverlay.style.height = '100%';
+        newOverlay.style.zIndex = '9999';
+        newOverlay.innerHTML = '<canvas id="screensaver-canvas"></canvas>';
+        document.body.appendChild(newOverlay);
+    }
+})();
+
+// Initialize screensaver (idempotent)
+function initScreensaver() {
+    if (screensaverInitialized) return true;
+
+    screensaverCanvas = document.getElementById('screensaver-canvas');
+    if (!screensaverCanvas) {
+        console.error('Screensaver canvas not found!');
+        return false;
+    }
+
+    // Ensure canvas CSS display to avoid layout quirks
+    screensaverCanvas.style.display = 'block';
+    screensaverCanvas.style.width = '100%';
+    screensaverCanvas.style.height = '100%';
+
+    screensaverCtx = screensaverCanvas.getContext('2d');
+    if (!screensaverCtx) {
+        console.error('2D context not available');
+        return false;
+    }
+
+    // Set canvas pixel size to match window
+    function resizeScreensaver() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (screensaverCanvas.width !== w || screensaverCanvas.height !== h) {
+            screensaverCanvas.width = w;
+            screensaverCanvas.height = h;
+            // re-create stars to fit new size (optional)
+            createStars();
+        }
+    }
+
+    resizeScreensaver();
+    window.addEventListener('resize', resizeScreensaver);
+
+    createStars();
+    screensaverInitialized = true;
+    return true;
+}
+
+// Activate screensaver: show overlay, init, start RAF
+function activateScreensaver() {
+    if (!initScreensaver()) return;
+    const overlay = document.getElementById('screensaver-overlay');
+    if (!overlay) return;
+
+    // Save current paused boolean so we can restore later
+    savedPausedState = !!paused;
+
+    overlay.style.display = 'block';
+    screensaverActive = true;
+
+    screensaverCanvas.width = window.innerWidth;
+    screensaverCanvas.height = window.innerHeight;
+
+    if (!screensaverLoopId) {
+        screensaverLoopId = requestAnimationFrame(drawScreensaver);
+    }
+}
+
+
+
+// Create star objects with random properties
+function createStars() {
+    if (!screensaverCanvas) return;
+    stars = [];
+    for (let i = 0; i < STAR_COUNT; i++) {
+        stars.push({
+            x: Math.random() * screensaverCanvas.width,
+            y: Math.random() * screensaverCanvas.height,
+            size: Math.random() * 3 + 1,
+            speed: Math.random() * 0.5 + 0.1,
+            opacity: Math.random() * 0.7 + 0.3,
+            twinkleSpeed: Math.random() * 0.02 + 0.005,
+            twinklePhase: Math.random() * Math.PI * 2
+        });
+    }
+}
+
+// Draw screensaver animation (manages its own RAF id)
+function drawScreensaver() {
+    // Only run when active and context exists
+    if (!screensaverActive || !screensaverCtx) {
+        screensaverLoopId = null;
+        return;
+    }
+
+    // Semi-transparent black for trail effect
+    screensaverCtx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+    screensaverCtx.fillRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
+
+    // Update and draw each star
+    for (const star of stars) {
+        star.twinklePhase += star.twinkleSpeed;
+        const opacity = Math.max(0, Math.min(1, star.opacity * (0.5 + Math.sin(star.twinklePhase) * 0.5)));
+
+        // Draw star core
+        screensaverCtx.beginPath();
+        screensaverCtx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        screensaverCtx.fillStyle = `rgba(255, 140, 0, ${opacity})`;
+        screensaverCtx.fill();
+
+        // Glow
+        const gradient = screensaverCtx.createRadialGradient(
+            star.x, star.y, 0,
+            star.x, star.y, star.size * 3
+        );
+        gradient.addColorStop(0, `rgba(255, 140, 0, ${opacity * 0.5})`);
+        gradient.addColorStop(1, 'transparent');
+
+        screensaverCtx.beginPath();
+        screensaverCtx.arc(star.x, star.y, star.size * 3, 0, Math.PI * 2);
+        screensaverCtx.fillStyle = gradient;
+        screensaverCtx.fill();
+
+        // Move star
+        star.y += star.speed;
+
+        // Reset if off-screen
+        if (star.y > screensaverCanvas.height + 10) {
+            star.y = -10;
+            star.x = Math.random() * screensaverCanvas.width;
+        }
+    }
+
+    // Queue next frame
+    screensaverLoopId = requestAnimationFrame(drawScreensaver);
+}
+
+// Exit screensaver
+function exitScreensaver() {
+    const screensaverElement = document.getElementById('screensaver-overlay');
+    if (screensaverElement) {
+        screensaverActive = false;
+        screensaverElement.style.display = 'none';
+    }
+
+    if (screensaverLoopId) {
+        cancelAnimationFrame(screensaverLoopId);
+        screensaverLoopId = null;
+    }
+
+    // Force pause button to half-moon (unpaused) so music can be re-enabled
+    const pauseBtn = document.getElementById('pause');
+    if (pauseBtn) pauseBtn.textContent = '☽';
+
+    // Make sure paused boolean matches the UI (☽ = unpaused)
+    paused = false;
+
+    // Restore music: unmute when leaving screensaver
+    try {
+        if (typeof musicManager !== 'undefined') {
+            if (musicMuted) {
+                musicManager.mute(false);
+                musicMuted = false;
+            }
+        }
+    } catch (e) {
+        console.warn('musicManager unmute failed', e);
+    }
+}
+
+// Toggle screensaver on pause
+function togglePause() {
+    // Only allow pausing when there are stairs or enemies present, or in hideout
+    const canPause = (exit !== null) || (enemies.length > 0) || inHideout;
+    
+    if (!canPause && !paused) {
+        // If trying to pause but can't, show message
+        logBattleEvent("Floor " + floor + " - Pause disabled: No stairs or enemies!");
+        return;
+    }
+    
+    if (!canPause && paused) {
+        // If already paused and can't unpause, do nothing
+        return;
+    }
+    
+    paused = !paused;
+    const pauseBtn = document.getElementById('pause');
+    if (pauseBtn) pauseBtn.textContent = paused ? '☀' : '☽';
+
+    if (paused) {
+        // Clear any pending API calls
+        if (apiTimeoutId) {
+            clearTimeout(apiTimeoutId);
+            apiTimeoutId = null;
+        }
+        nextApiCallTime = null;
+
+        // Pause music when pausing and keep state in sync
+        try {
+            if (typeof musicManager !== 'undefined' && !musicMuted) {
+                musicManager.mute(true);
+                musicMuted = true;
+            }
+        } catch (e) {
+            console.warn('musicManager mute failed', e);
+        }
+
+        // Activate screensaver when paused
+        activateScreensaver();
+    } else {
+        // Resume music when unpausing and keep state in sync
+        try {
+            if (typeof musicManager !== 'undefined' && musicMuted) {
+                musicManager.mute(false);
+                musicMuted = false;
+            }
+        } catch (e) {
+            console.warn('musicManager unmute failed', e);
+        }
+
+        exitScreensaver();
+    }
+}
+
+// Add gamepad-specific pause handling
+function handleGamepadPause() {
+    // When gamepad is connected, we want to:
+    // 1. Only allow unpause via Start button (A/B/Select/D-pad disabled)
+    // 2. Temporarily disable A, B, Select and D-pad buttons when paused
+    
+    if (gamepadIndex !== null && paused) {
+        // Disable other buttons during pause with gamepad
+        const actionsButtons = document.querySelectorAll('#actions button');
+        const dpadButtons = document.querySelectorAll('#dpad button');
+        
+        // Temporarily disable A, B, Select buttons
+        actionsButtons.forEach(button => {
+            if (button.id !== 'pause' && button.id !== 'mute') {
+                button.disabled = true;
+                button.style.opacity = '0.5';
+            }
+        });
+        
+        // Temporarily disable D-pad buttons
+        dpadButtons.forEach(button => {
+            button.disabled = true;
+            button.style.opacity = '0.5';
+        });
+    } else if (gamepadIndex !== null && !paused) {
+        // Re-enable buttons when unpaused with gamepad
+        const actionsButtons = document.querySelectorAll('#actions button');
+        const dpadButtons = document.querySelectorAll('#dpad button');
+        
+        // Re-enable A, B, Select buttons
+        actionsButtons.forEach(button => {
+            if (button.id !== 'pause' && button.id !== 'mute') {
+                button.disabled = false;
+                button.style.opacity = '1';
+            }
+        });
+        
+        // Re-enable D-pad buttons
+        dpadButtons.forEach(button => {
+            button.disabled = false;
+            button.style.opacity = '1';
+        });
+    }
+}
+
+
+// Add debounced movement detection for screensaver exit
+let screensaverMovementTimeout = null;
+let lastMovementTime = 0;
+const DEBOUNCE_DELAY = 50; // 50ms debounce
+
+function handleMovement() {
+    const now = Date.now();
+
+    // Only handle when screensaver is active
+    if (!screensaverActive) return;
+    
+    // Debounce the movement detection
+    if (now - lastMovementTime > DEBOUNCE_DELAY) {
+        // Reset the debounce timer
+        lastMovementTime = now;
+        
+        // Clear any existing timeout
+        if (screensaverMovementTimeout) {
+            clearTimeout(screensaverMovementTimeout);
+            screensaverMovementTimeout = null;
+        }
+        
+        // Set new timeout to exit screensaver after movement
+        screensaverMovementTimeout = setTimeout(() => {
+            exitScreensaver();
+        }, DEBOUNCE_DELAY * 2); // Exit after 2x debounce delay (600ms)
+    }
+}
+
+// Add pointer (press) and key event listeners for screensaver exit
+document.addEventListener('pointerdown', function(e) {
+    // Ignore secondary buttons (e.g. right-click)
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    handleMovement();
+}, { passive: true });
+
+// Also listen for touchstart fallback in case pointer events aren't supported
+document.addEventListener('touchstart', function(e) {
+    if (e.touches && e.touches.length > 1) return; // ignore multi-touch
+    handleMovement();
+}, { passive: true });
+
+document.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return; // left button only
+    handleMovement();
+}, { passive: true });
+
+document.addEventListener('keydown', function(e) {
+    // Only trigger screensaver exit on movement/activation keys
+    if (['a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
+        handleMovement();
+    }
+});
+
+// reset stored state on connect/disconnect
+window.addEventListener('gamepadconnected', () => { gamepadIndex = null; });
+window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
+
     </script>
 </body>
 </html>
