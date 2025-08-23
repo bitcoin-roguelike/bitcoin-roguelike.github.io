@@ -998,11 +998,17 @@ const names = [
 function showInfo() {
     const infoMessage = document.getElementById('info-message');
     infoMessage.style.display = 'block';
+    
+    // Switch to info.png
+    currentSplashImage = 'info.png';
+    splashCanvas.clearRect(0, 0, 320, 320);
+    splashImg.src = currentSplashImage;
+    splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    
     setTimeout(() => {
         infoMessage.style.display = 'none';
     }, 5000); // Auto-hide after 5 seconds
 }
-
 function populateNameList() {
     const datalist = document.getElementById('name-list');
     datalist.innerHTML = ''; // Clear existing options
@@ -2024,11 +2030,12 @@ function playWebAudioSound(soundObj) {
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
+let currentSplashImage = 'splash.png';
 const splashImg = new Image();
-splashImg.src = 'splash.png';
+splashImg.src = currentSplashImage;
 splashImg.onload = () => {
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-    };
+};
 
 function fadeSplash() {
     setTimeout(() => {
@@ -2059,11 +2066,21 @@ function resetSplashScreen() {
     splashScreen.style.display = 'block'; // Show splash screen
     // Redraw splash image
     splashCanvas.clearRect(0, 0, 320, 320);
+    splashImg.src = currentSplashImage;
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-    }
+}
 
 document.getElementById('start-button').addEventListener('click', () => {
     currentTheme = 'dungeon'; // Force default theme on game start
+    
+    // Switch back to splash.png when starting
+    if (currentSplashImage !== 'splash.png') {
+        currentSplashImage = 'splash.png';
+        splashCanvas.clearRect(0, 0, 320, 320);
+        splashImg.src = currentSplashImage;
+        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    }
+    
     if (splashActive) {
         preloadSounds();
         // Ensure AudioContext is resumed for iOS
@@ -5885,6 +5902,14 @@ function startGame() {
     document.getElementById('mute').textContent = '♪'; // Update mute button UI
     if (!splashActive) {
         return;
+    }
+    
+    // Switch back to splash.png when starting
+    if (currentSplashImage !== 'splash.png') {
+        currentSplashImage = 'splash.png';
+        splashCanvas.clearRect(0, 0, 320, 320);
+        splashImg.src = currentSplashImage;
+        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
     
     const startButton = document.getElementById('start-button');
