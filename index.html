@@ -1768,10 +1768,6 @@ function placeStairs() {
         console.warn('Attempted to place stairs in hideout – forbidden');
         return false;
     }
-    if (exit) {
-        logBattleEvent(`Floor ${floor} - Stairs placement skipped: exit already exists at (${exit.x}, ${exit.y})`);
-        return true;
-    }
     let x, y, placed = false;
     // Try room-based placement first
     if (rooms && rooms.length > 0) {
