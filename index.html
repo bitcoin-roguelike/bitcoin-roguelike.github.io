@@ -6238,252 +6238,220 @@ document.addEventListener('contextmenu', function(e) {
 }, { passive: false });
 
 
-// Screen saver
+// Screensaver: black background, slow drifting orange ball (#f7931a) with white "₿" and soft glows.
+// Smooth fade-out/fade-in, minimal breathing and drift.
+
 let screensaverActive = false;
 let screensaverCanvas = null;
 let screensaverCtx = null;
-let stars = [];
-const STAR_COUNT = 150;
-
 let screensaverInitialized = false;
-let screensaverLoopId = null; // holds requestAnimationFrame id
+let screensaverLoopId = null;
 
-// Ensure overlay exists immediately (prevents race with pause button)
 (function ensureScreensaverOverlay() {
-    if (!document.getElementById('screensaver-overlay')) {
-        const newOverlay = document.createElement('div');
-        newOverlay.id = 'screensaver-overlay';
-        newOverlay.style.display = 'none';
-        newOverlay.style.position = 'fixed';
-        newOverlay.style.left = '0';
-        newOverlay.style.top = '0';
-        newOverlay.style.width = '100%';
-        newOverlay.style.height = '100%';
-        newOverlay.style.zIndex = '9999';
-        newOverlay.innerHTML = '<canvas id="screensaver-canvas"></canvas>';
-        document.body.appendChild(newOverlay);
-    }
+  if (!document.getElementById('screensaver-overlay')) {
+    const newOverlay = document.createElement('div');
+    newOverlay.id = 'screensaver-overlay';
+    newOverlay.style.display = 'none';
+    newOverlay.style.position = 'fixed';
+    newOverlay.style.left = '0';
+    newOverlay.style.top = '0';
+    newOverlay.style.width = '100%';
+    newOverlay.style.height = '100%';
+    newOverlay.style.zIndex = '9999';
+    newOverlay.innerHTML = '<canvas id="screensaver-canvas"></canvas>';
+    document.body.appendChild(newOverlay);
+  }
 })();
 
-// Initialize screensaver (idempotent)
 function initScreensaver() {
-    if (screensaverInitialized) return true;
+  if (screensaverInitialized) return true;
+  screensaverCanvas = document.getElementById('screensaver-canvas');
+  if (!screensaverCanvas) return false;
+  screensaverCanvas.style.display = 'block';
+  screensaverCanvas.style.width = '100%';
+  screensaverCanvas.style.height = '100%';
+  screensaverCtx = screensaverCanvas.getContext('2d');
+  if (!screensaverCtx) return false;
 
-    screensaverCanvas = document.getElementById('screensaver-canvas');
-    if (!screensaverCanvas) {
-        console.error('Screensaver canvas not found!');
-        return false;
+  function resize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (screensaverCanvas.width !== w || screensaverCanvas.height !== h) {
+      screensaverCanvas.width = w;
+      screensaverCanvas.height = h;
     }
+  }
+  resize();
+  window.addEventListener('resize', resize);
 
-    // Ensure canvas CSS display to avoid layout quirks
-    screensaverCanvas.style.display = 'block';
-    screensaverCanvas.style.width = '100%';
-    screensaverCanvas.style.height = '100%';
-
-    screensaverCtx = screensaverCanvas.getContext('2d');
-    if (!screensaverCtx) {
-        console.error('2D context not available');
-        return false;
-    }
-
-    // Set canvas pixel size to match window
-    function resizeScreensaver() {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        if (screensaverCanvas.width !== w || screensaverCanvas.height !== h) {
-            screensaverCanvas.width = w;
-            screensaverCanvas.height = h;
-            // re-create stars to fit new size (optional)
-            createStars();
-        }
-    }
-
-    resizeScreensaver();
-    window.addEventListener('resize', resizeScreensaver);
-
-    createStars();
-    screensaverInitialized = true;
-    return true;
+  screensaverInitialized = true;
+  return true;
 }
 
-// Activate screensaver: show overlay, init, start RAF
 function activateScreensaver() {
-    if (!initScreensaver()) return;
-    const overlay = document.getElementById('screensaver-overlay');
-    if (!overlay) return;
-
-    overlay.style.display = 'block';
-    screensaverActive = true;
-
-    screensaverCanvas.width = window.innerWidth;
-    screensaverCanvas.height = window.innerHeight;
-
-    if (!screensaverLoopId) {
-        screensaverLoopId = requestAnimationFrame(drawScreensaver);
-    }
+  if (!initScreensaver()) return;
+  const overlay = document.getElementById('screensaver-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'block';
+  screensaverActive = true;
+  if (!screensaverLoopId) screensaverLoopId = requestAnimationFrame(drawScreensaver);
 }
 
-
-
-// Create bitcoin objects with random properties
-function createStars() {
-    if (!screensaverCanvas) return;
-    stars = [];
-    for (let i = 0; i < STAR_COUNT; i++) {
-        stars.push({
-            x: Math.random() * screensaverCanvas.width,
-            y: Math.random() * screensaverCanvas.height,
-            size: Math.random() * 10 + 8, // Larger size for ₿
-            speed: Math.random() * 0.5 + 0.1,
-            opacity: Math.random() * 0.7 + 0.3,
-            twinkleSpeed: Math.random() * 0.02 + 0.005,
-            twinklePhase: Math.random() * Math.PI * 2,
-            char: '₿' // Bitcoin symbol
-        });
-    }
-}
-
-// Draw screensaver animation (manages its own RAF id)
-function drawScreensaver() {
-    // Only run when active and context exists
-    if (!screensaverActive || !screensaverCtx) {
-        screensaverLoopId = null;
-        return;
-    }
-
-    // Semi-transparent black for trail effect
-    screensaverCtx.fillStyle = 'rgba(0, 0, 0, 0.12)';
-    screensaverCtx.fillRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
-
-// Update and draw each bitcoin
-for (const star of stars) {
-    star.twinklePhase += star.twinkleSpeed;
-    const opacity = Math.max(0, Math.min(1, star.opacity * (0.5 + Math.sin(star.twinklePhase) * 0.5)));
-
-    // Draw ₿ character with glow effect
-    screensaverCtx.font = `${star.size}px 'VT323', monospace`;
-    screensaverCtx.textAlign = 'center';
-    screensaverCtx.textBaseline = 'middle';
-    
-    // Draw glow
-    const gradient = screensaverCtx.createRadialGradient(
-        star.x, star.y, 0,
-        star.x, star.y, star.size * 2
-    );
-    gradient.addColorStop(0, `rgba(255, 140, 0, ${opacity * 0.7})`);
-    gradient.addColorStop(1, 'transparent');
-    
-    screensaverCtx.fillStyle = gradient;
-    screensaverCtx.fillText(star.char, star.x, star.y);
-    
-    // Draw main character with orange color
-    screensaverCtx.fillStyle = `rgba(255, 140, 0, ${opacity})`;
-    screensaverCtx.fillText(star.char, star.x, star.y);
-
-    // Move star
-    star.y += star.speed;
-
-    // Reset if off-screen
-    if (star.y > screensaverCanvas.height + 10) {
-        star.y = -10;
-        star.x = Math.random() * screensaverCanvas.width;
-    }
-}
-
-    // Queue next frame
-    screensaverLoopId = requestAnimationFrame(drawScreensaver);
-}
-
-// Exit screensaver
 function exitScreensaver() {
-    const screensaverElement = document.getElementById('screensaver-overlay');
-    if (screensaverElement) {
-        screensaverActive = false;
-        screensaverElement.style.display = 'none';
-    }
-
-    if (screensaverLoopId) {
-        cancelAnimationFrame(screensaverLoopId);
-        screensaverLoopId = null;
-    }
-
-    const muteButton = document.getElementById('mute');
-    if (muteButton.textContent === '☀') {
-        muteButton.textContent = '♪';
-        musicMuted = false;
-        musicManager.mute(false);
-        if (!splashActive) {
-            musicManager.current = null; // Reset MusicManager state
-            musicManager.play(currentTheme);
-        }
-    }
-
-    // Restore music: unmute when leaving screensaver
-    try {
-        if (typeof musicManager !== 'undefined') {
-            if (musicMuted) {
-                musicManager.mute(false);
-                musicMuted = false;
-            }
-        }
-    } catch (e) {
-        console.warn('musicManager unmute failed', e);
-    }
+  const overlay = document.getElementById('screensaver-overlay');
+  if (overlay) overlay.style.display = 'none';
+  screensaverActive = false;
+  if (screensaverLoopId) {
+    cancelAnimationFrame(screensaverLoopId);
+    screensaverLoopId = null;
+  }
+  startTime = 0;
 }
 
-// Add debounced movement detection for screensaver exit
+// Visual settings
+const ORANGE_HEX = '#f7931a';
+const ORANGE_RGB = { r: 247, g: 147, b: 26 }; // for rgba usage
+const BASE_RADIUS_RATIO = 0.10;
+const SLOW_BREATHE_AMPL = 0.02;
+const BREATHE_PERIOD = 10.0;
+const DRIFT_PERIOD_Y = 20.0;
+const DRIFT_AMPL_Y = 0.05;
+const DRIFT_PERIOD_X = 26.0;
+const DRIFT_AMPL_X = 0.07;
+
+const VISIBLE_INTERVAL = 9.0;
+const HIDE_DURATION = 3.5;
+const FADE_DURATION = 1.0;
+
+let startTime = 0;
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function alphaForTime(tSec) {
+  const cycleLen = VISIBLE_INTERVAL + FADE_DURATION + HIDE_DURATION + FADE_DURATION;
+  const p = tSec % cycleLen;
+  if (p < VISIBLE_INTERVAL) return 1;
+  let q = p - VISIBLE_INTERVAL;
+  if (q < FADE_DURATION) return 1 - easeInOutCubic(q / FADE_DURATION);
+  q -= FADE_DURATION;
+  if (q < HIDE_DURATION) return 0;
+  q -= HIDE_DURATION;
+  if (q < FADE_DURATION) return easeInOutCubic(q / FADE_DURATION);
+  return 1;
+}
+
+function drawScreensaver(timestamp) {
+  if (!screensaverActive || !screensaverCtx) {
+    screensaverLoopId = null;
+    return;
+  }
+  if (!startTime) startTime = timestamp || performance.now();
+  const now = timestamp || performance.now();
+  const tSec = (now - startTime) / 1000;
+
+  // Clear
+  screensaverCtx.fillStyle = 'black';
+  screensaverCtx.fillRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
+
+  const alpha = alphaForTime(tSec);
+  if (alpha <= 0) {
+    screensaverLoopId = requestAnimationFrame(drawScreensaver);
+    return;
+  }
+
+  const w = screensaverCanvas.width;
+  const h = screensaverCanvas.height;
+  const minWH = Math.min(w, h);
+
+  const baseRadius = minWH * BASE_RADIUS_RATIO;
+  const breathe = 1 + SLOW_BREATHE_AMPL * Math.sin((2 * Math.PI * tSec) / BREATHE_PERIOD);
+  const radius = baseRadius * breathe;
+
+  const offsetY = DRIFT_AMPL_Y * h * Math.sin((2 * Math.PI * tSec) / DRIFT_PERIOD_Y);
+  const offsetX = DRIFT_AMPL_X * w * Math.sin((2 * Math.PI * tSec) / DRIFT_PERIOD_X + 0.9);
+
+  const cx = w / 2 + offsetX;
+  const cy = h / 2 + offsetY;
+
+  // Orange glow (soft, larger than before)
+  const glowRadius = radius * 2.8;
+  const glowAlpha = 0.22 * alpha;
+  const grad = screensaverCtx.createRadialGradient(cx, cy, radius * 0.25, cx, cy, glowRadius);
+  grad.addColorStop(0, `rgba(${ORANGE_RGB.r},${ORANGE_RGB.g},${ORANGE_RGB.b},${(glowAlpha).toFixed(3)})`);
+  grad.addColorStop(0.45, `rgba(${ORANGE_RGB.r},${ORANGE_RGB.g},${ORANGE_RGB.b},${(glowAlpha * 0.55).toFixed(3)})`);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  screensaverCtx.fillStyle = grad;
+  screensaverCtx.beginPath();
+  screensaverCtx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+  screensaverCtx.fill();
+
+  // Main steady circle
+  const mainAlpha = 0.75 * alpha;
+  screensaverCtx.fillStyle = `rgba(${ORANGE_RGB.r},${ORANGE_RGB.g},${ORANGE_RGB.b},${mainAlpha.toFixed(3)})`;
+  screensaverCtx.beginPath();
+  screensaverCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+  screensaverCtx.fill();
+
+  // White ₿ with soft white halo
+  const fontSize = Math.max(12, Math.round(radius * 1.05));
+  screensaverCtx.save();
+  // white halo using shadow
+  screensaverCtx.globalAlpha = alpha;
+  screensaverCtx.shadowColor = 'rgba(255,255,255,0.75)';
+  screensaverCtx.shadowBlur = Math.max(6, radius * 0.22);
+  screensaverCtx.fillStyle = '#ffffff';
+  screensaverCtx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+  screensaverCtx.textAlign = 'center';
+  screensaverCtx.textBaseline = 'middle';
+  screensaverCtx.fillText('₿', cx, cy + (fontSize * 0.02));
+  screensaverCtx.restore();
+
+  screensaverLoopId = requestAnimationFrame(drawScreensaver);
+}
+
+/* Input handlers to exit screensaver (kept minimal) */
 let screensaverMovementTimeout = null;
 let lastMovementTime = 0;
-const DEBOUNCE_DELAY = 50; // 50ms debounce
+const DEBOUNCE_DELAY = 50;
 
 function handleMovement() {
-    const now = Date.now();
-
-    // Only handle when screensaver is active
-    if (!screensaverActive) return;
-    
-    // Debounce the movement detection
-    if (now - lastMovementTime > DEBOUNCE_DELAY) {
-        // Reset the debounce timer
-        lastMovementTime = now;
-        
-        // Clear any existing timeout
-        if (screensaverMovementTimeout) {
-            clearTimeout(screensaverMovementTimeout);
-            screensaverMovementTimeout = null;
-        }
-        
-        // Set new timeout to exit screensaver after movement
-        screensaverMovementTimeout = setTimeout(() => {
-            exitScreensaver();
-        }, DEBOUNCE_DELAY * 2); // Exit after 2x debounce delay (600ms)
+  const now = Date.now();
+  if (!screensaverActive) return;
+  if (now - lastMovementTime > DEBOUNCE_DELAY) {
+    lastMovementTime = now;
+    if (screensaverMovementTimeout) {
+      clearTimeout(screensaverMovementTimeout);
+      screensaverMovementTimeout = null;
     }
+    screensaverMovementTimeout = setTimeout(() => {
+      exitScreensaver();
+    }, DEBOUNCE_DELAY * 2);
+  }
 }
 
-// Add pointer (press) and key event listeners for screensaver exit
-document.addEventListener('pointerdown', function(e) {
-    // Ignore secondary buttons (e.g. right-click)
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    handleMovement();
+document.addEventListener('pointerdown', function (e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  handleMovement();
 }, { passive: true });
 
-// Also listen for touchstart fallback in case pointer events aren't supported
-document.addEventListener('touchstart', function(e) {
-    if (e.touches && e.touches.length > 1) return; // ignore multi-touch
-    handleMovement();
+document.addEventListener('touchstart', function (e) {
+  if (e.touches && e.touches.length > 1) return;
+  handleMovement();
 }, { passive: true });
 
-document.addEventListener('mousedown', function(e) {
-    if (e.button !== 0) return; // left button only
-    handleMovement();
+document.addEventListener('mousedown', function (e) {
+  if (e.button !== 0) return;
+  handleMovement();
 }, { passive: true });
 
-document.addEventListener('keydown', function(e) {
-    // Only trigger screensaver exit on movement/activation keys
-    if (['a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
-        handleMovement();
-    }
+document.addEventListener('keydown', function (e) {
+  if (['a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
+    handleMovement();
+  }
 });
+
 
 // reset stored state on connect/disconnect
 window.addEventListener('gamepadconnected', () => { gamepadIndex = null; });
