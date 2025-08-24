@@ -3194,7 +3194,7 @@ async function fetchTxs() {
           }
         }
         
-        // Apply RIP blast to all on-screen enemies if active
+// Apply RIP blast to all on-screen enemies if active
         if (p.ripBlast && enemies.length > 0) {
             logBattleEvent(`Floor ${floor} - RIP Blast annihilates all enemies!`);
             playWebAudioSound(sounds.hit);
@@ -3312,15 +3312,35 @@ async function fetchTxs() {
             });
             
             enemies = enemies.filter(e => e.hp > 0); // Remove dead enemies
-            // Delay stairs placement until fire wave animation completes
+            
+            // Check if we should place stairs immediately after RIP blast
             if (enemies.length === 0 && !exit && waveActive) {
-                // Stairs will be placed in draw() after animation completes
+                // Immediately try to place stairs if no enemies remain
+                if (placeStairs()) {
+                    wave++;
+                    waveActive = false;
+                    document.getElementById('wave').textContent = wave;
+                    logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
+                } else {
+                    logBattleEvent(`Floor ${floor} - RIP blast cleared enemies, but stairs placement failed!`);
+                }
             }
+            
             p.ripBlast = false; // Disable blast after use
             needsRedraw = true;
         } else if (p.ripBlast && enemies.length === 0) {
             logBattleEvent(`Floor ${floor} - RIP Blast activated but no enemies to destroy!`);
-            // Delay stairs placement until fire wave animation completes
+            // Immediately try to place stairs when RIP is used without enemies
+            if (!exit && waveActive) {
+                if (placeStairs()) {
+                    wave++;
+                    waveActive = false;
+                    document.getElementById('wave').textContent = wave;
+                    logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
+                } else {
+                    logBattleEvent(`Floor ${floor} - RIP blast activated but stairs placement failed!`);
+                }
+            }
             p.ripBlast = false; // Consume RIP even if no enemies
             needsRedraw = true;
         }
@@ -3823,7 +3843,7 @@ if (
     return; // Exit move early to prevent further movement
 }
 
-// Add this after the stairs logic in move function:
+// This logic should be moved outside the conditional block and before other exit checks
 if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     // NEW: make sure the scroll flag is reset for the next floor
     scrollDroppedThisFloor = false;
@@ -3888,6 +3908,10 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
             console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
         }
     }, 1000);
+    
+    // Add proper exit handling to prevent teleportation issues
+    needsRedraw = true;
+    return; // Prevent further movement after stairs
 }
 
 // In move function - before calling fetchTxs
@@ -6560,3 +6584,4 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
+
