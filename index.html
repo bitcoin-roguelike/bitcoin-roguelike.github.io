@@ -5123,10 +5123,19 @@ function restart() {
     scoreSubmitted = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
-//    musicMuted = true;
-//    musicManager.mute(true); // Ensure MusicManager is muted
-    musicManager.current = null; // Reset MusicManager state
-
+    
+// Reset music manager properly - ensure fresh initialization
+    musicManager.mute(true); // Ensure MusicManager is muted during restart
+//    musicManager.current = null; // Reset MusicManager state ! DONT you fool! ;)
+    
+    // Force re-initialization of audio elements to prevent null references
+    Object.values(musicManager.audios).forEach(audio => {
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+    });
+    
     /* ------------------------------------------------------------------
        3. Reset UI elements
        ------------------------------------------------------------------ */
@@ -5966,7 +5975,10 @@ function startGame() {
         musicManager.mute(false); // Ensure MusicManager is unmuted only if it wasn't muted before
         musicMuted = false; // Reset mute state flag
     }
-    musicManager.current = null; // Reset MusicManager state
+    // Ensure proper music manager initialization on restart
+    if (!musicManager.current) {
+        musicManager.current = null;
+    }
     musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
     musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
     
