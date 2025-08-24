@@ -2108,27 +2108,21 @@ document.getElementById('start-button').addEventListener('click', () => {
 function toggleMute() {
     const muteButton = document.getElementById('mute');
     const currentState = muteButton.textContent;
-    
+
     // Cycle through the three states: ♪ → X → ☀ → ♪
     if (currentState === '♪') {
         // First state: Music on → Mute music
         musicMuted = true;
         musicManager.mute(true);
         muteButton.textContent = 'X';
-} else if (currentState === 'X') {
+    } else if (currentState === 'X') {
         // Second state: Music muted → Activate screensaver
         musicMuted = true;
         musicManager.mute(true);
         muteButton.textContent = '☀';
-        if (!splashActive) {
-            musicManager.current = null; // Reset MusicManager state
-            musicManager.play(currentTheme);
-        }
-        // Activate screensaver when moving to ☀ state
         activateScreensaver();
     } else if (currentState === '☀') {
-        // Third state: Screensaver active → Return to music
-        // Reset screensaver and return to normal state
+        // Third state: Screensaver active → Return to music on
         exitScreensaver();
         musicMuted = false;
         musicManager.mute(false);
@@ -6402,6 +6396,17 @@ function exitScreensaver() {
         screensaverLoopId = null;
     }
 
+    const muteButton = document.getElementById('mute');
+    if (muteButton.textContent === '☀') {
+        muteButton.textContent = '♪';
+        musicMuted = false;
+        musicManager.mute(false);
+        if (!splashActive) {
+            musicManager.current = null; // Reset MusicManager state
+            musicManager.play(currentTheme);
+        }
+    }
+
     // Force pause button to half-moon (unpaused) so music can be re-enabled
     const pauseBtn = document.getElementById('pause');
     if (pauseBtn) pauseBtn.textContent = '☽';
@@ -6584,4 +6589,5 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
+
 
