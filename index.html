@@ -994,6 +994,16 @@ const names = [
     "Zoar"
 ];
 
+// Replace this section in the runeAlgo function:
+function runeAlgo() {
+let filteredRuneDrops = [];
+for (let i = 0; i < runeDrops.length; i++) {
+    if (!runeDrops[i].specific) {
+    filteredRuneDrops.push(runeDrops[i]);
+    }
+  }
+}
+
 // Show info message
 function showInfo() {
     const infoMessage = document.getElementById('info-message');
@@ -1338,8 +1348,8 @@ document.addEventListener('dblclick', (e) => {
 const canvas = document.getElementById('game');
 let touchMoveInterval = null; // Global variable for continuous touch movement
 let touchTimeout = null; // Global variable for touch timeout
-let dpadButtons = document.querySelectorAll('#dpad button');
-let actionsButtons = document.querySelectorAll('#actions button');
+const dpadButtons = document.querySelectorAll('#dpad button');
+const actionsButtons = document.querySelectorAll('#actions button');
 
 // Canvas touch handling to avoid interference with D-pad
 canvas.addEventListener('touchstart', (e) => {
@@ -1476,7 +1486,6 @@ let portals = []; // Array to store active portal positions and animation state
 let splashActive = true;
 let waveActive = false;
 let musicMuted = false;        
-let paused = false;
 let swordDir = 'right', swordActive = false, swordStart = 0;
 let gameOverSoundPlayed = false;
 let fogMap = [];
@@ -1768,6 +1777,11 @@ function placeStairs() {
         console.warn('Attempted to place stairs in hideout – forbidden');
         return false;
     }
+    if (exit) {
+        logBattleEvent(`Floor ${floor} - Stairs placement skipped: exit already exists at (${exit.x}, ${exit.y})`);
+        return true;
+    }
+
     let x, y, placed = false;
     // Try room-based placement first
     if (rooms && rooms.length > 0) {
@@ -2307,8 +2321,8 @@ function initMap() {
             waypointPos = null;
             exit = null; // Prevent stairs and related enemy spawning
 
-            dpadButtons = document.querySelectorAll('#dpad button');
-            actionsButtons = document.querySelectorAll('#actions button');
+            const dpadButtons = document.querySelectorAll('#dpad button');
+            const actionsButtons = document.querySelectorAll('#actions button');
 
             rooms = [];
             const roomSize = 7;
@@ -2941,8 +2955,8 @@ function shouldSpawn() {
 }
 
 async function fetchTxs() {
-    if (gameOver || splashActive || floor === 0 || inHideout || paused) {
-        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}, paused=${paused}`);
+    if (gameOver || splashActive || floor === 0 || inHideout) {
+        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}`);
         return;
     }
     
@@ -2973,7 +2987,7 @@ async function fetchTxs() {
         await new Promise(resolve => setTimeout(resolve, 25));
         
         // Check if we're still in the right state before making API call
-        if (gameOver || splashActive || floor === 0 || inHideout || paused) {
+        if (gameOver || splashActive || floor === 0 || inHideout) {
             console.log(`fetchTxs: State changed during API call, aborting`);
             return;
         }
@@ -3366,11 +3380,89 @@ function isSolid(x, y) {
 
 function move(dir) {
     if (gameOver || splashActive || inputBlocked) return;
-    // Check if player is in hideout and trying to pause from waypoint tile
-    if (inHideout && map[p.y][p.x] === 16 && !paused) {
-    // Allow pausing when on waypoint in hideout
-    // This is handled by the existing logic but we want to ensure it works properly
+
+// ⚠️ This should be run BEFORE any movement or API fetches
+if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
+    // Make sure we don't skip the exit handling
+    console.log("PLAYER STEPPED ON STAIRS - INITIATING FLOOR EXIT");
+    
+    // Reset scroll flag for next floor
+    scrollDroppedThisFloor = false;
+
+    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+    
+    // Remove immortality if needed
+    if (p.immortal) {
+        p.immortal = false;
+        logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
     }
+    
+    // Prevent duplicate API calls by checking if we're already in a transition
+    if (isFetchingTxs) {
+        console.log('Skipping fetchTxs: already fetching');
+        return; // Early exit here to prevent any further logic
+    }
+
+    // Reset floor state variables
+    enemiesSpawnedThisFloor = 0;
+    initialSpawnDoneThisFloor = false;
+    enemies = [];
+    floor++;
+    initialWaveSpawned = false;
+    waveActive = false;
+    exit = null;
+    killsLog = [];
+    battleLog = []; // Clear battleLog to prevent memory buildup
+    
+    // Reset special sound tracking for the new floor
+    specialSoundsPlayedThisFloor.lava = false;
+    specialSoundsPlayedThisFloor.quicksand = false;
+    specialSoundsPlayedThisFloor.pond = false;
+    specialSoundsPlayedThisFloor.rune = false;
+    specialSoundsPlayedThisFloor.hole = false;
+    
+    // Reset runewords to allow reactivation on new floor
+    p.runewords = [];
+    
+    // Clear runeDrops specific runes to prevent stale entries
+    runeDrops = runeDrops.filter(r => !r.specific);
+    
+    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+    document.getElementById('wave').textContent = wave;
+    
+    initMap();
+    nextApiCallTime = null;
+    
+    // Show the theme name for 3 s, then revert to the floor number
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+
+    const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+    floorIndicator.textContent = themeName;               // 1️⃣ show theme
+
+    themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+        floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+        themeTimeoutId = null;
+    }, 3000);
+    
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value = '';
+    battleEvents.style.transform = 'translateX(-100%)';
+    battleEvents.style.opacity = '0';
+    
+    // Only trigger fetchTxs if not already running
+    setTimeout(() => {
+        if (!gameOver && !splashActive && floor > 0) {
+            fetchTxs();
+            console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+        }
+    }, 1000);
+    
+    // Add proper exit handling to prevent teleportation issues
+    needsRedraw = true;
+    return; // ✅ This is CRUCIAL - stops further execution after exit
+}
+    
     swordDir = dir;
     let nx = p.x, ny = p.y;
     let newDirection = p.anim.direction; // Default to current direction
@@ -3833,77 +3925,6 @@ if (
     return; // Exit move early to prevent further movement
 }
 
-// This logic should be moved outside the conditional block and before other exit checks
-if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
-    // NEW: make sure the scroll flag is reset for the next floor
-    scrollDroppedThisFloor = false;
-
-    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-    if (p.immortal) {
-        p.immortal = false;
-        logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
-    }
-    
-    // Prevent duplicate API calls by checking if we're already in a transition
-    if (isFetchingTxs) {
-        console.log('Skipping fetchTxs: already fetching');
-        return;
-    }
-    
-    enemiesSpawnedThisFloor = 0;
-    initialSpawnDoneThisFloor = false;
-    enemies = [];
-    floor++;
-    initialWaveSpawned = false;
-    waveActive = false;
-    exit = null;
-    killsLog = [];
-    battleLog = []; // Clear battleLog to prevent memory buildup
-    // Reset special sound tracking for the new floor
-    specialSoundsPlayedThisFloor.lava = false;
-    specialSoundsPlayedThisFloor.quicksand = false;
-    specialSoundsPlayedThisFloor.pond = false;
-    specialSoundsPlayedThisFloor.rune = false;
-    specialSoundsPlayedThisFloor.hole = false;
-    // Reset runewords to allow reactivation on new floor
-    p.runewords = [];
-    // Clear runeDrops specific runes to prevent stale entries
-    runeDrops = runeDrops.filter(r => !r.specific);
-    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-    document.getElementById('wave').textContent = wave;
-    initMap();
-    nextApiCallTime = null;
-    
-    // Show the theme name for 3 s, then revert to the floor number
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
-
-    const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
-    floorIndicator.textContent = themeName;               // 1️⃣ show theme
-
-    themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
-        floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
-        themeTimeoutId = null;
-    }, 3000);
-    
-    const battleEvents = document.getElementById('battle-events');
-    battleEvents.value = '';
-    battleEvents.style.transform = 'translateX(-100%)';
-    battleEvents.style.opacity = '0';
-    
-    // Only trigger fetchTxs if not already running
-    setTimeout(() => {
-        if (!gameOver && !splashActive && floor > 0) {
-            fetchTxs();
-            console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
-        }
-    }, 1000);
-    
-    // Add proper exit handling to prevent teleportation issues
-    needsRedraw = true;
-    return; // Prevent further movement after stairs
-}
-
 // In move function - before calling fetchTxs
 if (map[ny][nx] === 12 && !inHideout) { // Portal tile in normal floor
     playWebAudioSound(sounds.town_portal);
@@ -4040,6 +4061,10 @@ if (map[ny][nx] === 8) {
     }
 }
 
+
+
+
+
 // Check if player moved from a rune tile
 if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
     const floorIndicator = document.getElementById('floor-indicator');
@@ -4100,6 +4125,7 @@ if (map[p.y][p.x] === 9) {
     
     needsRedraw = true;
 }
+
 
 function moveEnemies() {
     if (gameOver || splashActive) return;
@@ -4344,103 +4370,91 @@ function initGradientOverlay() {
 
 // Modified checkRunewords function to display 5x5 rune grid with counts
 function checkRunewords() {
-    // Define all possible runes
+    // Optimized rune counting with precomputed counts
+    const runeCounts = {};
     const allRunes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
     
-    // Count occurrences of each rune, capped at 9
-    const runeCounts = {};
-    allRunes.forEach(rune => runeCounts[rune] = 0);
-    p.runes.forEach(rune => {
-        if (runeCounts[rune] < 9) {
+    // Count runes efficiently
+    for (let i = 0; i < p.runes.length; i++) {
+        const rune = p.runes[i];
+        if (runeCounts[rune]) {
             runeCounts[rune]++;
+        } else {
+            runeCounts[rune] = 1;
         }
-    });
-    
-// Build 5x5 grid display
-let displayText = '<br>'; // Start with a <br> for the first row
-for (let i = 0; i < 5; i++) {
-    const row = allRunes.slice(i * 5, (i + 1) * 5).map(rune => {
-        const count = runeCounts[rune];
-        const letter = rune.toUpperCase();
-        const display = `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
-        if (count > 0) {
-            return display;
+        // Cap at 9 to prevent overflow
+        if (runeCounts[rune] > 9) {
+            runeCounts[rune] = 9;
         }
-        return `<span style="opacity: 0;">${display}</span>`;
-    }).join('  '); // Two spaces for separation
-    displayText += row + (i < 4 ? '<br>' : ''); // Newline except for last row
-}
+    }
     
-    // Wrap displayText in a span with Safari-compatible nbsp styling
-    const wrappedDisplayText = `<span style="-webkit-nbsp-mode: normal;">${displayText}</span>`;
+    // Build display with precomputed values
+    let displayText = '<br>';
+    for (let i = 0; i < 5; i++) {
+        const row = [];
+        for (let j = 0; j < 5; j++) {
+            const runeIndex = i * 5 + j;
+            if (runeIndex < allRunes.length) {
+                const rune = allRunes[runeIndex];
+                const count = runeCounts[rune] || 0;
+                const letter = rune.toUpperCase();
+                const display = `${letter}<sup style="font-size: 0.6em;">${count}</sup>`;
+                if (count > 0) {
+                    row.push(display);
+                } else {
+                    row.push(`<span style="opacity: 0;">${display}</span>`);
+                }
+            }
+        }
+        displayText += row.join('  ') + (i < 4 ? '<br>' : '');
+    }
     
-    // Update inventory display
-    document.getElementById('runes').innerHTML = wrappedDisplayText; // Apply wrapped text to runes element
+    // Update inventory display efficiently
+    const runesElement = document.getElementById('runes');
+    if (runesElement) {
+        runesElement.innerHTML = `<span style="-webkit-nbsp-mode: normal;">${displayText}</span>`;
+    }
 }
 
 // Modified checkRunewordsAtFloorStart function to check for BTC, HODL, and RIP runes in any order
 function checkRunewordsAtFloorStart() {
-    const btcRunes = ['b', 't', 'c'];
-    const hodlRunes = ['h', 'o', 'd', 'l'];
-    const ripRunes = ['r', 'i', 'p'];
-    let usedIndices = []; // Track indices of used runes
-    let activatedRunewords = []; // Track activated runewords for display
-
-    // Helper function to check if all required runes exist in p.runes, excluding used indices
-    function hasRunes(requiredRunes, excludedIndices) {
-        const runeCount = {};
-        p.runes.forEach((r, i) => {
-            if (!excludedIndices.includes(i)) {
-                runeCount[r] = (runeCount[r] || 0) + 1;
-            }
-        });
-        const indices = [];
-        for (const rune of requiredRunes) {
-            if (!runeCount[rune] || runeCount[rune] === 0) return { found: false };
-            // Find the index of the first occurrence of this rune
-            const index = p.runes.findIndex((r, i) => r === rune && !excludedIndices.includes(i) && !indices.includes(i));
-            if (index === -1) return { found: false };
-            indices.push(index);
-            runeCount[rune]--;
-        }
-        return { found: true, indices };
+    // Simple rune matching without complex array operations
+    const runeMap = {};
+    p.runes.forEach(rune => {
+        runeMap[rune] = (runeMap[rune] || 0) + 1;
+    });
+    
+    // Check for specific runewords
+    let activatedRunewords = [];
+    
+    // BTC check (b, t, c)
+    if (runeMap['b'] && runeMap['t'] && runeMap['c']) {
+        p.hp += 444;
+        p.maxHP = Math.max(p.maxHP, p.hp);
+        p.runewords.push('btc');
+        logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
+        updatePlayerState();
+        activatedRunewords.push('BTC');
     }
-
-    // Define runewords
-    const runewords = [
-        { name: 'btc', runes: btcRunes, effect: () => {
-            p.hp += 444;
-            p.maxHP = Math.max(p.maxHP, p.hp);
-            p.runewords.push('btc');
-            logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
-            updatePlayerState();
-        }},
-        { name: 'hodl', runes: hodlRunes, effect: () => {
-            p.immortal = true;
-            p.runewords.push('hodl');
-            logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
-            updatePlayerState();
-        }},
-        { name: 'rip', runes: ripRunes, effect: () => {
-            p.ripBlast = true;
-            p.runewords.push('rip');
-            logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
-        }}
-    ];
-
-    // Check all runewords
-    for (const runeword of runewords) {
-        if (!p.runewords.includes(runeword.name)) {
-            const result = hasRunes(runeword.runes, usedIndices);
-            if (result.found) {
-                runeword.effect();
-                usedIndices.push(...result.indices);
-                activatedRunewords.push(runeword.name.toUpperCase());
-            }
-        }
+    
+    // HODL check (h, o, d, l)
+    if (runeMap['h'] && runeMap['o'] && runeMap['d'] && runeMap['l']) {
+        p.immortal = true;
+        p.runewords.push('hodl');
+        logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
+        updatePlayerState();
+        activatedRunewords.push('HODL');
     }
-
-    let isRunewordMessageDisplayed = false;
+    
+    // RIP check (r, i, p)
+    if (runeMap['r'] && runeMap['i'] && runeMap['p']) {
+        p.ripBlast = true;
+        p.runewords.push('rip');
+        logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
+        activatedRunewords.push('RIP');
+    }
+    
+    // Handle runeword activation messages
     if (activatedRunewords.length > 0) {
         const floorIndicator = document.getElementById('floor-indicator');
         floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
@@ -4448,29 +4462,29 @@ function checkRunewordsAtFloorStart() {
             playWebAudioSound(sounds.rune);
             specialSoundsPlayedThisFloor.rune = true;
         }
-        isRunewordMessageDisplayed = true;
         setTimeout(() => {
-            isRunewordMessageDisplayed = false;
-            // Only reset to floor number if no other runeword display is active
             const currentText = floorIndicator.textContent;
             if (currentText.startsWith("Runeword")) {
                 floorIndicator.textContent = `Floor ${floor}`;
             }
         }, 5000);
     }
-
-    // When you want to update the floor indicator text
-    if (!isRunewordMessageDisplayed) {
-        const floorIndicator = document.getElementById('floor-indicator');
-        floorIndicator.textContent = `Floor ${floor}`;
+    
+    // Remove runes that were used for runewords
+    const usedRunes = new Set();
+    if (p.runewords.includes('btc')) {
+        usedRunes.add('b'); usedRunes.add('t'); usedRunes.add('c');
     }
-
-    // Remove used runes
-    usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
-    for (const index of usedIndices) {
-        p.runes.splice(index, 1);
+    if (p.runewords.includes('hodl')) {
+        usedRunes.add('h'); usedRunes.add('o'); usedRunes.add('d'); usedRunes.add('l');
     }
-
+    if (p.runewords.includes('rip')) {
+        usedRunes.add('r'); usedRunes.add('i'); usedRunes.add('p');
+    }
+    
+    // Remove used runes from p.runes
+    p.runes = p.runes.filter(rune => !usedRunes.has(rune));
+    
     // Clear specific rune drops
     runeDrops = runeDrops.filter(r => !r.specific);
     for (let y = 0; y < H; y++) {
@@ -5110,7 +5124,6 @@ function restart() {
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
 //    musicMuted = true;
-//    paused = false;
 //    musicManager.mute(true); // Ensure MusicManager is muted
     musicManager.current = null; // Reset MusicManager state
 
@@ -5147,8 +5160,8 @@ function restart() {
        4. Re-initialize button variables and touch listeners
        ------------------------------------------------------------------ */
     // Re-initialize button variables properly
-    dpadButtons = document.querySelectorAll('#dpad button');
-    actionsButtons = document.querySelectorAll('#actions button');
+    const dpadButtons = document.querySelectorAll('#dpad button');
+    const actionsButtons = document.querySelectorAll('#actions button');
     
     // Cleanup old listeners first
     cleanupEventListeners();
@@ -5636,9 +5649,6 @@ function gameLoop(timestamp) {
         needsRedraw = true;
     }
     
-    // Handle gamepad pause state changes
-    handleGamepadPause();
-    
     if (gameOver) {
         musicManager.mute(true);
         musicManager.play(currentTheme);
@@ -5678,7 +5688,10 @@ if (p.hp <= 0 && !gameOver) {
     }
 }
 
-    requestAnimationFrame(gameLoop);
+    let animationFrameId = null;
+    if (!animationFrameId) {
+    animationFrameId = requestAnimationFrame(gameLoop);
+    }
 }
 
 document.addEventListener('keydown', e => {
@@ -5713,9 +5726,6 @@ document.addEventListener('keydown', e => {
         }
 if (gameOver && hasPlayedOnce) {
     // Don't allow pausing from game over screen - just restart
-    if (paused) {
-        togglePause(); // Toggle to ensure clean state
-    }
     restart();
     return;
 }
@@ -5788,19 +5798,16 @@ document.getElementById('game-over').addEventListener('click', (event) => {
         !document.getElementById('restart-game').contains(event.target) &&
         !document.getElementById('leaderboard-output').contains(event.target)
     ) {
-        // Prevent pause from being triggered on game over screen
-        if (!paused) {
-            // Don't allow pausing from game over screen
-            return;
-        }
-        // If already paused, allow normal behavior
     }
 });
 
         initMap();
         updateSatsDisplay();
         populateNameList();
-        requestAnimationFrame(gameLoop);
+        let animationFrameId = null;
+    	if (!animationFrameId) {
+    	animationFrameId = requestAnimationFrame(gameLoop);
+    	}
         
 // Removed redundant D-pad touch event listeners; handled in initTouchControls
 
@@ -6138,20 +6145,20 @@ function updateGamepad(timestamp) {
     // Handle buttons (A=0, B=1, Select=2, Start=3)
     const nowTime = Date.now();
 
-    // A Button (0) - usePotion - only when not paused
-    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver && !paused) {
+    // A Button (0) - usePotion
+    if (buttons[0].pressed && !lastButtonsState[0] && !splashActive && !gameOver) {
         usePotion();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // B Button (1) - attack - only when not paused
-    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver && !paused) {
+    // B Button (1) - attack
+    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
         attack();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // Select Button (2) - toggleMute - only when not paused
-    if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS && !paused) {
+    // Select Button (2) - toggleMute
+    if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         toggleMute();
         lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
     }
@@ -6177,7 +6184,7 @@ function updateGamepad(timestamp) {
         // Rely on movementTimer for continuous movement
         if (newMoveDir && !movementTimer) {
             movementTimer = setInterval(() => {
-                if (!splashActive && !gameOver && gamepadMoveDir && !paused) {
+                if (!splashActive && !gameOver && gamepadMoveDir) {
                     const now = Date.now();
                     if (now - gamepadLastMoveTime >= 200) {
                         move(gamepadMoveDir);
@@ -6199,8 +6206,8 @@ function updateGamepad(timestamp) {
 // Initialize touch controls after DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize the global button variables
-    dpadButtons = document.querySelectorAll('#dpad button');
-    actionsButtons = document.querySelectorAll('#actions button');
+    const dpadButtons = document.querySelectorAll('#dpad button');
+    const actionsButtons = document.querySelectorAll('#actions button');
     
     setTimeout(() => {
         initTouchControls();
@@ -6293,9 +6300,6 @@ function activateScreensaver() {
     if (!initScreensaver()) return;
     const overlay = document.getElementById('screensaver-overlay');
     if (!overlay) return;
-
-    // Save current paused boolean so we can restore later
-    savedPausedState = !!paused;
 
     overlay.style.display = 'block';
     screensaverActive = true;
@@ -6403,13 +6407,6 @@ function exitScreensaver() {
         }
     }
 
-    // Force pause button to half-moon (unpaused) so music can be re-enabled
-    const pauseBtn = document.getElementById('pause');
-    if (pauseBtn) pauseBtn.textContent = '☽';
-
-    // Make sure paused boolean matches the UI (☽ = unpaused)
-    paused = false;
-
     // Restore music: unmute when leaving screensaver
     try {
         if (typeof musicManager !== 'undefined') {
@@ -6422,107 +6419,6 @@ function exitScreensaver() {
         console.warn('musicManager unmute failed', e);
     }
 }
-
-// Toggle screensaver on pause
-function togglePause() {
-    // Only allow pausing when there are stairs or enemies present, or in hideout
-    const canPause = (exit !== null) || (enemies.length > 0) || inHideout;
-    
-    if (!canPause && !paused) {
-        // If trying to pause but can't, show message
-        logBattleEvent("Floor " + floor + " - Pause disabled: No stairs or enemies!");
-        return;
-    }
-    
-    if (!canPause && paused) {
-        // If already paused and can't unpause, do nothing
-        return;
-    }
-    
-    paused = !paused;
-    const pauseBtn = document.getElementById('pause');
-    if (pauseBtn) pauseBtn.textContent = paused ? '☀' : '☽';
-
-    if (paused) {
-        // Clear any pending API calls
-        if (apiTimeoutId) {
-            clearTimeout(apiTimeoutId);
-            apiTimeoutId = null;
-        }
-        nextApiCallTime = null;
-
-        // Pause music when pausing and keep state in sync
-        try {
-            if (typeof musicManager !== 'undefined' && !musicMuted) {
-                musicManager.mute(true);
-                musicMuted = true;
-            }
-        } catch (e) {
-            console.warn('musicManager mute failed', e);
-        }
-
-        // Activate screensaver when paused
-        activateScreensaver();
-    } else {
-        // Resume music when unpausing and keep state in sync
-        try {
-            if (typeof musicManager !== 'undefined' && musicMuted) {
-                musicManager.mute(false);
-                musicMuted = false;
-            }
-        } catch (e) {
-            console.warn('musicManager unmute failed', e);
-        }
-
-        exitScreensaver();
-    }
-}
-
-// Add gamepad-specific pause handling
-function handleGamepadPause() {
-    // When gamepad is connected, we want to:
-    // 1. Only allow unpause via Start button (A/B/Select/D-pad disabled)
-    // 2. Temporarily disable A, B, Select and D-pad buttons when paused
-    
-    if (gamepadIndex !== null && paused) {
-        // Disable other buttons during pause with gamepad
-        const actionsButtons = document.querySelectorAll('#actions button');
-        const dpadButtons = document.querySelectorAll('#dpad button');
-        
-        // Temporarily disable A, B, Select buttons
-        actionsButtons.forEach(button => {
-            if (button.id !== 'pause' && button.id !== 'mute') {
-                button.disabled = true;
-                button.style.opacity = '0.5';
-            }
-        });
-        
-        // Temporarily disable D-pad buttons
-        dpadButtons.forEach(button => {
-            button.disabled = true;
-            button.style.opacity = '0.5';
-        });
-    } else if (gamepadIndex !== null && !paused) {
-        // Re-enable buttons when unpaused with gamepad
-        const actionsButtons = document.querySelectorAll('#actions button');
-        const dpadButtons = document.querySelectorAll('#dpad button');
-        
-        // Re-enable A, B, Select buttons
-        actionsButtons.forEach(button => {
-            if (button.id !== 'pause' && button.id !== 'mute') {
-                button.disabled = false;
-                button.style.opacity = '1';
-            }
-        });
-        
-        // Re-enable D-pad buttons
-        dpadButtons.forEach(button => {
-            button.disabled = false;
-            button.style.opacity = '1';
-        });
-    }
-}
-
 
 // Add debounced movement detection for screensaver exit
 let screensaverMovementTimeout = null;
