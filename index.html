@@ -5134,10 +5134,6 @@ function restart() {
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
     
-    //musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
-    musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-    musicManager.mute(true); // Mute immediately to prevent playback on restart
-    
     /* ------------------------------------------------------------------
        3. Reset UI elements
        ------------------------------------------------------------------ */
@@ -5179,13 +5175,6 @@ function restart() {
     
     // Re-initialize touch controls
     initTouchControls(); // Re-initialize touch controls
-    
-    // After restart, ensure music is properly muted to prevent playback
-    setTimeout(() => {
-        musicManager.mute(true);
-        musicMuted = true;
-        document.getElementById('mute').textContent = 'X';
-    }, 100);
     
     /* ------------------------------------------------------------------
        5. Reset audio & gamepad polling
@@ -5978,9 +5967,6 @@ function startGame() {
     
     currentTheme = 'dungeon'; // Force default theme on game start
     // Only unmute if music wasn't previously muted (preserve previous mute state)
-    
-    musicManager.mute(false); // Ensure MusicManager is unmuted only if it wasn't muted before
-    musicMuted = false; // Reset mute state flag
     
     const shouldUnmute = !musicMuted;
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
