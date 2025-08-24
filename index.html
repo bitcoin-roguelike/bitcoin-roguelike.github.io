@@ -2144,6 +2144,28 @@ function toggleMute() {
     }
 }
 
+// Modified function to handle screensaver exit consistently
+function exitScreensaverConsistently() {
+    const muteButton = document.getElementById('mute');
+    const currentState = muteButton.textContent;
+    
+    // Always exit screensaver and reset to music on state (♪)
+    if (screensaverActive) {
+        exitScreensaver();
+    }
+    
+    // Only reset mute state if not already in proper state
+    if (currentState !== '♪') {
+        musicMuted = false;
+        musicManager.mute(false);
+        muteButton.textContent = '♪';
+        if (!splashActive) {
+            musicManager.current = null; // Reset MusicManager state
+            musicManager.play(currentTheme);
+        }
+    }
+}
+
 <!-- After -->
 function logWhaleHashId(txid) {
     const newEntry = `Floor ${floor} - <a href="https://mempool.space/tx/${txid}" target="_blank">${txid}</a>`;
@@ -5176,6 +5198,9 @@ function restart() {
     // Re-initialize touch controls
     initTouchControls(); // Re-initialize touch controls
     
+            musicMuted = true;
+        musicManager.mute(true);
+    
     /* ------------------------------------------------------------------
        5. Reset audio & gamepad polling
        ------------------------------------------------------------------ */
@@ -5927,6 +5952,7 @@ let currentAxes = null;
 
 // Start game function for splash screen
 function startGame() {
+musicManager.current = null; // Reset MusicManager state
     document.getElementById('mute').textContent = '♪'; // Update mute button UI
     if (!splashActive) {
         return;
@@ -5967,6 +5993,9 @@ function startGame() {
     
     currentTheme = 'dungeon'; // Force default theme on game start
     // Only unmute if music wasn't previously muted (preserve previous mute state)
+    
+                    musicMuted = false;
+        musicManager.mute(false);
     
     const shouldUnmute = !musicMuted;
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
@@ -6015,6 +6044,7 @@ function startGame() {
             console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
         }
     }, 2000); // Match original start-button delay
+
 }
 
 window.addEventListener("gamepadconnected", (e) => {
@@ -6180,8 +6210,13 @@ function updateGamepad(timestamp) {
             startGame();
         } else if (gameOver) {
             restart();
-        } else 
-        lastStartPressTime = nowTime;
+        } else {
+            // Gamepad Select button behavior: exit screensaver consistently
+            if (screensaverActive) {
+                exitScreensaverConsistently();
+            }
+            lastStartPressTime = nowTime;
+        }
     }
 
     // Update button states
@@ -6438,16 +6473,28 @@ document.addEventListener('pointerdown', function (e) {
 
 document.addEventListener('touchstart', function (e) {
   if (e.touches && e.touches.length > 1) return;
+  // When touch starts during screensaver, exit screensaver consistently
+  if (screensaverActive) {
+    exitScreensaverConsistently();
+  }
   handleMovement();
 }, { passive: true });
 
 document.addEventListener('mousedown', function (e) {
   if (e.button !== 0) return;
+  // When mouse down occurs during screensaver, exit screensaver consistently
+  if (screensaverActive) {
+    exitScreensaverConsistently();
+  }
   handleMovement();
 }, { passive: true });
 
 document.addEventListener('keydown', function (e) {
   if (['a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
+    // When key press occurs during screensaver, exit screensaver consistently
+    if (screensaverActive) {
+      exitScreensaverConsistently();
+    }
     handleMovement();
   }
 });
@@ -6460,6 +6507,7 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
+
 
 
 
