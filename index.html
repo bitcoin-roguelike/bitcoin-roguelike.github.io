@@ -3433,30 +3433,37 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     initMap();
     nextApiCallTime = null;
     
-    // Show the theme name for 3 s, then revert to the floor number
+// Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
     const floorIndicator = document.getElementById('floor-indicator');
     if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
 
-    const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
-    floorIndicator.textContent = themeName;               // 1️⃣ show theme
+    // Check if any runewords are active
+    const hasActiveRunewords = p.runewords.length > 0;
+    
+    if (hasActiveRunewords) {
+        // Show runeword message immediately
+        floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
+    } else {
+        // Show theme name for 3 s, then revert to floor number
+        const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+        floorIndicator.textContent = themeName;               // 1️⃣ show theme
 
-    themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
-        floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
-        themeTimeoutId = null;
-    }, 3000);
+        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+            floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+            themeTimeoutId = null;
+        }, 3000);
+    }
     
     const battleEvents = document.getElementById('battle-events');
     battleEvents.value = '';
     battleEvents.style.transform = 'translateX(-100%)';
     battleEvents.style.opacity = '0';
     
-    // Only trigger fetchTxs if not already running
-    setTimeout(() => {
-        if (!gameOver && !splashActive && floor > 0) {
-            fetchTxs();
-            console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
-        }
-    }, 1000);
+    // Immediately trigger fetchTxs after floor transition
+    if (!gameOver && !splashActive && floor > 0) {
+        fetchTxs();
+        console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+    }
     
     // Add proper exit handling to prevent teleportation issues
     needsRedraw = true;
@@ -3496,12 +3503,15 @@ if (enemies.some(e => e.x === nx && e.y === ny)) {
     needsRedraw = true; // Ensure redraw to reflect new direction
     return;
 }
-    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
+if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx;
         p.y = ny;
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2; // Cycle frames
-        p.anim.lastFrameTime = performance.now(); // Update frame time
-        if (map[ny][nx] === 2) { 
+        //p.anim.lastFrameTime = performance.now(); // Update frame time
+        
+        // Only process potion pickup if we're NOT stepping on stairs
+        // This prevents the bug where stepping on stairs triggers potion pickup sound
+        if (map[ny][nx] === 2 && !(exit && p.x === exit.x && p.y === exit.y)) { 
             p.potions++; 
             map[ny][nx] = 0; 
             playWebAudioSound(sounds.pickup);
@@ -5124,11 +5134,9 @@ function restart() {
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
     
-// Reset music manager properly - ensure fresh initialization
-    
     //musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
     musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-    musicManager.mute(false);
+    musicManager.mute(true); // Mute immediately to prevent playback on restart
     
     /* ------------------------------------------------------------------
        3. Reset UI elements
@@ -5159,7 +5167,7 @@ function restart() {
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
 
-    /* ------------------------------------------------------------------
+/* ------------------------------------------------------------------
        4. Re-initialize button variables and touch listeners
        ------------------------------------------------------------------ */
     // Re-initialize button variables properly
@@ -5171,6 +5179,13 @@ function restart() {
     
     // Re-initialize touch controls
     initTouchControls(); // Re-initialize touch controls
+    
+    // After restart, ensure music is properly muted to prevent playback
+    setTimeout(() => {
+        musicManager.mute(true);
+        musicMuted = true;
+        document.getElementById('mute').textContent = 'X';
+    }, 100);
     
     /* ------------------------------------------------------------------
        5. Reset audio & gamepad polling
@@ -5963,6 +5978,10 @@ function startGame() {
     
     currentTheme = 'dungeon'; // Force default theme on game start
     // Only unmute if music wasn't previously muted (preserve previous mute state)
+    
+    musicManager.mute(false); // Ensure MusicManager is unmuted only if it wasn't muted before
+    musicMuted = false; // Reset mute state flag
+    
     const shouldUnmute = !musicMuted;
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
     if (shouldUnmute) {
@@ -6487,5 +6506,6 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
+
 
 
