@@ -1396,6 +1396,7 @@ let savedPauseState = null; // remembers pause button state before screensaver
 let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
 let activatedRunewords = [];
+let lastDrawTime = null;
 let map = [],
     p = {
         x: 2,
@@ -1493,99 +1494,34 @@ const specialSoundsPlayedThisFloor = {
     hole: false
 };
 
-    const types = [
-{
-    name: 'Shrimp',
-    min: 0,
-    max: 0.01,
-    anim: {
-        frames: [new Image(), new Image(), new Image()],
-        hellFrames: [new Image(), new Image(), new Image()], // Hell Shrimp frames
-        frameIndex: 0,
-        lastFrameTime: 0,
-        frameDuration: 200
-    },
-    hp: 2,
-    atk: 1,
-    reward: 0,
-    move: 1
-},
-        {
-            name: 'Crab',
-            min: 0.01,
-            max: 0.1,
-            anim: {
-                frames: [new Image(), new Image(), new Image()],
-                frameIndex: 0,
-                lastFrameTime: 0,
-                frameDuration: 200
-            },
-            hp: 3,
-            atk: 2,
-            reward: 0,
-            move: 1
-        },
-        {
-            name: 'Squid',
-            min: 0.1,
-            max: 1,
-            anim: {
-                frames: [new Image(), new Image(), new Image()],
-                frameIndex: 0,
-                lastFrameTime: 0,
-                frameDuration: 200
-            },
-            hp: 4,
-            atk: 2,
-            reward: 0,
-            move: 2
-        },
-        {
-            name: 'Dolphin',
-            min: 1,
-            max: 10,
-            anim: {
-                frames: [new Image(), new Image(), new Image()],
-                frameIndex: 0,
-                lastFrameTime: 0,
-                frameDuration: 200
-            },
-            hp: 4,
-            atk: 3,
-            reward: 0,
-            move: 2
-        },
-        {
-            name: 'Shark',
-            min: 10,
-            max: 100,
-            anim: {
-                frames: [new Image(), new Image(), new Image()],
-                frameIndex: 0,
-                lastFrameTime: 0,
-                frameDuration: 200
-            },
-            hp: 5,
-            atk: 5,
-            reward: 0,
-            move: 2
-        },
-        {
-            name: 'Whale',
-            min: 100,
-            max: Infinity,
-            anim: {
-                frames: [new Image(), new Image(), new Image()],
-                frameIndex: 0,
-                lastFrameTime: 0,
-                frameDuration: 200
-            },
-            hp: 6,
-            atk: 4, // changed this to whale attacking for 10% of players life + 3 dmg to balance the end-game and still be pretty dangerous at the early stages
-            reward: 0,
-            move: 2
-        }
-    ];
+class EnemyType {
+    constructor(name, min, max, hp, atk, move, reward = 0) {
+        this.name = name;
+        this.min = min;
+        this.max = max;
+        this.hp = hp;
+        this.atk = atk;
+        this.move = move;
+        this.reward = reward;
+        this.anim = {
+            frames: [new Image(), new Image(), new Image()],
+            hellFrames: [new Image(), new Image(), new Image()],
+            frameIndex: 0,
+            lastFrameTime: 0,
+            frameDuration: 200
+        };
+    }
+}
+
+const types = [
+    new EnemyType('Shrimp', 0, 0.01, 2, 1, 1),
+    new EnemyType('Crab', 0.01, 0.1, 3, 2, 1),
+    new EnemyType('Squid', 0.1, 1, 4, 2, 2),
+    new EnemyType('Dolphin', 1, 10, 4, 3, 2),
+    new EnemyType('Shark', 10, 100, 5, 5, 2),
+    new EnemyType('Whale', 100, Infinity, 6, 4, 2)
+];
+
 const assets = {
     themes: {
         dungeon: { floor: new Image(), wall: new Image() },
@@ -1624,32 +1560,35 @@ const assets = {
     scroll: new Image(),
     town_portal: [new Image(), new Image(), new Image()]
 };
-        types[0].anim.frames[0].src = 'shrimp_1.png';
-	types[0].anim.frames[1].src = 'shrimp_2.png';
-	types[0].anim.frames[2].src = 'shrimp_3.png';
-	types[0].anim.hellFrames[0].src = 'hell_shrimp_1.png';
-	types[0].anim.hellFrames[1].src = 'hell_shrimp_2.png';
-	types[0].anim.hellFrames[2].src = 'hell_shrimp_3.png';
-		types[0].anim.hellFrames.forEach((frame, i) => {
-    frame.onerror = () => console.error(`Failed to load Hell Shrimp frame ${i}: ${frame.src}`);
-    });
-    	types[1].anim.frames[0].src = 'crab_1.png';
-    	types[1].anim.frames[1].src = 'crab_2.png';
-    	types[1].anim.frames[2].src = 'crab_3.png';
-    	types[2].anim.frames[0].src = 'squid_1.png';
-    	types[2].anim.frames[1].src = 'squid_2.png';
-    	types[2].anim.frames[2].src = 'squid_3.png';
-    	types[3].anim.frames[0].src = 'dolphin_1.png';
-    	types[3].anim.frames[1].src = 'dolphin_2.png';
-    	types[3].anim.frames[2].src = 'dolphin_3.png';
-    	types[4].anim.frames[0].src = 'shark_1.png';
-    	types[4].anim.frames[1].src = 'shark_2.png';
-    	types[4].anim.frames[2].src = 'shark_3.png';
-    	types[5].anim.frames[0].src = 'whale_1.png';
-    	types[5].anim.frames[1].src = 'whale_2.png';
-    	types[5].anim.frames[2].src = 'whale_3.png';
 
-    Object.values(assets).forEach(asset => {
+// Initialize sprite frames for all enemy types
+for (let i = 0; i < types.length; i++) {
+    const type = types[i];
+    if (type.name === 'Shrimp') {
+        // Hell Shrimp has special frames that need to be loaded
+        assets.themes.hell.special.onerror = () => console.error(`Failed to load hell special asset: ${assets.themes.hell.special.src}`);
+    }
+}
+
+// Load sprite frames for each enemy type
+types.forEach((type, index) => {
+    // Set up default animation frames
+    type.anim.frames[0].src = `${type.name.toLowerCase()}_1.png`;
+    type.anim.frames[1].src = `${type.name.toLowerCase()}_2.png`;
+    type.anim.frames[2].src = `${type.name.toLowerCase()}_3.png`;
+    
+    // Special handling for Hell Shrimp
+    if (type.name === 'Shrimp') {
+        type.anim.hellFrames[0].src = 'hell_shrimp_1.png';
+        type.anim.hellFrames[1].src = 'hell_shrimp_2.png';
+        type.anim.hellFrames[2].src = 'hell_shrimp_3.png';
+        type.anim.hellFrames.forEach((frame, i) => {
+            frame.onerror = () => console.error(`Failed to load Hell Shrimp frame ${i}: ${frame.src}`);
+        });
+    }
+});
+
+Object.values(assets).forEach(asset => {
         if (asset instanceof Image) {
             asset.onerror = () => console.error(`Failed to load asset: ${asset.src}`);
         } else if (typeof asset === 'object') {
@@ -1658,11 +1597,19 @@ const assets = {
             });
         }
     });
-    types.forEach(t => {
-        t.anim.frames.forEach((frame, i) => {
-            frame.onerror = () => console.error(`Failed to load sprite frame ${i} for ${t.name}: ${frame.src}`);
-        });
+    
+// Handle error for enemy sprite frames
+types.forEach(t => {
+    t.anim.frames.forEach((frame, i) => {
+        frame.onerror = () => console.error(`Failed to load sprite frame ${i} for ${t.name}: ${frame.src}`);
     });
+    // Also handle Hell Shrimp frames if they exist
+    if (t.anim.hellFrames) {
+        t.anim.hellFrames.forEach((frame, i) => {
+            frame.onerror = () => console.error(`Failed to load Hell sprite frame ${i} for ${t.name}: ${frame.src}`);
+        });
+    }
+});
         assets.themes.dungeon.floor.src = 'floor.png';
         assets.themes.dungeon.wall.src = 'wall.png';
         assets.themes.desert.floor.src = 'sand_floor.png';
@@ -2070,7 +2017,7 @@ function resetSplashScreen() {
 }
 
 document.getElementById('start-button').addEventListener('click', () => {
-    currentTheme = 'dungeon'; // Force default theme on game start
+    currentTheme = 'hell'; // Force default theme on game start
     // Switch back to splash.png when starting
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
@@ -5261,6 +5208,13 @@ function restart() {
 }
 
 function draw() {
+    // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
+    const now = performance.now();
+    if (now - lastDrawTime < 50) {
+        needsRedraw = true;
+        return;
+    }
+    lastDrawTime = now;
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
         console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
         initMap();
@@ -6543,4 +6497,5 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
+
 
