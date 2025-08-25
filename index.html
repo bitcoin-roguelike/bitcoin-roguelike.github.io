@@ -5732,7 +5732,73 @@ document.addEventListener('keydown', e => {
             setTimeout(() => {
                 startButton.style.background = '#00e8d8'; // Revert to original color
             }, 200); // Short duration to simulate tap
-            preloadSounds(); // Initialize all sounds except music
+
+currentTheme = 'dungeon'; // Force default theme on game start
+    // Switch back to splash.png when starting
+    if (currentSplashImage !== 'splash.png') {
+        currentSplashImage = 'splash.png';
+        splashCanvas.clearRect(0, 0, 320, 320);
+        splashImg.src = currentSplashImage;
+        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    }
+    
+    if (splashActive) {
+        preloadSounds();
+        // Ensure AudioContext is resumed for iOS
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                // Reset music manager state and play music after AudioContext is resumed
+                musicManager.current = null;
+                if (!musicMuted) {
+                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
+                }
+            }).catch(e => console.error('Failed to resume AudioContext:', e));
+        } else {
+            // Reset music manager state on restart
+            musicManager.current = null;
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play music if AudioContext is already running
+            }
+        }
+            // Fix: Properly reset MusicManager state and ensure audio context is ready
+    try {
+        if (audioContext && audioContext.state === 'suspended') {
+        musicManager.current = null;
+            audioContext.resume();
+        }
+
+        musicManager.mute(false); // Ensure unmuted
+        musicMuted = false;
+    } catch (e) {
+        console.warn('Error resetting music manager:', e);
+    }
+    
+    // Set music volume to 0 when restarting
+    if (musicManager.current) {
+        const currentAudio = musicManager.audios[musicManager.current];
+        if (currentAudio) {
+            currentAudio.volume = 0;
+        }
+    }
+        fadeSplash();
+        setTimeout(() => {
+            if (!gameOver && !splashActive) {
+                fetchTxs();
+                lastUpdate = Date.now();
+                console.log('Initial fetchTxs triggered after splash, wave=', wave);
+            }
+        }, 2000);
+    }
+    
+    // Set music volume to max when starting
+    if (musicManager.current) {
+        const currentAudio = musicManager.audios[musicManager.current];
+        if (currentAudio) {
+            currentAudio.currentTime = 0;
+            currentAudio.volume = 1;
+        }
+    }
+
             fadeSplash();
             setTimeout(() => {
                 if (!gameOver && !splashActive) {
