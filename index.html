@@ -1395,6 +1395,7 @@ let isFetchingTxs = false; // Track if fetchTxs is currently running
 let savedPauseState = null; // remembers pause button state before screensaver
 let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
+let activatedRunewords = [];
 let map = [],
     p = {
         x: 2,
@@ -3864,13 +3865,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
         p.immortal = false;
         logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
     }
-    
-    // Prevent duplicate API calls by checking if we're already in a transition
-    if (isFetchingTxs) {
-        console.log('Skipping fetchTxs: already fetching');
-        return;
-    }
-    
+        
     enemiesSpawnedThisFloor = 0;
     initialSpawnDoneThisFloor = false;
     enemies = [];
@@ -4408,66 +4403,67 @@ for (let i = 0; i < 5; i++) {
 
 // Modified checkRunewordsAtFloorStart function to check for BTC, HODL, and RIP runes in any order
 function checkRunewordsAtFloorStart() {
-    const btcRunes = ['b', 't', 'c'];
-    const hodlRunes = ['h', 'o', 'd', 'l'];
-    const ripRunes = ['r', 'i', 'p'];
-    let usedIndices = []; // Track indices of used runes
-    let activatedRunewords = []; // Track activated runewords for display
-
-    // Helper function to check if all required runes exist in p.runes, excluding used indices
-    function hasRunes(requiredRunes, excludedIndices) {
-        const runeCount = {};
-        p.runes.forEach((r, i) => {
-            if (!excludedIndices.includes(i)) {
-                runeCount[r] = (runeCount[r] || 0) + 1;
-            }
-        });
-        const indices = [];
-        for (const rune of requiredRunes) {
-            if (!runeCount[rune] || runeCount[rune] === 0) return { found: false };
-            // Find the index of the first occurrence of this rune
-            const index = p.runes.findIndex((r, i) => r === rune && !excludedIndices.includes(i) && !indices.includes(i));
-            if (index === -1) return { found: false };
-            indices.push(index);
-            runeCount[rune]--;
-        }
-        return { found: true, indices };
-    }
-
-    // Define runewords
     const runewords = [
-        { name: 'btc', runes: btcRunes, effect: () => {
+        { name: 'btc', runes: ['b', 't', 'c'], effect: () => {
             p.hp += 444;
             p.maxHP = Math.max(p.maxHP, p.hp);
             p.runewords.push('btc');
             logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
             updatePlayerState();
         }},
-        { name: 'hodl', runes: hodlRunes, effect: () => {
+        { name: 'hodl', runes: ['h', 'o', 'd', 'l'], effect: () => {
             p.immortal = true;
             p.runewords.push('hodl');
             logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
             updatePlayerState();
         }},
-        { name: 'rip', runes: ripRunes, effect: () => {
+        { name: 'rip', runes: ['r', 'i', 'p'], effect: () => {
             p.ripBlast = true;
             p.runewords.push('rip');
             logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
         }}
     ];
 
-    // Check all runewords
+    // Compute rune counts and indices in a single pass
+    const runeData = { counts: {}, indices: {} };
+    p.runes.forEach((rune, i) => {
+        if (!runeData.counts[rune]) {
+            runeData.counts[rune] = 0;
+            runeData.indices[rune] = [];
+        }
+        runeData.counts[rune]++;
+        runeData.indices[rune].push(i);
+    });
+
+    let usedIndices = [];
+    // let activatedRunewords = [];	// moved to global scope
+
+    // Check each runeword
     for (const runeword of runewords) {
-        if (!p.runewords.includes(runeword.name)) {
-            const result = hasRunes(runeword.runes, usedIndices);
-            if (result.found) {
+        if (p.runewords.includes(runeword.name)) continue; // Skip already activated runewords
+
+        // Check if all required runes are available
+        const hasAllRunes = runeword.runes.every(rune => (runeData.counts[rune] || 0) > 0);
+        if (hasAllRunes) {
+            // Collect indices for the required runes
+            const indices = [];
+            for (const rune of runeword.runes) {
+                if (runeData.indices[rune].length > 0) {
+                    indices.push(runeData.indices[rune].shift()); // Take first available index
+                    runeData.counts[rune]--;
+                } else {
+                    break; // Missing a rune, stop checking this runeword
+                }
+            }
+            if (indices.length === runeword.runes.length) { // All runes found
                 runeword.effect();
-                usedIndices.push(...result.indices);
+                usedIndices.push(...indices);
                 activatedRunewords.push(runeword.name.toUpperCase());
             }
         }
     }
 
+    // Display runeword message if any were activated
     let isRunewordMessageDisplayed = false;
     if (activatedRunewords.length > 0) {
         const floorIndicator = document.getElementById('floor-indicator');
@@ -4479,7 +4475,6 @@ function checkRunewordsAtFloorStart() {
         isRunewordMessageDisplayed = true;
         setTimeout(() => {
             isRunewordMessageDisplayed = false;
-            // Only reset to floor number if no other runeword display is active
             const currentText = floorIndicator.textContent;
             if (currentText.startsWith("Runeword")) {
                 floorIndicator.textContent = `Floor ${floor}`;
@@ -4487,16 +4482,18 @@ function checkRunewordsAtFloorStart() {
         }, 5000);
     }
 
-    // When you want to update the floor indicator text
+    // Update floor indicator if no runeword message is displayed
     if (!isRunewordMessageDisplayed) {
         const floorIndicator = document.getElementById('floor-indicator');
         floorIndicator.textContent = `Floor ${floor}`;
     }
 
     // Remove used runes
-    usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
-    for (const index of usedIndices) {
-        p.runes.splice(index, 1);
+    if (usedIndices.length > 0) {
+        usedIndices.sort((a, b) => b - a); // Sort descending to avoid index issues
+        for (const index of usedIndices) {
+            p.runes.splice(index, 1);
+        }
     }
 
     // Clear specific rune drops
@@ -4508,7 +4505,9 @@ function checkRunewordsAtFloorStart() {
             }
         }
     }
+
     checkRunewords(); // Update inventory display
+    activatedRunewords = [];
     needsRedraw = true;
 }
 
@@ -4865,12 +4864,28 @@ if (hit) {
     
 // Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
 if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
-    let sx = p.x, sy = p.y; // Start at player's position
+    // Check if player is standing adjacent to an enemy
+    let isAdjacentToEnemy = false;
+    let sx = p.x, sy = p.y;
+    if (swordDir === 'up') sy--;
+    if (swordDir === 'down') sy++;
+    if (swordDir === 'left') sx--;
+    if (swordDir === 'right') sx++;
+    
+    // Check if there's an enemy one tile away in the sword direction
     if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
-        projectiles.push({ x: sx, y: sy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
-        sounds.shoot_sword.pause();
-        sounds.shoot_sword.currentTime = 0;
-        sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
+        isAdjacentToEnemy = enemies.some(e => e.x === sx && e.y === sy);
+    }
+    
+    // Only shoot projectiles if not standing adjacent to an enemy
+    if (!isAdjacentToEnemy) {
+        let startSx = p.x, startSy = p.y; // Start at player's position
+        if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
+            projectiles.push({ x: startSx, y: startSy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
+            sounds.shoot_sword.pause();
+            sounds.shoot_sword.currentTime = 0;
+            sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
+        }
     }
 }
     
