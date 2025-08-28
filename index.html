@@ -1477,7 +1477,7 @@ let scrollDrops = []; // Array to store scroll drops with positions
 let portals = []; // Array to store active portal positions and animation state
 let splashActive = true;
 let waveActive = false;
-let musicMuted = false;        
+let musicMuted = localStorage.getItem('musicMuted') === 'true';        
 let swordDir = 'right', swordActive = false, swordStart = 0;
 let gameOverSoundPlayed = false;
 let fogMap = [];
@@ -2051,8 +2051,7 @@ document.getElementById('start-button').addEventListener('click', () => {
             audioContext.resume();
         }
 
-        musicManager.mute(false); // Ensure unmuted
-        musicMuted = false;
+        musicManager.mute(musicMuted); // Ensure proper mute state
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
@@ -2094,6 +2093,7 @@ function toggleMute() {
         musicMuted = true;
         musicManager.mute(true);
         muteButton.textContent = 'X';
+        localStorage.setItem('musicMuted', 'true');
 } else if (currentState === 'X') {
         // Second state: Music muted → Activate screensaver
         musicMuted = true;
@@ -2116,10 +2116,10 @@ function toggleMute() {
             musicManager.current = null; // Reset MusicManager state
             musicManager.play(currentTheme);
         }
+        localStorage.setItem('musicMuted', 'false');
     }
 }
 
-<!-- After -->
 function logWhaleHashId(txid) {
     const newEntry = `Floor ${floor} - <a href="https://mempool.space/tx/${txid}" target="_blank">${txid}</a>`;
     whaleHashIds.push(newEntry);
@@ -2776,8 +2776,6 @@ if (floorTiles.length > 0) {
 if (p.pickaxes > 0) {
     p.pickaxes--;
     logBattleEvent(`Floor ${floor} - Secret Room Created! (Pickaxe consumed)`);
-    // Reset pickaxe durability when collecting new one
-    p.pickaxe.reset();
     // Update display immediately
     updatePickaxeDisplay();
 }
@@ -3333,56 +3331,138 @@ function isSolid(x, y) {
     return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
 }
 
+// Animation controller for movement timing
+class AnimationController {
+    constructor() {
+        this.movementStartTime = 0;
+        this.isMoving = false;
+        this.currentDirection = null;
+        this.nextMoveQueue = [];
+        this.animationDuration = 200; // 200ms per tile move
+    }
+
+    startMovement(direction) {
+        if (this.isMoving) {
+            // Queue the movement if already moving
+            this.nextMoveQueue.push(direction);
+            return false;
+        }
+        
+        this.isMoving = true;
+        this.currentDirection = direction;
+        this.movementStartTime = performance.now();
+        
+        // Schedule next move after animation duration
+        setTimeout(() => {
+            this.endMovement();
+        }, this.animationDuration);
+        
+        return true;
+    }
+
+    endMovement() {
+        this.isMoving = false;
+        this.currentDirection = null;
+        
+        // Process queued movements
+        if (this.nextMoveQueue.length > 0) {
+            const nextDirection = this.nextMoveQueue.shift();
+            move(nextDirection);
+        }
+    }
+
+    // Check if movement is in progress
+    get isAnimating() {
+        return this.isMoving;
+    }
+}
+
+// Create global animation controller
+const animController = new AnimationController();
+
 function move(dir) {
     if (gameOver || splashActive || inputBlocked) return;
+    
     // Check if player is in hideout and trying to pause from waypoint tile
     if (inHideout && map[p.y][p.x] === 16) {
-    // Allow pausing when on waypoint in hideout
-    // This is handled by the existing logic but we want to ensure it works properly
+        // Allow pausing when on waypoint in hideout
+        // This is handled by the existing logic but we want to ensure it works properly
     }
+
+    // If already animating, queue this move
+    if (animController.isAnimating) {
+        animController.nextMoveQueue.push(dir);
+        return;
+    }
+
     swordDir = dir;
     let nx = p.x, ny = p.y;
-    let newDirection = p.anim.direction; // Default to current direction
-    if (dir === 'up') {
-        ny--;
-        newDirection = 'back';
+    let newDirection = p.anim.direction;
+
+    if (dir === 'up') { ny--; newDirection = 'back'; }
+    if (dir === 'down') { ny++; newDirection = 'front'; }
+    if (dir === 'left') { nx--; newDirection = 'left'; }
+    if (dir === 'right') { nx++; newDirection = 'right'; }
+
+    // Validate move before starting animation
+    if (nx < 0 || nx >= W || ny < 0 || ny >= H || isSolid(nx, ny)) {
+        p.anim.direction = newDirection; // Update direction for rendering
+        needsRedraw = true;
+        return; // Don't start animation
     }
-    if (dir === 'down') {
-        ny++;
-        newDirection = 'front';
+
+    if (!map[ny] || map[ny][nx] === undefined) {
+        console.error('Invalid map access: nx=', nx, 'ny=', ny);
+        initMap();
+        needsRedraw = true;
+        return; // Don't start animation
     }
-    if (dir === 'left') {
-        nx--;
-        newDirection = 'left';
+
+    if (enemies.some(e => e.x === nx && e.y === ny)) {
+        p.anim.direction = newDirection; // Update direction for rendering
+        needsRedraw = true;
+        return; // Don't start animation
     }
-    if (dir === 'right') {
-        nx++;
-        newDirection = 'right';
+
+    // Now start animation since move is valid
+    if (!animController.startMovement(dir)) {
+        return; // Shouldn't happen since we checked isAnimating
     }
-    if (nx < 0 || nx >= W || ny < 0 || ny >= H || isSolid(nx, ny)) return;
-// Update direction even if move is blocked
-p.anim.direction = newDirection;
-if (!map[ny] || map[ny][nx] === undefined) {
-    console.error('Invalid map access: nx=', nx, 'ny=', ny);
-    initMap();
-    needsRedraw = true;
-    return;
-}
-// Always update direction for rendering, even if blocked by enemy
-if (enemies.some(e => e.x === nx && e.y === ny)) {
-    needsRedraw = true; // Ensure redraw to reflect new direction
-    return;
-}
+
+    // Update direction and position
+    p.anim.direction = newDirection;
+    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
+        p.x = nx;
+        p.y = ny;
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+        p.anim.lastFrameTime = performance.now();
+        }
+    
+    if (!map[ny] || map[ny][nx] === undefined) {
+        console.error('Invalid map access: nx=', nx, 'ny=', ny);
+        initMap();
+        needsRedraw = true;
+        return;
+    }
+    
+    // Always update direction for rendering, even if blocked by enemy
+    if (enemies.some(e => e.x === nx && e.y === ny)) {
+        needsRedraw = true; // Ensure redraw to reflect new direction
+        return;
+    }
+    
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx;
         p.y = ny;
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2; // Cycle frames
         p.anim.lastFrameTime = performance.now(); // Update frame time
+        
         if (map[ny][nx] === 2) { 
             p.potions++; 
             map[ny][nx] = 0; 
             playWebAudioSound(sounds.pickup);
         }
+        
         if (map[ny][nx] === 6 && !inHideout) {
             if (currentTheme === 'paradise') {
                 if (p.hp <= 36) {
@@ -3391,69 +3471,72 @@ if (enemies.some(e => e.x === nx && e.y === ny)) {
                     logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
                     playWebAudioSound(sounds.pickup);
                 }
+            }
+            
+            // If p.hp > 36, do nothing and continue
+            
+            // Desert – Sludge pit
+            if (currentTheme === 'desert') {
+                p.hp = Math.max(0, p.hp - 2);
+                logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
+                playWebAudioSound(sounds.hit);
+                if (p.hp <= 0 && p.immortal) {
+                    p.hp = 1;
+                    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+                } else if (p.hp <= 0) {
+                    p.hp = 0;
+                    diamonds = 0;                // ← reset diamonds
+                    updatePlayerState();          // ← update display
+                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                    gameOver = true;
                 }
-                // If p.hp > 36, do nothing and continue
-// Desert – Sludge pit
-if (currentTheme === 'desert') {
-    p.hp = Math.max(0, p.hp - 2);
-    logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
-    playWebAudioSound(sounds.hit);
-    if (p.hp <= 0 && p.immortal) {
-        p.hp = 1;
-        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-    } else if (p.hp <= 0) {
-        p.hp = 0;
-        diamonds = 0;                // ← reset diamonds
-        updatePlayerState();          // ← update display
-        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-        gameOver = true;
-    }
-}
+            }
 
-// Hell – Lava
-if (currentTheme === 'hell') {
-    p.hp = Math.max(0, p.hp - 8);
-    logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
-    playWebAudioSound(sounds.hit);
-    if (p.hp <= 0 && p.immortal) {
-        p.hp = 1;
-        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-    } else if (p.hp <= 0) {
-        p.hp = 0;
-        diamonds = 0;
-        updatePlayerState();
-        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-        gameOver = true;
-    }
-}
+            // Hell – Lava
+            if (currentTheme === 'hell') {
+                p.hp = Math.max(0, p.hp - 8);
+                logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
+                playWebAudioSound(sounds.hit);
+                if (p.hp <= 0 && p.immortal) {
+                    p.hp = 1;
+                    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+                } else if (p.hp <= 0) {
+                    p.hp = 0;
+                    diamonds = 0;
+                    updatePlayerState();
+                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                    gameOver = true;
+                }
+            }
 
-// Ruins – Falling into a hole
-if (currentTheme === 'ruins') {
-    if (p.hp === 1) {
-        p.hp = 0;
-        logBattleEvent(`Floor ${floor} - Fell into Hole: Hero Fell! Reached Floor ${floor}`);
-        playWebAudioSound(sounds.hole);
-        gameOver = true;
-    } else {
-        const oldHP = p.hp;
-        p.hp = Math.ceil(p.hp / 2);
-        logBattleEvent(`Floor ${floor} - Fell into Hole: -${oldHP - p.hp} HP (now ${p.hp})`);
-        playWebAudioSound(sounds.hole);
-        if (p.hp <= 0 && p.immortal) {
-            p.hp = 1;
-            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        } else if (p.hp <= 0) {
-            p.hp = 0;
-            diamonds = 0;
-            updatePlayerState();
-            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-            gameOver = true;
-        }
-    }
-}
+            // Ruins – Falling into a hole
+            if (currentTheme === 'ruins') {
+                if (p.hp === 1) {
+                    p.hp = 0;
+                    logBattleEvent(`Floor ${floor} - Fell into Hole: Hero Fell! Reached Floor ${floor}`);
+                    playWebAudioSound(sounds.hole);
+                    gameOver = true;
+                } else {
+                    const oldHP = p.hp;
+                    p.hp = Math.ceil(p.hp / 2);
+                    logBattleEvent(`Floor ${floor} - Fell into Hole: -${oldHP - p.hp} HP (now ${p.hp})`);
+                    playWebAudioSound(sounds.hole);
+                    if (p.hp <= 0 && p.immortal) {
+                        p.hp = 1;
+                        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+                    } else if (p.hp <= 0) {
+                        p.hp = 0;
+                        diamonds = 0;
+                        updatePlayerState();
+                        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                        gameOver = true;
+                    }
+                }
+            }
 
             updatePlayerState();
         }
+        
         if (map[ny][nx] === 7) {
             const coinToss = Math.random() < 0.5; // 50/50 chance
             if (coinToss) {
@@ -3463,36 +3546,37 @@ if (currentTheme === 'ruins') {
                 p.hp += healthGain;
                 logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
                 playWebAudioSound(sounds.heads); // Play heads.wav
-} else {
-    // Remove excess health and adjust armor
-    let currentMaxHP = 24; // Base HP
-    let newArmorStatus = 'Cloth';
-    if (p.hp > 1000) {
-        currentMaxHP = 1000; // Diamond armor max
-        newArmorStatus = 'Diamond';
-    } else if (p.hp > 36) {
-        currentMaxHP = 36; // Leather armor max
-        newArmorStatus = 'Leather';
-    } else if (p.hp > 24) {
-        currentMaxHP = 24; // Cloth max
-        newArmorStatus = 'Cloth';
-    }
-    if (p.hp > currentMaxHP) {
-        const healthLost = p.hp - currentMaxHP;
-        p.hp = currentMaxHP;
-        p.hasDiamondArmor = currentMaxHP >= 1000;
-        p.hasArmor = currentMaxHP === 36;
-        document.getElementById('armorStatus').textContent = newArmorStatus;
-        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
-    } else {
-        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
-    }
-    playWebAudioSound(sounds.tails); // Play tails.wav
-}
+            } else {
+                // Remove excess health and adjust armor
+                let currentMaxHP = 24; // Base HP
+                let newArmorStatus = 'Cloth';
+                if (p.hp > 1000) {
+                    currentMaxHP = 1000; // Diamond armor max
+                    newArmorStatus = 'Diamond';
+                } else if (p.hp > 36) {
+                    currentMaxHP = 36; // Leather armor max
+                    newArmorStatus = 'Leather';
+                } else if (p.hp > 24) {
+                    currentMaxHP = 24; // Cloth max
+                    newArmorStatus = 'Cloth';
+                }
+                if (p.hp > currentMaxHP) {
+                    const healthLost = p.hp - currentMaxHP;
+                    p.hp = currentMaxHP;
+                    p.hasDiamondArmor = currentMaxHP >= 1000;
+                    p.hasArmor = currentMaxHP === 36;
+                    document.getElementById('armorStatus').textContent = newArmorStatus;
+                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
+                } else {
+                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
+                }
+                playWebAudioSound(sounds.tails); // Play tails.wav
+            }
             p.potions = 0;
             map[ny][nx] = 0;
             updatePlayerState();
         }
+        
         if (map[ny][nx] === 3) {
             const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
             if (drop) {
@@ -3503,12 +3587,14 @@ if (currentTheme === 'ruins') {
                 updateSatsDisplay();
             }
         }
+        
         if (map[ny][nx] === 4) {
             p.pickaxes++;
             map[ny][nx] = 0;
             playWebAudioSound(sounds.pickup);
             logBattleEvent(`Floor ${floor} - Pickaxe Found!`);
         }
+        
         if (map[ny][nx] === 5) {
             if (p.hp >= 24) {
                 p.hp += 12;
@@ -3521,555 +3607,565 @@ if (currentTheme === 'ruins') {
             logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
             updatePlayerState();
         }
+        
         if (map[ny][nx] === 10) {            // diamond tile
-    	    diamonds++;                      // collect it
+            diamonds++;                      // collect it
             map[ny][nx] = 0;                 // remove from map
             playWebAudioSound(sounds.pickup);
             logBattleEvent(`Floor ${floor} - Diamond collected!`);
             updatePlayerState();              // updates inventory display
         }
         
-if (map[ny][nx] === 11) { // Scroll tile
-    const scroll = scrollDrops.find(s => s.x === nx && s.y === ny);
-    if (scroll) {
-        map[ny][nx] = 0; // Consume scroll
-        scrollDrops = scrollDrops.filter(s => s !== scroll);
-        playWebAudioSound(sounds.pickup);
-        logBattleEvent(`Floor ${floor} - Scroll consumed! Town portal opened nearby!`);
-        // Find an adjacent tile for the portal
-        const adjacent = [
-            { x: nx, y: ny - 1 },
-            { x: nx, y: ny + 1 },
-            { x: nx - 1, y: ny },
-            { x: nx + 1, y: ny }
-        ].filter(pos => 
-            pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H &&
-            map[pos.y][pos.x] === 0 &&
-            !enemies.some(e => e.x === pos.x && e.y === pos.y) &&
-            !portals.some(p => p.x === pos.x && p.y === pos.y)
-        );
-        if (adjacent.length > 0) {
-            const portalPos = adjacent[Math.floor(Math.random() * adjacent.length)];
-            map[portalPos.y][portalPos.x] = 12; // Portal tile
-            portals.push({
-                x: portalPos.x,
-                y: portalPos.y,
-                frameIndex: 0,
-                lastFrameTime: performance.now(),
-                frameDuration: 200
-            });
-        } else {
-            logBattleEvent(`Floor ${floor} - No space for town portal!`);
-        }
-    }
-}
-
-
-        
-// Check for adjacent special tiles (type 6) and play ambient sound once per floor
-if (currentTheme !== 'dungeon') {
-    const adjacent = [
-        {x: p.x, y: p.y - 1}, // Up
-        {x: p.x, y: p.y + 1}, // Down
-        {x: p.x - 1, y: p.y}, // Left
-        {x: p.x + 1, y: p.y}  // Right
-    ].filter(pos => pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 6);
-    if (adjacent.length > 0) {
-        let soundKey;
-        switch (currentTheme) {
-            case 'hell':
-                soundKey = 'lava';
-                break;
-            case 'desert':
-                soundKey = 'quicksand';
-                break;
-            case 'paradise':
-                soundKey = 'pond';
-                break;
-        }
-        if (soundKey && !specialSoundsPlayedThisFloor[soundKey]) {
-            playWebAudioSound(sounds[soundKey]);
-            specialSoundsPlayedThisFloor[soundKey] = true;
-            logBattleEvent(`Floor ${floor} - Heard ${soundKey === 'quicksand' ? 'sludge pit' : soundKey} nearby!`);
-        }
-    }
-}
-
-// Check for falling animation (only on Ruins theme)
-if (
-    currentTheme === 'ruins' &&
-    map[ny][nx] === 6 && // Ring hole tile
-    !p.isFalling // Not already falling
-) {
-    inputBlocked = true;
-    p.isFalling = true;
-    const direction = p.anim.direction; // Save current direction for push
-    const oldX = p.x;
-    const oldY = p.y;
-
-    // Start fall animation - ensure it starts from frame 0
-    let frameIndex = 0;
-    const fallDuration = 200; // ms per frame
-    const totalFrames = 4; // it is really just 3 frames but the last seems to be clipped off due to this "totalFrames - 1"
-    const startTime = Date.now();
-
-    function animateFall() {
-        const elapsed = Date.now() - startTime;
-        frameIndex = Math.min(Math.floor(elapsed / fallDuration), totalFrames - 1);
-
-        // Update animation - this ensures all frames play, including the last one!
-        p.anim.frameIndex = frameIndex;
-        needsRedraw = true;
-
-        if (frameIndex < totalFrames - 1) {
-            requestAnimationFrame(animateFall);
-        } else {
-            // Animation complete, now push player one tile away
-            let pushX = oldX;
-            let pushY = oldY;
-
-            switch (direction) {
-                case 'up': pushY--; break;
-                case 'down': pushY++; break;
-                case 'left': pushX--; break;
-                case 'right': pushX++; break;
-            }
-
-            // Ensure player lands on a valid floor tile (not wall or hole), preferring same direction
-            pushX = oldX; // Reuse existing pushX
-            pushY = oldY; // Reuse existing pushY
-            let validPosition = false;
-
-            // Log original position for debugging
-            //console.log(`Original position: (${oldX}, ${oldY}), tile=${oldX >= 0 && oldX < W && oldY >= 0 && oldY < H ? map[oldY][oldX] : 'out of bounds'}`);
-
-            // Try pushing one tile in the original direction
-            //console.log(`Direction before initial push: ${direction}`);
-            switch (direction) {
-                case 'back': pushY--; break; // Up
-                case 'front': pushY++; break; // Down
-                case 'left': pushX--; break;
-                case 'right': pushX++; break;
-            }
-
-            //console.log(`Initial push: direction=${direction}, position=(${pushX}, ${pushY}), tile=${pushX >= 0 && pushX < W && pushY >= 0 && pushY < H ? map[pushY][pushX] : 'out of bounds'}`);
-
-            // Check if initial push position is the hole; if so, player is already on it
-            if (
-                pushX >= 0 && pushX < W &&
-                pushY >= 0 && pushY < H &&
-                map[pushY][pushX] === 6 // Initial push is the hole
-            ) {
-                // Try one tile before the hole (opposite direction, same side)
-                let backX = oldX;
-                let backY = oldY;
-                switch (direction) {
-                    case 'front': backY--; break; // Up (opposite of front)
-                    case 'back': backY++; break; // Down (opposite of back)
-                    case 'left': backX++; break; // Right (opposite of left)
-                    case 'right': backX--; break; // Left (opposite of right)
-                }
-                //console.log(`Back push (opposite direction): position=(${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
-                if (
-                    backX >= 0 && backX < W &&
-                    backY >= 0 && backY < H &&
-                    map[backY][backX] !== 1 && // Not a wall
-                    map[backY][backX] !== 6 // Not a hole
-                ) {
-                    pushX = backX;
-                    pushY = backY;
-                    validPosition = true;
-                    //console.log(`Valid back push position found at (${pushX}, ${pushY})`);
+        if (map[ny][nx] === 11) { // Scroll tile
+            const scroll = scrollDrops.find(s => s.x === nx && s.y === ny);
+            if (scroll) {
+                map[ny][nx] = 0; // Consume scroll
+                scrollDrops = scrollDrops.filter(s => s !== scroll);
+                playWebAudioSound(sounds.pickup);
+                logBattleEvent(`Floor ${floor} - Scroll consumed! Town portal opened nearby!`);
+                // Find an adjacent tile for the portal
+                const adjacent = [
+                    { x: nx, y: ny - 1 },
+                    { x: nx, y: ny + 1 },
+                    { x: nx - 1, y: ny },
+                    { x: nx + 1, y: ny }
+                ].filter(pos => 
+                    pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H &&
+                    map[pos.y][pos.x] === 0 &&
+                    !enemies.some(e => e.x === pos.x && e.y === pos.y) &&
+                    !portals.some(p => p.x === pos.x && p.y === pos.y)
+                );
+                if (adjacent.length > 0) {
+                    const portalPos = adjacent[Math.floor(Math.random() * adjacent.length)];
+                    map[portalPos.y][portalPos.x] = 12; // Portal tile
+                    portals.push({
+                        x: portalPos.x,
+                        y: portalPos.y,
+                        frameIndex: 0,
+                        lastFrameTime: performance.now(),
+                        frameDuration: 200
+                    });
                 } else {
-                    //console.log(`Back push invalid at (${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
-                    // Try adjacent tiles on same side (left/right for front/back, up/down for left/right)
-                    const adjacent = [
-                        direction === 'front' || direction === 'back' ? { x: oldX - 1, y: oldY } : { x: oldX, y: oldY - 1 }, // Left or up
-                        direction === 'front' || direction === 'back' ? { x: oldX + 1, y: oldY } : { x: oldX, y: oldY + 1 }  // Right or down
-                    ];
-                    for (let i = 0; i < adjacent.length; i++) {
-                        const adjX = adjacent[i].x;
-                        const adjY = adjacent[i].y;
-                        //console.log(`Adjacent push ${i+1}: position=(${adjX}, ${adjY}), tile=${adjX >= 0 && adjX < W && adjY >= 0 && adjY < H ? map[adjY][adjX] : 'out of bounds'}`);
+                    logBattleEvent(`Floor ${floor} - No space for town portal!`);
+                }
+            }
+        }
+
+        // Check for adjacent special tiles (type 6) and play ambient sound once per floor
+        if (currentTheme !== 'dungeon') {
+            const adjacent = [
+                {x: p.x, y: p.y - 1}, // Up
+                {x: p.x, y: p.y + 1}, // Down
+                {x: p.x - 1, y: p.y}, // Left
+                {x: p.x + 1, y: p.y}  // Right
+            ].filter(pos => pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 6);
+            if (adjacent.length > 0) {
+                let soundKey;
+                switch (currentTheme) {
+                    case 'hell':
+                        soundKey = 'lava';
+                        break;
+                    case 'desert':
+                        soundKey = 'quicksand';
+                        break;
+                    case 'paradise':
+                        soundKey = 'pond';
+                        break;
+                }
+                if (soundKey && !specialSoundsPlayedThisFloor[soundKey]) {
+                    playWebAudioSound(sounds[soundKey]);
+                    specialSoundsPlayedThisFloor[soundKey] = true;
+                    logBattleEvent(`Floor ${floor} - Heard ${soundKey === 'quicksand' ? 'sludge pit' : soundKey} nearby!`);
+                }
+            }
+        }
+
+        // Check for falling animation (only on Ruins theme)
+        if (
+            currentTheme === 'ruins' &&
+            map[ny][nx] === 6 && // Ring hole tile
+            !p.isFalling // Not already falling
+        ) {
+            inputBlocked = true;
+            p.isFalling = true;
+            const direction = p.anim.direction; // Save current direction for push
+            const oldX = p.x;
+            const oldY = p.y;
+
+            // Start fall animation - ensure it starts from frame 0
+            let frameIndex = 0;
+            const fallDuration = 200; // ms per frame
+            const totalFrames = 4; // it is really just 3 frames but the last seems to be clipped off due to this "totalFrames - 1"
+            const startTime = Date.now();
+
+            function animateFall() {
+                const elapsed = Date.now() - startTime;
+                frameIndex = Math.min(Math.floor(elapsed / fallDuration), totalFrames - 1);
+
+                // Update animation - this ensures all frames play, including the last one!
+                p.anim.frameIndex = frameIndex;
+                needsRedraw = true;
+
+                if (frameIndex < totalFrames - 1) {
+                    requestAnimationFrame(animateFall);
+                } else {
+                    // Animation complete, now push player one tile away
+                    let pushX = oldX;
+                    let pushY = oldY;
+
+                    switch (direction) {
+                        case 'up': pushY--; break;
+                        case 'down': pushY++; break;
+                        case 'left': pushX--; break;
+                        case 'right': pushX++; break;
+                    }
+
+                    // Ensure player lands on a valid floor tile (not wall or hole), preferring same direction
+                    pushX = oldX; // Reuse existing pushX
+                    pushY = oldY; // Reuse existing pushY
+                    let validPosition = false;
+
+                    // Log original position for debugging
+                    //console.log(`Original position: (${oldX}, ${oldY}), tile=${oldX >= 0 && oldX < W && oldY >= 0 && oldY < H ? map[oldY][oldX] : 'out of bounds'}`);
+
+                    // Try pushing one tile in the original direction
+                    //console.log(`Direction before initial push: ${direction}`);
+                    switch (direction) {
+                        case 'back': pushY--; break; // Up
+                        case 'front': pushY++; break; // Down
+                        case 'left': pushX--; break;
+                        case 'right': pushX++; break;
+                    }
+
+                    //console.log(`Initial push: direction=${direction}, position=(${pushX}, ${pushY}), tile=${pushX >= 0 && pushX < W && pushY >= 0 && pushY < H ? map[pushY][pushX] : 'out of bounds'}`);
+
+                    // Check if initial push position is the hole; if so, player is already on it
+                    if (
+                        pushX >= 0 && pushX < W &&
+                        pushY >= 0 && pushY < H &&
+                        map[pushY][pushX] === 6 // Initial push is the hole
+                    ) {
+                        // Try one tile before the hole (opposite direction, same side)
+                        let backX = oldX;
+                        let backY = oldY;
+                        switch (direction) {
+                            case 'front': backY--; break; // Up (opposite of front)
+                            case 'back': backY++; break; // Down (opposite of back)
+                            case 'left': backX++; break; // Right (opposite of left)
+                            case 'right': backX--; break; // Left (opposite of right)
+                        }
+                        //console.log(`Back push (opposite direction): position=(${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
                         if (
-                            adjX >= 0 && adjX < W &&
-                            adjY >= 0 && adjY < H &&
-                            map[adjY][adjX] !== 1 && // Not a wall
-                            map[adjY][adjX] !== 6 // Not a hole
+                            backX >= 0 && backX < W &&
+                            backY >= 0 && backY < H &&
+                            map[backY][backX] !== 1 && // Not a wall
+                            map[backY][backX] !== 6 // Not a hole
                         ) {
-                            pushX = adjX;
-                            pushY = adjY;
+                            pushX = backX;
+                            pushY = backY;
                             validPosition = true;
-                            //console.log(`Valid adjacent push position found at (${pushX}, ${pushY})`);
-                            break;
+                            //console.log(`Valid back push position found at (${pushX}, ${pushY})`);
+                        } else {
+                            //console.log(`Back push invalid at (${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                            // Try adjacent tiles on same side (left/right for front/back, up/down for left/right)
+                            const adjacent = [
+                                direction === 'front' || direction === 'back' ? { x: oldX - 1, y: oldY } : { x: oldX, y: oldY - 1 }, // Left or up
+                                direction === 'front' || direction === 'back' ? { x: oldX + 1, y: oldY } : { x: oldX, y: oldY + 1 }  // Right or down
+                            ];
+                            for (let i = 0; i < adjacent.length; i++) {
+                                const adjX = adjacent[i].x;
+                                const adjY = adjacent[i].y;
+                                //console.log(`Adjacent push ${i+1}: position=(${adjX}, ${adjY}), tile=${adjX >= 0 && adjX < W && adjY >= 0 && adjY < H ? map[adjY][adjX] : 'out of bounds'}`);
+                                if (
+                                    adjX >= 0 && adjX < W &&
+                                    adjY >= 0 && adjY < H &&
+                                    map[adjY][adjX] !== 1 && // Not a wall
+                                    map[adjY][adjX] !== 6 // Not a hole
+                                ) {
+                                    pushX = adjX;
+                                    pushY = adjY;
+                                    validPosition = true;
+                                    //console.log(`Valid adjacent push position found at (${pushX}, ${pushY})`);
+                                    break;
+                                }
+                            }
+                        }
+                    } else if (
+                        pushX >= 0 && pushX < W &&
+                        pushY >= 0 && pushY < H &&
+                        map[pushY][pushX] !== 1 && // Not a wall
+                        map[pushY][pushX] !== 6 // Not a hole
+                    ) {
+                        validPosition = true;
+                        //console.log(`Valid initial position found at (${pushX}, ${pushY})`);
+                    } else if (
+                        pushX >= 0 && pushX < W &&
+                        pushY >= 0 && pushY < H &&
+                        map[pushY][pushX] === 1 // Wall detected
+                    ) {
+                        // Try one tile before the hole (opposite direction, same side)
+                        let backX = oldX;
+                        let backY = oldY;
+                        switch (direction) {
+                            case 'front': backY--; break; // Up
+                            case 'back': backY++; break; // Down
+                            case 'left': backX++; break; // Right
+                            case 'right': backX--; break; // Left
+                        }
+                        //console.log(`Back push (opposite direction): position=(${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                        if (
+                            backX >= 0 && backX < W &&
+                            backY >= 0 && backY < H &&
+                            map[backY][backX] !== 1 && // Not a wall
+                            map[backY][backX] !== 6 // Not a hole
+                        ) {
+                            pushX = backX;
+                            pushY = backY;
+                            validPosition = true;
+                            //console.log(`Valid back push position found at (${pushX}, ${pushY})`);
+                        } else {
+                            //console.log(`Back push invalid at (${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
+                            // Try adjacent tiles on same side
+                            const adjacent = [
+                                direction === 'front' || direction === 'back' ? { x: oldX - 1, y: oldY } : { x: oldX, y: oldY - 1 }, // Left or up
+                                direction === 'front' || direction === 'back' ? { x: oldX + 1, y: oldY } : { x: oldX, y: oldY + 1 }  // Right or down
+                            ];
+                            for (let i = 0; i < adjacent.length; i++) {
+                                const adjX = adjacent[i].x;
+                                const adjY = adjacent[i].y;
+                                //console.log(`Adjacent push ${i+1}: position=(${adjX}, ${adjY}), tile=${adjX >= 0 && adjX < W && adjY >= 0 && adjY < H ? map[adjY][adjX] : 'out of bounds'}`);
+                                if (
+                                    adjX >= 0 && adjX < W &&
+                                    adjY >= 0 && adjY < H &&
+                                    map[adjY][adjX] !== 1 && // Not a wall
+                                    map[adjY][adjX] !== 6 // Not a hole
+                                ) {
+                                    pushX = adjX;
+                                    pushY = adjY;
+                                    validPosition = true;
+                                    //console.log(`Valid adjacent push position found at (${pushX}, ${pushY})`);
+                                    break;
+                                }
+                            }
                         }
                     }
-                }
-            } else if (
-                pushX >= 0 && pushX < W &&
-                pushY >= 0 && pushY < H &&
-                map[pushY][pushX] !== 1 && // Not a wall
-                map[pushY][pushX] !== 6 // Not a hole
-            ) {
-                validPosition = true;
-                //console.log(`Valid initial position found at (${pushX}, ${pushY})`);
-            } else if (
-                pushX >= 0 && pushX < W &&
-                pushY >= 0 && pushY < H &&
-                map[pushY][pushX] === 1 // Wall detected
-            ) {
-                // Try one tile before the hole (opposite direction, same side)
-                let backX = oldX;
-                let backY = oldY;
-                switch (direction) {
-                    case 'front': backY--; break; // Up
-                    case 'back': backY++; break; // Down
-                    case 'left': backX++; break; // Right
-                    case 'right': backX--; break; // Left
-                }
-                //console.log(`Back push (opposite direction): position=(${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
-                if (
-                    backX >= 0 && backX < W &&
-                    backY >= 0 && backY < H &&
-                    map[backY][backX] !== 1 && // Not a wall
-                    map[backY][backX] !== 6 // Not a hole
-                ) {
-                    pushX = backX;
-                    pushY = backY;
-                    validPosition = true;
-                    //console.log(`Valid back push position found at (${pushX}, ${pushY})`);
-                } else {
-                    //console.log(`Back push invalid at (${backX}, ${backY}), tile=${backX >= 0 && backX < W && backY >= 0 && backY < H ? map[backY][backX] : 'out of bounds'}`);
-                    // Try adjacent tiles on same side
-                    const adjacent = [
-                        direction === 'front' || direction === 'back' ? { x: oldX - 1, y: oldY } : { x: oldX, y: oldY - 1 }, // Left or up
-                        direction === 'front' || direction === 'back' ? { x: oldX + 1, y: oldY } : { x: oldX, y: oldY + 1 }  // Right or down
-                    ];
-                    for (let i = 0; i < adjacent.length; i++) {
-                        const adjX = adjacent[i].x;
-                        const adjY = adjacent[i].y;
-                        //console.log(`Adjacent push ${i+1}: position=(${adjX}, ${adjY}), tile=${adjX >= 0 && adjX < W && adjY >= 0 && adjY < H ? map[adjY][adjX] : 'out of bounds'}`);
-                        if (
-                            adjX >= 0 && adjX < W &&
-                            adjY >= 0 && adjY < H &&
-                            map[adjY][adjX] !== 1 && // Not a wall
-                            map[adjY][adjX] !== 6 // Not a hole
-                        ) {
-                            pushX = adjX;
-                            pushY = adjY;
-                            validPosition = true;
-                            //console.log(`Valid adjacent push position found at (${pushX}, ${pushY})`);
-                            break;
-                        }
+
+                    // Final check to ensure player doesn't land on hole
+                    if (validPosition && pushX >= 0 && pushX < W && pushY >= 0 && pushY < H && map[pushY][pushX] === 6) {
+                        //console.log(`Error: Final position is a hole at (${pushX}, ${pushY}); resetting to invalid`);
+                        validPosition = false;
                     }
+
+                    if (!validPosition) {
+                        console.log(`No valid position found; player may be stuck at (${pushX}, ${pushY}), tile=${pushX >= 0 && pushX < W && pushY >= 0 && pushY < H ? map[pushY][pushX] : 'out of bounds'}`);
+                    }
+
+                    // Update player position if valid
+                    if (validPosition) {
+                        p.x = pushX;
+                        p.y = pushY;
+                    } else {
+                        // Fallback: keep player at original position if no valid move
+                        p.x = oldX;
+                        p.y = oldY;
+                    }
+
+                    // Reset falling flag and animation state
+                    p.isFalling = false;
+                    p.anim.frameIndex = 0; // Reset to first frame
+                    p.anim.direction = direction; // Restore original direction
+                    // ⬅️ UNBLOCK INPUT HERE
+                    setTimeout(() => {
+                        inputBlocked = false;
+                    }, 200); // Small delay to ensure smooth transition
+                    needsRedraw = true;
                 }
             }
-
-            // Final check to ensure player doesn't land on hole
-            if (validPosition && pushX >= 0 && pushX < W && pushY >= 0 && pushY < H && map[pushY][pushX] === 6) {
-                //console.log(`Error: Final position is a hole at (${pushX}, ${pushY}); resetting to invalid`);
-                validPosition = false;
-            }
-
-            if (!validPosition) {
-                console.log(`No valid position found; player may be stuck at (${pushX}, ${pushY}), tile=${pushX >= 0 && pushX < W && pushY >= 0 && pushY < H ? map[pushY][pushX] : 'out of bounds'}`);
-            }
-
-            // Update player position if valid
-            if (validPosition) {
-                p.x = pushX;
-                p.y = pushY;
-            } else {
-                // Fallback: keep player at original position if no valid move
-                p.x = oldX;
-                p.y = oldY;
-            }
-
-            // Reset falling flag and animation state
-            p.isFalling = false;
-            p.anim.frameIndex = 0; // Reset to first frame
-            p.anim.direction = direction; // Restore original direction
-            // ⬅️ UNBLOCK INPUT HERE
-    	    setTimeout(() => {
-    	    	inputBlocked = false;
-    	    	}, 200); // Small delay to ensure smooth transition
-            needsRedraw = true;
+            // Ensure we reset to first frame before starting animation
+            p.anim.frameIndex = 0;
+            animateFall();
+            animController.endMovement();
+            return; // Exit move early to prevent further movement
         }
-    }
-    // Ensure we reset to first frame before starting animation
-    p.anim.frameIndex = 0;
-    animateFall();
-    return; // Exit move early to prevent further movement
-}
 
-// Add this after the stairs logic in move function:
-if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
-    // NEW: make sure the scroll flag is reset for the next floor
-    scrollDroppedThisFloor = false;
+        // Add this after the stairs logic in move function:
+        if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
+            // NEW: make sure the scroll flag is reset for the next floor
+            scrollDroppedThisFloor = false;
 
-    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-    if (p.immortal) {
-        p.immortal = false;
-        logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
-    }
-        
-    enemiesSpawnedThisFloor = 0;
-    initialSpawnDoneThisFloor = false;
-    enemies = [];
-    floor++;
-    initialWaveSpawned = false;
-    waveActive = false;
-    exit = null;
-    killsLog = [];
-    battleLog = []; // Clear battleLog to prevent memory buildup
-    // Reset special sound tracking for the new floor
-    specialSoundsPlayedThisFloor.lava = false;
-    specialSoundsPlayedThisFloor.quicksand = false;
-    specialSoundsPlayedThisFloor.pond = false;
-    specialSoundsPlayedThisFloor.rune = false;
-    specialSoundsPlayedThisFloor.hole = false;
-    // Reset runewords to allow reactivation on new floor
-    p.runewords = [];
-    // Clear runeDrops specific runes to prevent stale entries
-    runeDrops = runeDrops.filter(r => !r.specific);
-    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-    document.getElementById('wave').textContent = wave;
-    initMap();
-    nextApiCallTime = null;
-    
-// Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
-
-    // Check if any runewords are active
-    const hasActiveRunewords = p.runewords.length > 0;
-    
-    if (hasActiveRunewords) {
-        // Show runeword message immediately
-        floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
-    } else {
-        // Show theme name for 3 s, then revert to floor number
-        const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
-        floorIndicator.textContent = themeName;               // 1️⃣ show theme
-
-        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
-            floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
-            themeTimeoutId = null;
-        }, 3000);
-    }
-    
-    const battleEvents = document.getElementById('battle-events');
-    battleEvents.value = '';
-    battleEvents.style.transform = 'translateX(-100%)';
-    battleEvents.style.opacity = '0';
-    
-    // Immediately trigger fetchTxs after floor transition
-    if (!gameOver && !splashActive && floor > 0) {
-        fetchTxs();
-        console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
-    }
-    
-    // Add proper exit handling to prevent teleportation issues
-    needsRedraw = true;
-    return; // ✅ This is CRUCIAL - stops further execution after exit
-}
-
-// In move function - before calling fetchTxs
-if (map[ny][nx] === 12 && !inHideout) { // Portal tile in normal floor
-    playWebAudioSound(sounds.town_portal);
-    inHideout = true;
-    initMap();
-    return;
-}
-
-if (map[ny][nx] === 16 && inHideout) {
-    playWebAudioSound(sounds.town_portal);
-    if (previousFloorState) {
-        // Restore previous floor state
-        map = previousFloorState.map.map(row => [...row]);
-        enemies = previousFloorState.enemies.map(e => ({ ...e, type: { ...e.type } }));
-        rooms = previousFloorState.rooms.map(r => ({ ...r }));
-        exit = previousFloorState.exit ? { ...previousFloorState.exit } : null;
-        satoshiDrops = [...previousFloorState.satoshiDrops];
-        runeDrops = [...previousFloorState.runeDrops];
-        scrollDrops = [...previousFloorState.scrollDrops];
-        portals = previousFloorState.portals.map(p => ({ ...p }));
-        floor = previousFloorState.floor;
-        wave = previousFloorState.wave;
-        enemiesSpawnedThisFloor = previousFloorState.enemiesSpawnedThisFloor;
-        whalesSpawnedThisFloor = previousFloorState.whalesSpawnedThisFloor;
-        initialSpawnDoneThisFloor = previousFloorState.initialSpawnDoneThisFloor;
-        initialWaveSpawned = previousFloorState.initialWaveSpawned;
-        waveActive = previousFloorState.waveActive;
-        currentTheme = previousFloorState.currentTheme;
-        const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
-        p.x = portal ? portal.x : 2;
-        p.y = portal ? portal.y : 2;
-        inHideout = false;
-        document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-        updateFogMap(p.x, p.y);
-        needsRedraw = true;
-        logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
-        document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
-        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
-            el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
-        });
-        return;
-    } else {
-        inHideout = false;
-        initMap();
-        portals = [{ x: p.x, y: p.y, frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }];
-        map[p.y][p.x] = 12;
-        logBattleEvent(`Floor ${floor} - Returned to a new floor via waypoint!`);
-        document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-        needsRedraw = true;
-        document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
-        document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
-            el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
-        });
-        return;
-    }
-}
-
-if (!musicMuted) {
-    musicManager.play(currentTheme);
-}
-
-if (map[ny][nx] === 14 && inHideout) { // Jeweller
-    if (diamonds >= 3) {
-        diamonds -= 3;
-        p.perfectlyCutDiamonds++;
-        logBattleEvent(`Jeweller refined 3 diamonds into a Perfectly Cut Diamond!`);
-        playWebAudioSound(sounds.pickup);
-        updatePlayerState();
-    } else {
-        logBattleEvent(`Jeweller requires 3 diamonds to refine!`);
-    }
-}
-if (map[ny][nx] === 15 && inHideout) { // Blacksmith
-    if (p.perfectlyCutDiamonds >= 1 && !p.hasDiamondArmor) {
-        p.perfectlyCutDiamonds--;
-        p.hasDiamondArmor = true;
-        p.hasArmor = false; // Remove regular armor
-        p.hp += 1000;
-        logBattleEvent(`Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
-        playWebAudioSound(sounds.pickup);
-        updatePlayerState();
-    } else if (p.hasDiamondArmor) {
-        logBattleEvent(`Blacksmith: You already have Diamond Armor!`);
-    } else {
-        logBattleEvent(`Blacksmith requires a Perfectly Cut Diamond!`);
-    }
-}
-
-if (map[ny][nx] === 17 && inHideout) { // Rune Whisperer
-    if (p.runes.length > 0) {
-        const runeCount = p.runes.length;
-        const healthGain = runeCount * 2;
-        p.hp += healthGain;
-        p.runes = [];
-        runeDrops = runeDrops.filter(r => !r.specific);
-        for (let y = 0; y < H; y++) {
-            for (let x = 0; x < W; x++) {
-                if (map[y][x] === 9) {
-                    map[y][x] = 0; // Clear specific rune tiles
-                }
+            sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+            if (p.immortal) {
+                p.immortal = false;
+                logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
             }
-        }
-        logBattleEvent(`Rune Whisperer traded ${runeCount} runes for +${healthGain} HP! (HP now: ${p.hp})`);
-        playWebAudioSound(sounds.pickup);
-        checkRunewords();
-        updatePlayerState();
-    } else {
-        logBattleEvent(`Rune Whisperer: No runes to trade!`);
-    }
-}
-
-if (map[ny][nx] === 8) {
-    const rune = runeDrops.find(r => r.x === nx && r.y === ny);
-    if (rune) {
-        p.runes.push(rune.letter);
-        map[ny][nx] = 9; // Specific rune image
-        runeDrops = runeDrops.filter(r => r !== rune);
-        runeDrops.push({ x: nx, y: ny, letter: rune.letter, specific: true }); // Mark as specific rune for drawing
-        playWebAudioSound(sounds.pickup);
-        logBattleEvent(`Floor ${floor} - Picked up Rune ${rune.letter.toUpperCase()}!`);
-        
-        // Show rune name in floor indicator when picking up rune
-        const floorIndicator = document.getElementById('floor-indicator');
-        floorIndicator.textContent = `Rune Found: ${rune.letter.toUpperCase()}`;
-        setTimeout(() => {
-            if (!currentRuneTile || !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
-                floorIndicator.textContent = `Floor ${floor}`;
-            }
-        }, 3000); // Reset after 3 seconds
-
-        checkRunewords();
-        // Track that player is currently on a rune tile
-        currentRuneTile = { x: nx, y: ny };
-    }
-}
-
-// Check if player moved from a rune tile
-if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (floorIndicator.textContent.startsWith("Rune Found:") || 
-        floorIndicator.textContent.startsWith("Rune:")) {
-        // Reset to normal floor text if leaving rune tile
-        setTimeout(() => {
-            // Double-check that player is still not on a rune tile before resetting
-            const stillOnRuneTile = map[p.y][p.x] === 9 && 
-                runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
             
-            if (!stillOnRuneTile) {
-                floorIndicator.textContent = `Floor ${floor}`;
-            }
-        }, 100); // Small delay to prevent flicker
-    }
-}
+            enemiesSpawnedThisFloor = 0;
+            initialSpawnDoneThisFloor = false;
+            enemies = [];
+            floor++;
+            initialWaveSpawned = false;
+            waveActive = false;
+            exit = null;
+            killsLog = [];
+            battleLog = []; // Clear battleLog to prevent memory buildup
+            // Reset special sound tracking for the new floor
+            specialSoundsPlayedThisFloor.lava = false;
+            specialSoundsPlayedThisFloor.quicksand = false;
+            specialSoundsPlayedThisFloor.pond = false;
+            specialSoundsPlayedThisFloor.rune = false;
+            specialSoundsPlayedThisFloor.hole = false;
+            // Reset runewords to allow reactivation on new floor
+            p.runewords = [];
+            // Clear runeDrops specific runes to prevent stale entries
+            runeDrops = runeDrops.filter(r => !r.specific);
+            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+            document.getElementById('wave').textContent = wave;
+            initMap();
+            nextApiCallTime = null;
+            
+            // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
+            const floorIndicator = document.getElementById('floor-indicator');
+            if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
 
-updateFogMap(p.x, p.y);
+            // Check if any runewords are active
+            const hasActiveRunewords = p.runewords.length > 0;
+            
+            if (hasActiveRunewords) {
+                // Show runeword message immediately
+                floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
+            } else {
+                // Show theme name for 3 s, then revert to floor number
+                const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+                floorIndicator.textContent = themeName;               // 1️⃣ show theme
+
+                themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+                    floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+                    themeTimeoutId = null;
+                }, 3000);
+            }
+            
+            const battleEvents = document.getElementById('battle-events');
+            battleEvents.value = '';
+            battleEvents.style.transform = 'translateX(-100%)';
+            battleEvents.style.opacity = '0';
+            
+            // Immediately trigger fetchTxs after floor transition
+            if (!gameOver && !splashActive && floor > 0) {
+                fetchTxs();
+                console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+            }
+            
+            // Add proper exit handling to prevent teleportation issues
+            needsRedraw = true;
+            animController.endMovement();
+            return; // ✅ This is CRUCIAL - stops further execution after exit
+        }
+
+        // In move function - before calling fetchTxs
+        if (map[ny][nx] === 12 && !inHideout) { // Portal tile in normal floor
+            playWebAudioSound(sounds.town_portal);
+            inHideout = true;
+            initMap();
+            animController.endMovement();
+            return;
+        }
+
+        if (map[ny][nx] === 16 && inHideout) {
+            playWebAudioSound(sounds.town_portal);
+            if (previousFloorState) {
+                // Restore previous floor state
+                map = previousFloorState.map.map(row => [...row]);
+                enemies = previousFloorState.enemies.map(e => ({ ...e, type: { ...e.type } }));
+                rooms = previousFloorState.rooms.map(r => ({ ...r }));
+                exit = previousFloorState.exit ? { ...previousFloorState.exit } : null;
+                satoshiDrops = [...previousFloorState.satoshiDrops];
+                runeDrops = [...previousFloorState.runeDrops];
+                scrollDrops = [...previousFloorState.scrollDrops];
+                portals = previousFloorState.portals.map(p => ({ ...p }));
+                floor = previousFloorState.floor;
+                wave = previousFloorState.wave;
+                enemiesSpawnedThisFloor = previousFloorState.enemiesSpawnedThisFloor;
+                whalesSpawnedThisFloor = previousFloorState.whalesSpawnedThisFloor;
+                initialSpawnDoneThisFloor = previousFloorState.initialSpawnDoneThisFloor;
+                initialWaveSpawned = previousFloorState.initialWaveSpawned;
+                waveActive = previousFloorState.waveActive;
+                currentTheme = previousFloorState.currentTheme;
+                const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
+                p.x = portal ? portal.x : 2;
+                p.y = portal ? portal.y : 2;
+                inHideout = false;
+                document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+                updateFogMap(p.x, p.y);
+                needsRedraw = true;
+                logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
+                document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
+                document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
+                    el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
+                });
+                animController.endMovement();
+                return;
+            } else {
+                inHideout = false;
+                initMap();
+                portals = [{ x: p.x, y: p.y, frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }];
+                map[p.y][p.x] = 12;
+                logBattleEvent(`Floor ${floor} - Returned to a new floor via waypoint!`);
+                document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+                needsRedraw = true;
+                document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
+                document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
+                    el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
+                });
+                animController.endMovement();
+                return;
+            }
+        }
+
+        if (!musicMuted) {
+            musicManager.play(currentTheme);
+        }
+
+        if (map[ny][nx] === 14 && inHideout) { // Jeweller
+            if (diamonds >= 3) {
+                diamonds -= 3;
+                p.perfectlyCutDiamonds++;
+                logBattleEvent(`Jeweller refined 3 diamonds into a Perfectly Cut Diamond!`);
+                playWebAudioSound(sounds.pickup);
+                updatePlayerState();
+            } else {
+                logBattleEvent(`Jeweller requires 3 diamonds to refine!`);
+            }
+        }
+        
+        if (map[ny][nx] === 15 && inHideout) { // Blacksmith
+            if (p.perfectlyCutDiamonds >= 1 && !p.hasDiamondArmor) {
+                p.perfectlyCutDiamonds--;
+                p.hasDiamondArmor = true;
+                p.hasArmor = false; // Remove regular armor
+                p.hp += 1000;
+                logBattleEvent(`Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
+                playWebAudioSound(sounds.pickup);
+                updatePlayerState();
+            } else if (p.hasDiamondArmor) {
+                logBattleEvent(`Blacksmith: You already have Diamond Armor!`);
+            } else {
+                logBattleEvent(`Blacksmith requires a Perfectly Cut Diamond!`);
+            }
+        }
+
+        if (map[ny][nx] === 17 && inHideout) { // Rune Whisperer
+            if (p.runes.length > 0) {
+                const runeCount = p.runes.length;
+                const healthGain = runeCount * 2;
+                p.hp += healthGain;
+                p.runes = [];
+                runeDrops = runeDrops.filter(r => !r.specific);
+                for (let y = 0; y < H; y++) {
+                    for (let x = 0; x < W; x++) {
+                        if (map[y][x] === 9) {
+                            map[y][x] = 0; // Clear specific rune tiles
+                        }
+                    }
+                }
+                logBattleEvent(`Rune Whisperer traded ${runeCount} runes for +${healthGain} HP! (HP now: ${p.hp})`);
+                playWebAudioSound(sounds.pickup);
+                checkRunewords();
+                updatePlayerState();
+            } else {
+                logBattleEvent(`Rune Whisperer: No runes to trade!`);
+            }
+        }
+
+        if (map[ny][nx] === 8) {
+            const rune = runeDrops.find(r => r.x === nx && r.y === ny);
+            if (rune) {
+                p.runes.push(rune.letter);
+                map[ny][nx] = 9; // Specific rune image
+                runeDrops = runeDrops.filter(r => r !== rune);
+                runeDrops.push({ x: nx, y: ny, letter: rune.letter, specific: true }); // Mark as specific rune for drawing
+                playWebAudioSound(sounds.pickup);
+                logBattleEvent(`Floor ${floor} - Picked up Rune ${rune.letter.toUpperCase()}!`);
+                
+                // Show rune name in floor indicator when picking up rune
+                const floorIndicator = document.getElementById('floor-indicator');
+                floorIndicator.textContent = `Rune Found: ${rune.letter.toUpperCase()}`;
+                setTimeout(() => {
+                    if (!currentRuneTile || !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
+                        floorIndicator.textContent = `Floor ${floor}`;
+                    }
+                }, 3000); // Reset after 3 seconds
+
+                checkRunewords();
+                // Track that player is currently on a rune tile
+                currentRuneTile = { x: nx, y: ny };
+            }
+        }
+
+        // Check if player moved from a rune tile
+        if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
+            const floorIndicator = document.getElementById('floor-indicator');
+            if (floorIndicator.textContent.startsWith("Rune Found:") || 
+                floorIndicator.textContent.startsWith("Rune:")) {
+                // Reset to normal floor text if leaving rune tile
+                setTimeout(() => {
+                    // Double-check that player is still not on a rune tile before resetting
+                    const stillOnRuneTile = map[p.y][p.x] === 9 && 
+                        runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
+                    
+                    if (!stillOnRuneTile) {
+                        floorIndicator.textContent = `Floor ${floor}`;
+                    }
+                }, 100); // Small delay to prevent flicker
+            }
+        }
+
+        updateFogMap(p.x, p.y);
     }
+    
     moveEnemies();
     updatePlayerState();
     
-// Check if player is standing on a rune tile (specifically placed rune)
-if (map[p.y][p.x] === 9) {
-    const rune = runeDrops.find(r => r.x === p.x && r.y === p.y && r.specific);
-    if (rune) {
-        const floorIndicator = document.getElementById('floor-indicator');
-        // Show rune name when stepping on rune tile
-        if (!floorIndicator.textContent.startsWith("Rune:")) {
-            floorIndicator.textContent = `Rune: ${rune.letter.toUpperCase()}`;
-        } else {
-            // Update rune letter if it's different from what's currently displayed
-            const currentRuneText = floorIndicator.textContent;
-            const expectedRune = `Rune: ${rune.letter.toUpperCase()}`;
-            if (currentRuneText !== expectedRune) {
-                floorIndicator.textContent = expectedRune;
+    // Check if player is standing on a rune tile (specifically placed rune)
+    if (map[p.y][p.x] === 9) {
+        const rune = runeDrops.find(r => r.x === p.x && r.y === p.y && r.specific);
+        if (rune) {
+            const floorIndicator = document.getElementById('floor-indicator');
+            // Show rune name when stepping on rune tile
+            if (!floorIndicator.textContent.startsWith("Rune:")) {
+                floorIndicator.textContent = `Rune: ${rune.letter.toUpperCase()}`;
+            } else {
+                // Update rune letter if it's different from what's currently displayed
+                const currentRuneText = floorIndicator.textContent;
+                const expectedRune = `Rune: ${rune.letter.toUpperCase()}`;
+                if (currentRuneText !== expectedRune) {
+                    floorIndicator.textContent = expectedRune;
+                }
             }
+            currentRuneTile = { x: p.x, y: p.y };
         }
-        currentRuneTile = { x: p.x, y: p.y };
+    } else if (currentRuneTile && map[p.y][p.x] !== 9) {
+        // Player moved away from rune tile
+        const floorIndicator = document.getElementById('floor-indicator');
+        if (floorIndicator.textContent.startsWith("Rune:")) {
+            // Reset to floor text after a delay, but only if not currently on another rune tile
+            setTimeout(() => {
+                // Check again if player is now on a different rune tile
+                const stillOnRuneTile = map[p.y][p.x] === 9 && 
+                    runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
+                
+                if (!stillOnRuneTile) {
+                    floorIndicator.textContent = `Floor ${floor}`;
+                }
+            }, 100);
+        }
     }
-} else if (currentRuneTile && map[p.y][p.x] !== 9) {
-    // Player moved away from rune tile
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (floorIndicator.textContent.startsWith("Rune:")) {
-        // Reset to floor text after a delay, but only if not currently on another rune tile
-        setTimeout(() => {
-            // Check again if player is now on a different rune tile
-            const stillOnRuneTile = map[p.y][p.x] === 9 && 
-                runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
-            
-            if (!stillOnRuneTile) {
-                floorIndicator.textContent = `Floor ${floor}`;
-            }
-        }, 100);
-    }
-}
     
     needsRedraw = true;
+    
+    // End the animation
+    animController.endMovement();
 }
+
 
 function moveEnemies() {
     if (gameOver || splashActive) return;
@@ -4134,8 +4230,6 @@ if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActiv
 }
 
 }
-
-
 
 // Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
 function updateProjectiles() {
@@ -5100,13 +5194,14 @@ function restart() {
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     populateNameList();
     
-    // Fix: Properly reset MusicManager state and ensure audio context is ready
+// Fix: Properly reset MusicManager state and ensure audio context is ready
     try {
         if (audioContext && audioContext.state === 'suspended') {
         musicManager.current = null;
             audioContext.resume();
         }
 
+        musicManager.mute(musicMuted); // Ensure proper mute state from localStorage
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
@@ -5207,6 +5302,7 @@ function restart() {
     needsRedraw = true;
 }
 
+// Add to draw function for visual movement effect
 function draw() {
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
@@ -5215,6 +5311,13 @@ function draw() {
         return;
     }
     lastDrawTime = now;
+    
+    // Add movement animation effect
+if (animController.isAnimating && !splashActive && !gameOver) {
+    const offset = getMovementOffset(animController.currentDirection);
+    drawX += offset.x;
+    drawY += offset.y;
+}
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
         console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
         initMap();
@@ -5349,13 +5452,23 @@ highlightTiles.forEach(tile => {
             c.restore();
         }
     });
-    // Draw player
+// Draw player
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
         const now = performance.now();
         if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
             p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
             p.anim.lastFrameTime = now;
         }
+        
+        // Apply movement animation offset
+        let drawX = p.x * S;
+        let drawY = p.y * S;
+        if (animController.isAnimating && !splashActive && !gameOver) {
+            const offset = getMovementOffset(animController.currentDirection);
+            drawX += offset.x;
+            drawY += offset.y;
+        }
+        
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
 let frameKey = p.hasDiamondArmor ? `diamond_armor_${baseDirection}` : (p.hasArmor ? `armor_${baseDirection}` : baseDirection);
@@ -5365,11 +5478,11 @@ if (p.isFalling) {
 	const frame = p.anim.frames[frameKey][p.anim.frameIndex];
         c.save();
         if (direction === 'left') {
-            c.translate((p.x + 1) * S, p.y * S);
+            c.translate(drawX + S, drawY);
             c.scale(-1, 1);
             c.drawImage(frame, 0, 0, S, S);
         } else {
-            c.drawImage(frame, p.x * S, p.y * S, S, S);
+            c.drawImage(frame, drawX, drawY, S, S);
         }
         c.restore();
     }
@@ -5450,6 +5563,7 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
     }
     needsRedraw = true;
 }
+
 
     // Draw fog overlay
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -5970,7 +6084,7 @@ let currentAxes = null;
 
 // Start game function for splash screen
 function startGame() {
-    document.getElementById('mute').textContent = '♪'; // Update mute button UI
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
     if (!splashActive) {
         return;
     }
@@ -6009,13 +6123,9 @@ function startGame() {
     preloadSounds(); // Preload sounds after user interaction
     
     currentTheme = 'dungeon'; // Force default theme on game start
-    // Only unmute if music wasn't previously muted (preserve previous mute state)
-    const shouldUnmute = !musicMuted;
+    // Set mute state based on saved preference
+    musicManager.mute(musicMuted);
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
-    if (shouldUnmute) {
-        musicManager.mute(false); // Ensure MusicManager is unmuted only if it wasn't muted before
-        musicMuted = false; // Reset mute state flag
-    }
     musicManager.current = null; // Reset MusicManager state
     musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
     musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
@@ -6029,7 +6139,7 @@ function startGame() {
         musicManager.audios[currentTheme].oncanplaythrough = () => {
             console.log('Audio ready, playing from start:', currentTheme); // Debug log
             musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-            if (shouldUnmute) {
+            if (!musicMuted) {
                 musicManager.play(currentTheme); // Play once ready only if we should unmute
             }
         };
@@ -6276,6 +6386,28 @@ document.addEventListener('contextmenu', function(e) {
     }
 }, { passive: false });
 
+// Add animation timing to movement
+function getMovementAnimationProgress() {
+    if (animController.isAnimating) {
+        const elapsed = performance.now() - animController.movementStartTime;
+        return Math.min(elapsed / animController.animationDuration, 1);
+    }
+    return 0;
+}
+
+function getMovementOffset(direction) {
+    const progress = getMovementAnimationProgress();
+    if (progress === 0) return { x: 0, y: 0 };
+    
+    let offsetX = 0, offsetY = 0;
+    if (direction === 'up') offsetY = -S * (1 - progress);
+    if (direction === 'down') offsetY = S * (1 - progress);
+    if (direction === 'left') offsetX = -S * (1 - progress);
+    if (direction === 'right') offsetX = S * (1 - progress);
+    
+    return { x: offsetX, y: offsetY };
+}
+
 // Screensaver: black background, slow drifting orange ball (#f7931a) with white "₿" and soft glows.
 // Smooth fade-out/fade-in, minimal breathing and drift.
 
@@ -6464,7 +6596,21 @@ function handleMovement() {
       screensaverMovementTimeout = null;
     }
     screensaverMovementTimeout = setTimeout(() => {
-      exitScreensaver();
+      // Make screensaver exit behave like gamepad select button
+      const muteButton = document.getElementById('mute');
+      if (muteButton.textContent === '☀') { // Screensaver active state
+        exitScreensaver();
+        musicMuted = false;
+        musicManager.mute(false);
+        muteButton.textContent = '♪';
+        if (!splashActive) {
+          musicManager.current = null; // Reset MusicManager state
+          musicManager.play(currentTheme);
+        }
+        localStorage.setItem('musicMuted', 'false');
+      } else {
+        exitScreensaver();
+      }
     }, DEBOUNCE_DELAY * 2);
   }
 }
@@ -6497,5 +6643,3 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
-
-
