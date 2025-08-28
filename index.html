@@ -3338,12 +3338,13 @@ class AnimationController {
         this.isMoving = false;
         this.currentDirection = null;
         this.nextMoveQueue = [];
-        this.animationDuration = 200; // 200ms per tile move
+        this.animationDuration = 200; // Total animation time
+        this.frameInterval = 50; // 4 frames per move (200ms/50ms)
+        this.lastFrameTime = 0;
     }
 
     startMovement(direction) {
         if (this.isMoving) {
-            // Queue the movement if already moving
             this.nextMoveQueue.push(direction);
             return false;
         }
@@ -3351,11 +3352,7 @@ class AnimationController {
         this.isMoving = true;
         this.currentDirection = direction;
         this.movementStartTime = performance.now();
-        
-        // Schedule next move after animation duration
-        setTimeout(() => {
-            this.endMovement();
-        }, this.animationDuration);
+        this.lastFrameTime = performance.now();
         
         return true;
     }
@@ -3364,16 +3361,27 @@ class AnimationController {
         this.isMoving = false;
         this.currentDirection = null;
         
-        // Process queued movements
         if (this.nextMoveQueue.length > 0) {
             const nextDirection = this.nextMoveQueue.shift();
             move(nextDirection);
         }
     }
 
-    // Check if movement is in progress
     get isAnimating() {
         return this.isMoving;
+    }
+
+    getProgress() {
+        if (!this.isMoving) return 0;
+        const elapsed = performance.now() - this.movementStartTime;
+        return Math.min(elapsed / this.animationDuration, 1);
+    }
+    
+    // Get frame progress for animation cycling
+    getFrameProgress() {
+        if (!this.isMoving) return 0;
+        const elapsed = performance.now() - this.lastFrameTime;
+        return elapsed / this.frameInterval;
     }
 }
 
@@ -3434,8 +3442,16 @@ function move(dir) {
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx;
         p.y = ny;
+if (animController.isAnimating) {
+    const now = performance.now();
+    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = performance.now();
+        p.anim.lastFrameTime = now;
+    }
+} else {
+    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+    p.anim.lastFrameTime = performance.now();
+}
         }
     
     if (!map[ny] || map[ny][nx] === undefined) {
@@ -3454,8 +3470,16 @@ function move(dir) {
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx;
         p.y = ny;
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2; // Cycle frames
-        p.anim.lastFrameTime = performance.now(); // Update frame time
+if (animController.isAnimating) {
+    const now = performance.now();
+    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+        p.anim.lastFrameTime = now;
+    }
+} else {
+    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+    p.anim.lastFrameTime = performance.now();
+}
         
         if (map[ny][nx] === 2) { 
             p.potions++; 
@@ -4165,7 +4189,6 @@ function move(dir) {
     // End the animation
     animController.endMovement();
 }
-
 
 function moveEnemies() {
     if (gameOver || splashActive) return;
@@ -5454,20 +5477,24 @@ highlightTiles.forEach(tile => {
     });
 // Draw player
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
-        const now = performance.now();
-        if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
-            p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-            p.anim.lastFrameTime = now;
-        }
+const now = performance.now();
+if (animController.isAnimating) {
+    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+        p.anim.lastFrameTime = now;
+    }
+} else {
+    // Optional: Handle non-animating state or just let it be
+}
         
         // Apply movement animation offset
         let drawX = p.x * S;
         let drawY = p.y * S;
-        if (animController.isAnimating && !splashActive && !gameOver) {
-            const offset = getMovementOffset(animController.currentDirection);
-            drawX += offset.x;
-            drawY += offset.y;
-        }
+if (animController.isAnimating && !splashActive && !gameOver) {
+    const offset = getMovementOffset(animController.currentDirection);
+    drawX += offset.x;
+    drawY += offset.y;
+}
         
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
@@ -6396,14 +6423,16 @@ function getMovementAnimationProgress() {
 }
 
 function getMovementOffset(direction) {
-    const progress = getMovementAnimationProgress();
+    const progress = animController.getProgress();
     if (progress === 0) return { x: 0, y: 0 };
     
     let offsetX = 0, offsetY = 0;
-    if (direction === 'up') offsetY = -S * (1 - progress);
-    if (direction === 'down') offsetY = S * (1 - progress);
-    if (direction === 'left') offsetX = -S * (1 - progress);
-    if (direction === 'right') offsetX = S * (1 - progress);
+    const offset = S * progress; // Integer-based calculation
+    
+    if (direction === 'up') offsetY = -offset;
+    if (direction === 'down') offsetY = offset;
+    if (direction === 'left') offsetX = -offset;
+    if (direction === 'right') offsetX = offset;
     
     return { x: offsetX, y: offsetY };
 }
@@ -6643,3 +6672,4 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
+
