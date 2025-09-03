@@ -2771,14 +2771,6 @@ if (floorTiles.length > 0) {
             break;
         }
     }
-    
-// Always consume one pickaxe when creating a secret room
-if (p.pickaxes > 0) {
-    p.pickaxes--;
-    logBattleEvent(`Floor ${floor} - Secret Room Created! (Pickaxe consumed)`);
-    // Update display immediately
-    updatePickaxeDisplay();
-}
 
 // Show "Found Secret!" in Whale alert area and log success
 const floorIndicator = document.getElementById('floor-indicator');
@@ -6672,4 +6664,3 @@ window.addEventListener('gamepaddisconnected', () => { gamepadIndex = null; });
     </script>
 </body>
 </html>
-
