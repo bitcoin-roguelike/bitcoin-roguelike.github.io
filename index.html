@@ -2920,8 +2920,8 @@ function shouldSpawn() {
 }
 
 async function fetchTxs() {
-    if (gameOver || splashActive || floor === 0 || inHideout) {
-        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}`);
+    if (gameOver || splashActive || floor === 0 || inHideout || screensaverActive) {
+        console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}, screensaverActive=${screensaverActive}`);
         return;
     }
     
