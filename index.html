@@ -4934,7 +4934,26 @@ if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSw
     }
     
     // Only shoot projectiles if not standing adjacent to an enemy
-    if (!isAdjacentToEnemy) {
+    // Also disable when player is exactly 1 tile away from any enemy (within 1 tile radius)
+    let isNearEnemy = false;
+    const adjacentPositions = [
+        {x: p.x, y: p.y - 1}, // Up
+        {x: p.x, y: p.y + 1}, // Down
+        {x: p.x - 1, y: p.y}, // Left
+        {x: p.x + 1, y: p.y}  // Right
+    ];
+    
+    for (const pos of adjacentPositions) {
+        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
+            if (enemies.some(e => e.x === pos.x && e.y === pos.y)) {
+                isNearEnemy = true;
+                break;
+            }
+        }
+    }
+    
+    // Only shoot projectiles if not standing adjacent to an enemy
+    if (!isAdjacentToEnemy && !isNearEnemy) {
         let startSx = p.x, startSy = p.y; // Start at player's position
         if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
             projectiles.push({ x: startSx, y: startSy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
