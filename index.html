@@ -170,19 +170,10 @@
     font-size: 16px;
     outline: none;
     padding: 5px;
-    transition: all 0.3s ease;
 }
 
 #soul-terminal-input:focus {
     outline: 1px solid #ff8c00;
-    background: #260F00; /* Dark orange background */
-    box-shadow: 0 0 10px rgba(255, 140, 0, 0.5); /* Orange glow */
-    transition: all 0.3s ease;
-}
-/* Add this for the dark orange state after focus */
-#soul-terminal-input.has-focus {
-    background: #260F00; /* Dark orange background */
-    box-shadow: 0 0 10px rgba(255, 140, 0, 0.3);
 }
 #battle-log textarea {
     background: transparent;
@@ -5350,9 +5341,6 @@ function openSoulTerminal() {
     overlay.style.display = 'flex';
     setTimeout(() => {
         input.focus();
-        // Set dark orange background immediately on focus
-        input.style.background = '#260F00';
-        input.style.boxShadow = '0 0 10px rgba(255, 140, 0, 0.5)';
     }, 100);
 }
 
@@ -5637,16 +5625,10 @@ function handleTerminalInput(e) {
         const input = document.getElementById('soul-terminal-input');
         if (input) {
             input.blur();
-            // Add visual highlighting for 2 seconds after blur
-            input.style.boxShadow = '0 0 10px #260F00, inset 0 0 5px #ff8c00';
-            setTimeout(() => {
-                if (input) {
-                    input.style.boxShadow = '';
-                }
-            }, 1000);
         }
         return;
-    }    
+    }
+    
     if (key === 'Backspace') {
         if (p.soulTerminalCursorPos > 0) {
             p.soulTerminalCommand = 
@@ -5655,15 +5637,18 @@ function handleTerminalInput(e) {
             p.soulTerminalCursorPos--;
         }
         return;
-    }    
+    }
+    
     if (key === 'ArrowLeft' && p.soulTerminalCursorPos > 0) {
         p.soulTerminalCursorPos--;
         return;
-    }    
+    }
+    
     if (key === 'ArrowRight' && p.soulTerminalCursorPos < p.soulTerminalCommand.length) {
         p.soulTerminalCursorPos++;
         return;
-    }    
+    }
+    
     // Add regular character
     if (key.length === 1 && key !== 'Enter') {
         const before = p.soulTerminalCommand.slice(0, p.soulTerminalCursorPos);
@@ -5672,58 +5657,6 @@ function handleTerminalInput(e) {
         p.soulTerminalCursorPos++;
     }
 }
-
-// Add this to handle input focus and blur for the dark orange background
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize the global button variables
-    dpadButtons = document.querySelectorAll('#dpad button');
-    actionsButtons = document.querySelectorAll('#actions button');
-    
-    setTimeout(() => {
-        initTouchControls();
-    }, 100);
-    
-    // Add event listener for soul terminal input focus/blur
-    const soulTerminalInput = document.getElementById('soul-terminal-input');
-    if (soulTerminalInput) {
-        soulTerminalInput.addEventListener('focus', function() {
-            this.style.background = '#260F00'; // Dark orange background
-            this.style.boxShadow = '0 0 10px rgba(255, 140, 0, 0.5)';
-        });
-        
-        soulTerminalInput.addEventListener('blur', function() {
-            // Keep the dark orange background for a moment after blur
-            setTimeout(() => {
-                if (document.activeElement !== this) {
-                    this.style.background = '#260F00'; // Keep dark orange
-                    this.style.boxShadow = '0 0 10px rgba(255, 140, 0, 0.3)';
-                }
-            }, 100);
-        });
-        
-        soulTerminalInput.addEventListener('keydown', function(e) {
-            if (p.inSoulTerminal && p.soulTerminalActive) {
-                handleTerminalInput(e);
-                
-                // Handle Enter key for terminal input
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const command = this.value;
-                    processSoulCommand(command);
-                    this.value = '';
-                    this.focus();
-                    // Add visual highlighting for 2 seconds after blur
-                    this.style.boxShadow = '0 0 10px #ff8c00, inset 0 0 5px #ff8c00';
-                    setTimeout(() => {
-                        if (this) {
-                            this.style.boxShadow = '';
-                        }
-                    }, 1000);
-                }
-            }
-        });
-    }
-});
 
 function cleanupEventListeners() {
     // Clear any existing intervals
@@ -6761,13 +6694,6 @@ document.getElementById('soul-terminal-input').addEventListener('keydown', funct
             processSoulCommand(command);
             this.value = '';
             this.focus();
-            // Add visual highlighting for 2 seconds after blur
-            this.style.boxShadow = '0 0 10px #ff8c00, inset 0 0 5px #ff8c00';
-            setTimeout(() => {
-                if (this) {
-                    this.style.boxShadow = '';
-                }
-            }, 1000);
         }
     }
 });
