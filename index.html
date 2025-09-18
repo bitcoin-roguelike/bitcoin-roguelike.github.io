@@ -5367,7 +5367,18 @@ function updateSoulTerminalInventory() {
     addTerminalLineToContent(`Pickaxes: ${p.pickaxes}`);
     addTerminalLineToContent(`Diamonds: ${diamonds}`);
     addTerminalLineToContent(`Perfectly Cut Diamonds: ${document.getElementById('perfectlyCutDiamonds').textContent}`);
-    addTerminalLineToContent(`Runes: ${document.getElementById('runes').textContent}`);
+    //addTerminalLineToContent(`Runes: ${document.getElementById('runes').textContent}`); // all runes
+    // Get runes text and filter out runes ending with 0 (like p0)
+    let runesText = document.getElementById('runes').textContent;
+    let displayRunes = 'None'; // Default to 'None' if no runes remain
+    if (runesText) {
+        // Split by spaces and filter out runes ending with 0
+        const runeArray = runesText.split(/\s+/).filter(rune => rune && !rune.endsWith('0'));
+        if (runeArray.length > 0) {
+            displayRunes = runeArray.join(' ');
+        }
+    }
+    addTerminalLineToContent(`Runes: ${displayRunes}`);
     addTerminalLineToContent('_____________________');
     addTerminalLineToContent('Type "help" for help.');
 }
@@ -5577,6 +5588,11 @@ function handleTerminalInput(e) {
         processSoulCommand(p.soulTerminalCommand);
         p.soulTerminalCommand = '';
         p.soulTerminalCursorPos = 0;
+        // Blur the input field when Enter is pressed
+        const input = document.getElementById('soul-terminal-input');
+        if (input) {
+            input.blur();
+        }
         return;
     }
     
