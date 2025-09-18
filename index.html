@@ -5165,13 +5165,13 @@ if (hit) {
     }
     
 // Add soul storm charge consumption for each attack
-if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
+if (p.soulStormCharges >= 8 && !p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
     // Consume 8 charges for this attack
     p.soulStormCharges -= 8;
     activateSoulStorm();
     
     // Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
-    // Check if player is standing adjacent to an enemy
+    // Check if player is standing adjacent to an enemy - prevent projectiles when adjacent
     let isAdjacentToEnemy = false;
     let sx = p.x, sy = p.y;
     if (swordDir === 'up') sy--;
@@ -5184,8 +5184,7 @@ if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && 
         isAdjacentToEnemy = enemies.some(e => e.x === sx && e.y === sy);
     }
     
-    // Only shoot projectiles if not standing adjacent to an enemy
-    // Also disable when player is exactly 1 tile away from any enemy (within 1 tile radius)
+    // Also check if player is standing directly adjacent to ANY enemy
     let isNearEnemy = false;
     const adjacentPositions = [
         {x: p.x, y: p.y - 1}, // Up
@@ -5204,6 +5203,7 @@ if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && 
     }
     
     // Only shoot projectiles if not standing adjacent to an enemy
+    // This prevents projectile shooting when player is within 1 tile of enemy (snugging)
     if (!isAdjacentToEnemy && !isNearEnemy) {
         let startSx = p.x, startSy = p.y; // Start at player's position
         if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
@@ -5214,7 +5214,7 @@ if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && 
         }
     }
 } else if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
-    // Check if player is standing adjacent to an enemy
+    // Check if player is standing adjacent to an enemy - prevent projectiles when adjacent
     let isAdjacentToEnemy = false;
     let sx = p.x, sy = p.y;
     if (swordDir === 'up') sy--;
@@ -5227,8 +5227,7 @@ if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && 
         isAdjacentToEnemy = enemies.some(e => e.x === sx && e.y === sy);
     }
     
-    // Only shoot projectiles if not standing adjacent to an enemy
-    // Also disable when player is exactly 1 tile away from any enemy (within 1 tile radius)
+    // Also check if player is standing directly adjacent to ANY enemy
     let isNearEnemy = false;
     const adjacentPositions = [
         {x: p.x, y: p.y - 1}, // Up
@@ -5247,6 +5246,7 @@ if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && 
     }
     
     // Only shoot projectiles if not standing adjacent to an enemy
+    // This prevents projectile shooting when player is within 1 tile of enemy (snugging)
     if (!isAdjacentToEnemy && !isNearEnemy) {
         let startSx = p.x, startSy = p.y; // Start at player's position
         if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
