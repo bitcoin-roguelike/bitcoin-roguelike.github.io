@@ -162,9 +162,8 @@
 
 #soul-terminal-input {
     flex-grow: 1;
-    background: transparent;
-    color: #ff8c00;
-    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    background: #ff8c00;
+    color: #000;
     border: none;
     font-family: 'VT323', monospace;
     font-size: 16px;
@@ -174,6 +173,13 @@
 
 #soul-terminal-input:focus {
     outline: 1px solid #ff8c00;
+    background: #ff8c00;
+    color: #000;
+}
+/ Add this for the blur behavior /
+#soul-terminal-input:not(:focus) {
+    background: #ff8c00;
+    color: #000;
 }
 #battle-log textarea {
     background: transparent;
@@ -1433,25 +1439,6 @@ let touchMoveInterval = null; // Global variable for continuous touch movement
 let touchTimeout = null; // Global variable for touch timeout
 let dpadButtons = document.querySelectorAll('#dpad button');
 let actionsButtons = document.querySelectorAll('#actions button');
-
-// Canvas touch handling to avoid interference with D-pad
-canvas.addEventListener('touchstart', (e) => {
-    if (!e.target.closest('#dpad, #actions')) {
-        e.preventDefault();
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-    if (!e.target.closest('#dpad, #actions')) {
-        e.preventDefault();
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-    if (!e.target.closest('#dpad, #actions')) {
-        e.preventDefault();
-    }
-}, { passive: false });
 
 // Touch handlers for #actions buttons
 document.querySelectorAll('#actions button').forEach(button => {
@@ -5616,6 +5603,24 @@ function activateSoulStorm() {
 function handleTerminalInput(e) {
     const key = e.key;
     
+    // If terminal is not focused, focus it and add the key
+    if (!document.activeElement.matches('#soul-terminal-input')) {
+        const input = document.getElementById('soul-terminal-input');
+        input.focus();
+        input.value = p.soulTerminalCommand; // Update value to reflect current command
+        
+        // Handle key press immediately
+        if (key.length === 1 && key !== 'Enter') {
+            const before = p.soulTerminalCommand.slice(0, p.soulTerminalCursorPos);
+            const after = p.soulTerminalCommand.slice(p.soulTerminalCursorPos);
+            p.soulTerminalCommand = before + key + after;
+            p.soulTerminalCursorPos++;
+            input.value = p.soulTerminalCommand.substring(1); // One-liner hack to remove first character
+        }
+        
+        return;
+    }
+    
     if (key === 'Enter') {
         e.preventDefault();
         processSoulCommand(p.soulTerminalCommand);
@@ -5655,6 +5660,24 @@ function handleTerminalInput(e) {
         const after = p.soulTerminalCommand.slice(p.soulTerminalCursorPos);
         p.soulTerminalCommand = before + key + after;
         p.soulTerminalCursorPos++;
+    }
+}
+
+// Add this function to handle terminal input when not focused
+function handleBlurredTerminalInput(key) {
+    const input = document.getElementById('soul-terminal-input');
+    if (input && !input.matches(':focus')) {
+        // Focus the input field
+        input.focus();
+        
+        // Update command with new key
+        const before = p.soulTerminalCommand.slice(0, p.soulTerminalCursorPos);
+        const after = p.soulTerminalCommand.slice(p.soulTerminalCursorPos);
+        p.soulTerminalCommand = before + key + after;
+        p.soulTerminalCursorPos++;
+        
+        // Update display
+        input.value = p.soulTerminalCommand.substring(1);
     }
 }
 
@@ -5727,46 +5750,46 @@ function initTouchControls() {
     let activeTouchId = null;
     let currentTouchDir = null;
     let isMoving = false;
+    let lastMoveTime = 0;
 
     // Use the global dpadButtons
     dpadButtons.forEach(button => {
-button._touchstartHandler = function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (inputBlocked || splashActive || gameOver) return;
+        button._touchstartHandler = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (inputBlocked || splashActive || gameOver) return;
 
-    const touch = e.changedTouches[0];
-    if (!activeTouchId) {
-        activeTouchId = touch.identifier;
-        button.classList.add('pressed');
-        currentTouchDir = button.id;
-        isMoving = true;
+            const touch = e.changedTouches[0];
+            if (!activeTouchId) {
+                activeTouchId = touch.identifier;
+                button.classList.add('pressed');
+                currentTouchDir = button.id;
+                isMoving = true;
 
-        // Start continuous movement with 200ms delay
-        let lastMoveTime = 0;
-        const moveLoop = () => {
-            if (isMoving && currentTouchDir && !inputBlocked && !gameOver) {
-                const now = Date.now();
-                if (now - lastMoveTime >= 200) { // Enforce 200ms delay
-                    move(currentTouchDir);
-                    lastMoveTime = now;
-                }
+                // Start continuous movement with 200ms delay
+                const moveLoop = () => {
+                    if (isMoving && currentTouchDir && !inputBlocked && !gameOver) {
+                        const now = Date.now();
+                        if (now - lastMoveTime >= 200) { // Enforce 200ms delay
+                            move(currentTouchDir);
+                            lastMoveTime = now;
+                        }
+                        requestAnimationFrame(moveLoop);
+                    }
+                };
                 requestAnimationFrame(moveLoop);
             }
         };
-        requestAnimationFrame(moveLoop);
-    }
-};
 
-button._touchmoveHandler = function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    // Keep touch active but don't trigger move
-    const touch = Array.from(e.changedTouches).find(t => t.identifier === activeTouchId);
-    if (touch && currentTouchDir && !inputBlocked && !gameOver) {
-        // No move call here; let moveLoop handle movement
-    }
-};
+        button._touchmoveHandler = function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Keep touch active but don't trigger move
+            const touch = Array.from(e.changedTouches).find(t => t.identifier === activeTouchId);
+            if (touch && currentTouchDir && !inputBlocked && !gameOver) {
+                // No move call here; let moveLoop handle movement
+            }
+        };
 
         button._touchendHandler = function (e) {
             e.preventDefault();
@@ -5790,6 +5813,26 @@ button._touchmoveHandler = function (e) {
             e.stopPropagation();
         };
 
+        // Remove existing listeners and add new ones
+        if (button._touchstartHandler) {
+            button.removeEventListener('touchstart', button._touchstartHandler);
+        }
+        if (button._touchmoveHandler) {
+            button.removeEventListener('touchmove', button._touchmoveHandler);
+        }
+        if (button._touchendHandler) {
+            button.removeEventListener('touchend', button._touchendHandler);
+        }
+        if (button._touchcancelHandler) {
+            button.removeEventListener('touchcancel', button._touchcancelHandler);
+        }
+        if (button._clickHandler) {
+            button.removeEventListener('click', button._clickHandler);
+        }
+        if (button._contextmenuHandler) {
+            button.removeEventListener('contextmenu', button._contextmenuHandler);
+        }
+
         button.addEventListener('touchstart', button._touchstartHandler, { passive: false });
         button.addEventListener('touchmove', button._touchmoveHandler, { passive: false });
         button.addEventListener('touchend', button._touchendHandler, { passive: false });
@@ -5812,6 +5855,7 @@ button._touchmoveHandler = function (e) {
         activeTouchId = null;
         currentTouchDir = null;
         isMoving = false;
+        lastMoveTime = 0;
         initTouchControls(); // Re-attach listeners
     });
 }
@@ -6694,6 +6738,17 @@ document.getElementById('soul-terminal-input').addEventListener('keydown', funct
             processSoulCommand(command);
             this.value = '';
             this.focus();
+        }
+    }
+});
+
+// Add this after the existing soul-terminal-input keydown listener
+document.addEventListener('keydown', function(e) {
+    if (p.inSoulTerminal && p.soulTerminalActive && !e.target.matches('#soul-terminal-input')) {
+        // Handle keyboard input when terminal is active but not focused
+        const key = e.key;
+        if (key.length === 1 && key !== 'Enter') {
+            handleBlurredTerminalInput(key);
         }
     }
 });
