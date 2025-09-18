@@ -1746,7 +1746,9 @@ types.forEach(t => {
         assets.diamond_hand = new Image(); // Add diamond hand asset
         assets.diamond_hand.src = 'diamond_hand.png';
         assets.pickaxe_sword.src = 'pickaxe-sword.png';
-        assets.shoot_sword.src = 'shoot_sword.png';        
+        assets.shoot_sword.src = 'shoot_sword.png';
+        assets.soul_sword = new Image();
+        assets.soul_sword.src = 'soul_sword.png';      
         assets.runes.on_floor.src = 'rune_on_floor.png';
 	assets.runes.a.src = 'rune-a.png';
 	assets.runes.b.src = 'rune-b.png';
@@ -2694,30 +2696,57 @@ function initMap() {
             }
         }    
 
-        // Place soul stash in the same room as player spawn (only on normal floors)
-        if (!inHideout) {
-            const room = rooms[0]; // Player spawns in first room
-            let stashX, stashY;
-            let attempts = 100;
-            do {
-                stashX = room.x + Math.floor(Math.random() * room.w);
-                stashY = room.y + Math.floor(Math.random() * room.h);
-                attempts--;
-            } while ((map[stashY][stashX] !== 0 || 
-                     (stashX === p.x && stashY === p.y)) && attempts > 0);
-            
-            if (attempts > 0) {
-                map[stashY][stashX] = 19; // Soul stash tile
-                soulStashPos = {x: stashX, y: stashY};
-            } else {
-                // Fallback to player position if no room space found
-                if (map[p.y][p.x] === 0) {
-                    map[p.y][p.x] = 19; // Soul stash tile
-                    soulStashPos = {x: p.x, y: p.y};
+// Place soul stash in the same room as player spawn (only on normal floors)
+if (!inHideout) {
+    const room = rooms[0]; // Player spawns in first room
+    let stashX, stashY;
+    let attempts = 100;
+    
+    // First priority: Spawn near player (2 tiles away)
+    let foundNearPlayer = false;
+    if (p.x >= 0 && p.y >= 0) {
+        const possiblePositions = [];
+        for (let dx = -2; dx <= 2; dx++) {
+            for (let dy = -2; dy <= 2; dy++) {
+                if (Math.abs(dx) + Math.abs(dy) === 2) { // Exactly 2 tiles away
+                    const x = p.x + dx;
+                    const y = p.y + dy;
+                    if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] === 0) {
+                        possiblePositions.push({x, y});
+                    }
                 }
             }
         }
-
+        
+        if (possiblePositions.length > 0) {
+            const randomPos = possiblePositions[Math.floor(Math.random() * possiblePositions.length)];
+            stashX = randomPos.x;
+            stashY = randomPos.y;
+            foundNearPlayer = true;
+        }
+    }
+    
+    // If no near player position found, use original logic
+    if (!foundNearPlayer) {
+        do {
+            stashX = room.x + Math.floor(Math.random() * room.w);
+            stashY = room.y + Math.floor(Math.random() * room.h);
+            attempts--;
+        } while ((map[stashY][stashX] !== 0 || 
+                 (stashX === p.x && stashY === p.y)) && attempts > 0);
+    }
+    
+    if (attempts > 0 || foundNearPlayer) {
+        map[stashY][stashX] = 19; // Soul stash tile
+        soulStashPos = {x: stashX, y: stashY};
+    } else {
+        // Fallback to player position if no room space found
+        if (map[p.y][p.x] === 0) {
+            map[p.y][p.x] = 19; // Soul stash tile
+            soulStashPos = {x: p.x, y: p.y};
+        }
+    }
+}
         exit = null;
         initialWaveSpawned = false;
         needsRedraw = true;
@@ -2725,7 +2754,7 @@ function initMap() {
         // Check runewords at floor start
         checkRunewordsAtFloorStart();
         // Update rune display
-        checkRunewords();
+        //checkRunewords();
         if (!musicMuted) {
             musicManager.play(currentTheme);
         }
@@ -4101,8 +4130,11 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     const hasActiveRunewords = p.runewords.length > 0;
     
     if (hasActiveRunewords) {
-        // Show runeword message immediately
-        floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
+// Show runeword message with the whole rune part in uppercase
+const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
+
+floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
+        if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
     } else {
         // Show theme name for 3 s, then revert to floor number
         const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
@@ -4296,7 +4328,7 @@ if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
                     }
                 }, 3000); // Reset after 3 seconds
 
-                checkRunewords();
+                //checkRunewords();
                 // Track that player is currently on a rune tile
                 currentRuneTile = { x: nx, y: ny };
             }
@@ -5165,7 +5197,7 @@ if (hit) {
     }
     
 // Add soul storm charge consumption for each attack
-if (p.soulStormCharges >= 8 && !p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
+if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
     // Consume 8 charges for this attack
     p.soulStormCharges -= 8;
     activateSoulStorm();
@@ -5347,6 +5379,7 @@ function addTerminalLineToContent(line) {
 }
 
 function updateSoulTerminalInventory() {
+checkRunewords();
 //    addTerminalLineToContent('');
             const clearContent = document.getElementById('soul-terminal-content');
             clearContent.innerHTML = '';
@@ -5865,6 +5898,7 @@ function restart() {
     fogMap = [];
     scoreSubmitted = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
+    projectiles = []; // Add this line to reset projectiles array on restart
     populateNameList();
     
 // Fix: Properly reset MusicManager state and ensure audio context is ready
@@ -6193,7 +6227,11 @@ if (swordActive && Date.now() - swordStart < 200) {
             c.drawImage(assets.diamond_hand, -S / 2, -S / 2, S, S);
             p.atk = 3; // diamond hand attack power
         } else {
-            c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
+   if (p.soulStormCharges >= 8) {
+       c.drawImage(assets.soul_sword, -S / 2, -S / 2, S, S);
+   } else {
+       c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
+   }
             p.atk = 2; // Reset attack power
         }
         c.restore();
@@ -7358,3 +7396,4 @@ document.addEventListener('keydown', function (e) {
     </script>
 </body>
 </html>
+
