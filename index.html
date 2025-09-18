@@ -83,18 +83,98 @@
             display: none; 
             text-align: center; 
         }
-#battle-log { 
-            width: 620px;
-            margin-left: 20px; 
-            background: transparent; 
-            color: var(--text-color, #ff8c00) !important; 
-            text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
-            padding: 16px; 
-            border: none; 
-            font-size: 16px;
-            z-index: 10;
-            margin-top: -240px;
-        }
+#battle-log {
+    width: 620px;
+    margin-left: 20px; 
+    background: transparent; 
+    color: var(--text-color, #ff8c00) !important; 
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000; 
+    padding: 16px; 
+    border: none; 
+    font-size: 16px;
+    z-index: 10;
+    margin-top: -240px;
+}
+
+/* Soul Terminal Overlay */
+#soul-terminal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'VT323', monospace;
+    color: #ff8c00;
+}
+
+#soul-terminal {
+    width: 90%;
+    max-width: 800px;
+    height: 80%;
+    background: rgba(17, 17, 17, 0.95);
+    border: 4px solid #ff8c00;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#soul-terminal-header {
+    color: #ff8c00;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    font-size: 24px;
+    margin-bottom: 15px;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #ff8c00;
+}
+
+#soul-terminal-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+    background: #111;
+    border: 2px solid #ff8c00;
+    margin-bottom: 15px;
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+#soul-terminal-input-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#soul-terminal-prompt {
+    color: #ff8c00;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+#soul-terminal-input {
+    flex-grow: 1;
+    background: transparent;
+    color: #ff8c00;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    border: none;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    outline: none;
+    padding: 5px;
+}
+
+#soul-terminal-input:focus {
+    outline: 1px solid #ff8c00;
+}
 #battle-log textarea {
     background: transparent;
     color: var(--text-color, #ff8c00) !important;
@@ -710,16 +790,28 @@ button:hover {
     Health: <span id="health">24</span><br>
     Armor: <span id="armorStatus">Leather</span><br>
     Potions: <span id="potions">0</span><br>
-    Pickaxes: <span id="pickaxes">0</span><br> <!-- New pickaxe display -->
-    Diamonds: <span id="diamonds">0</span><br>   <!-- NEW -->
-    <span id="perfectlyCutDiamonds" style="display: none;">0</span>
+    <span id="pickaxes" style="display: none;">0</span><br> <!-- moved to soul terminal -->
     Floor x Bag: <span id="sats" style="display: none;">0</span>
     <span id="sats-calc" class="calc"></span>
-    Runes: <span id="runes">None</span><br>
+    <span id="diamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
+    <span id="perfectlyCutDiamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
+    <span id="runes" style="display: none;">None</span><br> <!-- moved to soul terminal -->
 </div>
         </div>
 <div id="battle-log">
     <textarea id="battle-events" readonly>Battle Log:</textarea>
+</div>
+
+<!-- Soul Terminal Overlay -->
+<div id="soul-terminal-overlay">
+    <div id="soul-terminal">
+        <div id="soul-terminal-header">Soul Terminal v1.0</div>
+        <div id="soul-terminal-content"></div>
+        <div id="soul-terminal-input-container">
+            <span id="soul-terminal-prompt">soul@terminal:~$ </span>
+            <input type="text" id="soul-terminal-input" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
 </div>
 <div id="controller">
             <div id="dpad">
@@ -1009,6 +1101,7 @@ function showInfo() {
         infoMessage.style.display = 'none';
     }, 5000); // Auto-hide after 5 seconds
 }
+
 function populateNameList() {
     const datalist = document.getElementById('name-list');
     datalist.innerHTML = ''; // Clear existing options
@@ -1431,6 +1524,15 @@ let map = [],
             lastFrameTime: 0,
             frameDuration: 200
         },
+        // Add soul system properties
+        soulStones: 0,
+        soulShards: 0,
+        soulOrbs: 0,
+        soulStormCharges: 0, // Track how many charges we have (max 256)
+        inSoulTerminal: false, // Track if player is in soul terminal
+        soulTerminalCommand: '', // Current command input
+        soulTerminalCursorPos: 0, // Cursor position in command
+        soulTerminalActive: false, // Whether soul terminal is currently open
         // Add diamond hand properties
         hasDiamondHand: false, // Track if player has diamond hand
     }, 
@@ -1485,6 +1587,10 @@ let battleLogTimeout = null;
 let projectiles = [];
 let autoSubmitTriggered = false;
 let inputBlocked = false;
+let soulStashPos = null; // Position of soul stash on current floor
+let soulTerminalActive = false; // Whether soul terminal is currently open
+let soulTerminalCommand = ''; // Current command input
+let soulTerminalCursorPos = 0; // Cursor position in command
 
 const specialSoundsPlayedThisFloor = {
     lava: false,
@@ -1558,7 +1664,10 @@ const assets = {
     },
     diamond: new Image(),
     scroll: new Image(),
-    town_portal: [new Image(), new Image(), new Image()]
+    town_portal: [new Image(), new Image(), new Image()],
+    soul_stash: new Image(),
+    soul_stone: new Image(),
+    hooded_heirloom: new Image()
 };
 
 // Initialize sprite frames for all enemy types
@@ -1678,6 +1787,9 @@ types.forEach(t => {
 	assets.waypoint.src = 'waypoint.png';
 	assets.rune_whisperer.src = 'rune_whisperer.png';
 	assets.player_diamond_armor.src = 'player_diamond_armor.png';
+	assets.soul_stash.src = 'soul_stash.png';
+	assets.soul_stone.src = 'soul_stone.png';
+	assets.hooded_heirloom.src = 'hooded_heirloom.png';
 	p.anim.frames.diamond_armor_front = [new Image(), new Image()];
 	p.anim.frames.diamond_armor_front[0].src = 'player_diamond_armor-front1.png';
 	p.anim.frames.diamond_armor_front[1].src = 'player_diamond_armor-front2.png';
@@ -2369,6 +2481,7 @@ function initMap() {
             } else {
                 console.warn('Failed to place waypoint: tile occupied at', waypointX, waypointY);
             }
+            
             // Place rune whisperer at a fixed position in the right room
             const runeWhispererX = rightRoomX + 1;
             const runeWhispererY = rightRoomY + 5;
@@ -2377,6 +2490,15 @@ function initMap() {
                 runeWhispererPos = { x: runeWhispererX, y: runeWhispererY };
             } else {
                 console.warn('Failed to place rune whisperer: tile occupied at', runeWhispererX, runeWhispererY);
+            }
+
+            // Place hooded heirloom (4 tiles north of rune whisperer)
+            const heirloomX = runeWhispererX;
+            const heirloomY = runeWhispererY - 4;
+            if (map[heirloomY][heirloomX] === 0) {
+                map[heirloomY][heirloomX] = 18; // Hooded Heirloom
+            } else {
+                console.warn('Failed to place hooded heirloom: tile occupied at', heirloomX, heirloomY);
             }
 
             p.x = mainRoomX + 3;
@@ -2571,6 +2693,30 @@ function initMap() {
             } else {
             }
         }    
+
+        // Place soul stash in the same room as player spawn (only on normal floors)
+        if (!inHideout) {
+            const room = rooms[0]; // Player spawns in first room
+            let stashX, stashY;
+            let attempts = 100;
+            do {
+                stashX = room.x + Math.floor(Math.random() * room.w);
+                stashY = room.y + Math.floor(Math.random() * room.h);
+                attempts--;
+            } while ((map[stashY][stashX] !== 0 || 
+                     (stashX === p.x && stashY === p.y)) && attempts > 0);
+            
+            if (attempts > 0) {
+                map[stashY][stashX] = 19; // Soul stash tile
+                soulStashPos = {x: stashX, y: stashY};
+            } else {
+                // Fallback to player position if no room space found
+                if (map[p.y][p.x] === 0) {
+                    map[p.y][p.x] = 19; // Soul stash tile
+                    soulStashPos = {x: p.x, y: p.y};
+                }
+            }
+        }
 
         exit = null;
         initialWaveSpawned = false;
@@ -2834,6 +2980,13 @@ if (!p.hasDiamondArmor && p.hasDiamondHand) {
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('diamonds').textContent = diamonds;
     document.getElementById('perfectlyCutDiamonds').textContent = p.perfectlyCutDiamonds;
+    
+    // Add soul items to display
+    if (p.inSoulTerminal) {
+        // In terminal, update both regular and soul inventory
+        document.getElementById('runes').textContent = p.runes.join(' ');
+    }
+    
     needsRedraw = true;
 }
 
@@ -3905,77 +4058,78 @@ if (animController.isAnimating) {
         }
 
         // Add this after the stairs logic in move function:
-        if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
-            // NEW: make sure the scroll flag is reset for the next floor
-            scrollDroppedThisFloor = false;
+// Add this after the stairs logic in move function:
+if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
+    // NEW: make sure the scroll flag is reset for the next floor
+    scrollDroppedThisFloor = false;
 
-            sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-            if (p.immortal) {
-                p.immortal = false;
-                logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
-            }
-            
-            enemiesSpawnedThisFloor = 0;
-            initialSpawnDoneThisFloor = false;
-            enemies = [];
-            floor++;
-            initialWaveSpawned = false;
-            waveActive = false;
-            exit = null;
-            killsLog = [];
-            battleLog = []; // Clear battleLog to prevent memory buildup
-            // Reset special sound tracking for the new floor
-            specialSoundsPlayedThisFloor.lava = false;
-            specialSoundsPlayedThisFloor.quicksand = false;
-            specialSoundsPlayedThisFloor.pond = false;
-            specialSoundsPlayedThisFloor.rune = false;
-            specialSoundsPlayedThisFloor.hole = false;
-            // Reset runewords to allow reactivation on new floor
-            p.runewords = [];
-            // Clear runeDrops specific runes to prevent stale entries
-            runeDrops = runeDrops.filter(r => !r.specific);
-            document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-            document.getElementById('wave').textContent = wave;
-            initMap();
-            nextApiCallTime = null;
-            
-            // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
-            const floorIndicator = document.getElementById('floor-indicator');
-            if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+    sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
+    if (p.immortal) {
+        p.immortal = false;
+        logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
+    }
+    
+    enemiesSpawnedThisFloor = 0;
+    initialSpawnDoneThisFloor = false;
+    enemies = [];
+    floor++;
+    initialWaveSpawned = false;
+    waveActive = false;
+    exit = null;
+    killsLog = [];
+    battleLog = []; // Clear battleLog to prevent memory buildup
+    // Reset special sound tracking for the new floor
+    specialSoundsPlayedThisFloor.lava = false;
+    specialSoundsPlayedThisFloor.quicksand = false;
+    specialSoundsPlayedThisFloor.pond = false;
+    specialSoundsPlayedThisFloor.rune = false;
+    specialSoundsPlayedThisFloor.hole = false;
+    // Reset runewords to allow reactivation on new floor
+    p.runewords = [];
+    // Clear runeDrops specific runes to prevent stale entries
+    runeDrops = runeDrops.filter(r => !r.specific);
+    document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+    document.getElementById('wave').textContent = wave;
+    initMap();
+    nextApiCallTime = null;
+    
+    // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
 
-            // Check if any runewords are active
-            const hasActiveRunewords = p.runewords.length > 0;
-            
-            if (hasActiveRunewords) {
-                // Show runeword message immediately
-                floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
-            } else {
-                // Show theme name for 3 s, then revert to floor number
-                const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
-                floorIndicator.textContent = themeName;               // 1️⃣ show theme
+    // Check if any runewords are active
+    const hasActiveRunewords = p.runewords.length > 0;
+    
+    if (hasActiveRunewords) {
+        // Show runeword message immediately
+        floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
+    } else {
+        // Show theme name for 3 s, then revert to floor number
+        const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+        floorIndicator.textContent = themeName;               // 1️⃣ show theme
 
-                themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
-                    floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
-                    themeTimeoutId = null;
-                }, 3000);
-            }
-            
-            const battleEvents = document.getElementById('battle-events');
-            battleEvents.value = '';
-            battleEvents.style.transform = 'translateX(-100%)';
-            battleEvents.style.opacity = '0';
-            
-            // Immediately trigger fetchTxs after floor transition
-            if (!gameOver && !splashActive && floor > 0) {
-                fetchTxs();
-                console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
-            }
-            
-            // Add proper exit handling to prevent teleportation issues
-            needsRedraw = true;
-            animController.endMovement();
-            return; // ✅ This is CRUCIAL - stops further execution after exit
-        }
+        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+            floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+            themeTimeoutId = null;
+        }, 3000);
+    }
+    
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value = '';
+    battleEvents.style.transform = 'translateX(-100%)';
+    battleEvents.style.opacity = '0';
+    
+    // Immediately trigger fetchTxs after floor transition
+    if (!gameOver && !splashActive && floor > 0) {
+        fetchTxs();
+        console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
+    }
+    
+    // Add proper exit handling to prevent teleportation issues
+    needsRedraw = true;
+    animController.endMovement();
+    return; // ✅ This is CRUCIAL - stops further execution after exit
+}
 
         // In move function - before calling fetchTxs
         if (map[ny][nx] === 12 && !inHideout) { // Portal tile in normal floor
@@ -4041,6 +4195,25 @@ if (animController.isAnimating) {
             musicManager.play(currentTheme);
         }
 
+// Handle soul stash interaction
+if (map[ny][nx] === 19 && !inHideout) { // Soul stash tile
+    // Lock player movement while in terminal
+    inputBlocked = true;
+    // Store the exact position of the soul stash for proper positioning
+    const stashX = nx;
+    const stashY = ny;
+    openSoulTerminal();
+    animController.endMovement();
+    return;
+}
+        
+        if (map[ny][nx] === 20) { // Soul stone tile
+	    map[ny][nx] = 0;
+	    playWebAudioSound(sounds.pickup);
+	    logBattleEvent(`Floor ${floor} - Soul Stone collected!`);
+	    updatePlayerState();
+	}
+
         if (map[ny][nx] === 14 && inHideout) { // Jeweller
             if (diamonds >= 3) {
                 diamonds -= 3;
@@ -4089,6 +4262,18 @@ if (animController.isAnimating) {
                 updatePlayerState();
             } else {
                 logBattleEvent(`Rune Whisperer: No runes to trade!`);
+            }
+        }
+
+if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
+            // Player can turn in soul orbs here for 256 charges each
+            if (p.soulOrbs > 0) {
+                p.soulOrbs--;
+                p.soulStormCharges = Math.min(256, p.soulStormCharges + 256);
+                logBattleEvent(`Hooded Heirloom: Received 256 Soul Storm Charges!`);
+                playWebAudioSound(sounds.pickup);
+            } else {
+                logBattleEvent(`Hooded Heirloom: No Soul Orbs to trade!`);
             }
         }
 
@@ -4447,7 +4632,8 @@ for (let i = 0; i < 5; i++) {
         }
         return `<span style="opacity: 0;">${display}</span>`;
     }).join('  '); // Two spaces for separation
-    displayText += row + (i < 4 ? '<br>' : ''); // Newline except for last row
+    //displayText += row + (i < 4 ? '<br>' : ''); // Newline except for last row
+    displayText += row + (i < 4 ? ' ' : ''); // Newline except for last row
 }
     
     // Wrap displayText in a span with Safari-compatible nbsp styling
@@ -4459,6 +4645,7 @@ for (let i = 0; i < 5; i++) {
 
 // Modified checkRunewordsAtFloorStart function to check for BTC, HODL, and RIP runes in any order
 function checkRunewordsAtFloorStart() {
+    // Only check for runewords at start of floor (no continuous checking)
     const runewords = [
         { name: 'btc', runes: ['b', 't', 'c'], effect: () => {
             p.hp += 444;
@@ -4466,17 +4653,20 @@ function checkRunewordsAtFloorStart() {
             p.runewords.push('btc');
             logBattleEvent(`Floor ${floor} - Runeword BTC activated! +444 HP (now ${p.hp})`);
             updatePlayerState();
+            needsRedraw = true;
         }},
         { name: 'hodl', runes: ['h', 'o', 'd', 'l'], effect: () => {
             p.immortal = true;
             p.runewords.push('hodl');
             logBattleEvent(`Floor ${floor} - Runeword HODL activated! You are immortal!`);
             updatePlayerState();
+            needsRedraw = true;
         }},
         { name: 'rip', runes: ['r', 'i', 'p'], effect: () => {
             p.ripBlast = true;
             p.runewords.push('rip');
             logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
+            needsRedraw = true;
         }}
     ];
 
@@ -4492,7 +4682,7 @@ function checkRunewordsAtFloorStart() {
     });
 
     let usedIndices = [];
-    // let activatedRunewords = [];	// moved to global scope
+    let activatedRunewords = [];
 
     // Check each runeword
     for (const runeword of runewords) {
@@ -4520,7 +4710,6 @@ function checkRunewordsAtFloorStart() {
     }
 
     // Display runeword message if any were activated
-    let isRunewordMessageDisplayed = false;
     if (activatedRunewords.length > 0) {
         const floorIndicator = document.getElementById('floor-indicator');
         floorIndicator.textContent = `Runeword${activatedRunewords.length > 1 ? 's' : ''} ${activatedRunewords.join(', ')} found!`;
@@ -4528,20 +4717,12 @@ function checkRunewordsAtFloorStart() {
             playWebAudioSound(sounds.rune);
             specialSoundsPlayedThisFloor.rune = true;
         }
-        isRunewordMessageDisplayed = true;
         setTimeout(() => {
-            isRunewordMessageDisplayed = false;
             const currentText = floorIndicator.textContent;
             if (currentText.startsWith("Runeword")) {
                 floorIndicator.textContent = `Floor ${floor}`;
             }
         }, 5000);
-    }
-
-    // Update floor indicator if no runeword message is displayed
-    if (!isRunewordMessageDisplayed) {
-        const floorIndicator = document.getElementById('floor-indicator');
-        floorIndicator.textContent = `Floor ${floor}`;
     }
 
     // Remove used runes
@@ -4563,7 +4744,6 @@ function checkRunewordsAtFloorStart() {
     }
 
     checkRunewords(); // Update inventory display
-    activatedRunewords = [];
     needsRedraw = true;
 }
 
@@ -4698,6 +4878,39 @@ if (hit) {
                             // No space for satoshi drop
                         }
 
+                        // Soul stone drop logic (5% chance)
+                        if (Math.random() < 0.05) {
+                            let stonePlaced = false;
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 20; // Soul stone tile
+                                stonePlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: enemy.x, y: enemy.y - 1},
+                                    {x: enemy.x, y: enemy.y + 1},
+                                    {x: enemy.x - 1, y: enemy.y},
+                                    {x: enemy.x + 1, y: enemy.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny)
+                                    ) {
+                                        map[ny][nx] = 20; // Soul stone tile
+                                        stonePlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (stonePlaced) {
+                                p.soulStones++;
+                                logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a Soul Stone!`);
+                                playWebAudioSound(sounds.pickup);
+                            }
+                        }
+
                         // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
                         if (!scrollDroppedThisFloor && Math.random() < 1/25) {
                             let scrollPlaced = false;
@@ -4823,6 +5036,39 @@ if (hit) {
                 // No space for satoshi drop
             }
 
+            // Soul stone drop logic (5% chance)
+            if (Math.random() < 0.05) {
+                let stonePlaced = false;
+                if (map[hit.y][hit.x] === 0) {
+                    map[hit.y][hit.x] = 20; // Soul stone tile
+                    stonePlaced = true;
+                } else {
+                    const adjacent = [
+                        {x: hit.x, y: hit.y - 1},
+                        {x: hit.x, y: hit.y + 1},
+                        {x: hit.x - 1, y: hit.y},
+                        {x: hit.x + 1, y: hit.y}
+                    ];
+                    for (const pos of adjacent) {
+                        const nx = pos.x, ny = pos.y;
+                        if (
+                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                            map[ny][nx] === 0 &&
+                            !enemies.some(e => e.x === nx && e.y === ny)
+                        ) {
+                            map[ny][nx] = 20; // Soul stone tile
+                            stonePlaced = true;
+                            break;
+                        }
+                    }
+                }
+                if (stonePlaced) {
+                    p.soulStones++;
+                    logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a Soul Stone!`);
+                    playWebAudioSound(sounds.pickup);
+                }
+            }
+
             // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
             if (!scrollDroppedThisFloor && Math.random() < 1/25) {
                 let scrollPlaced = false;
@@ -4918,8 +5164,56 @@ if (hit) {
 
     }
     
-// Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
-if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
+// Add soul storm charge consumption for each attack
+if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
+    // Consume 8 charges for this attack
+    p.soulStormCharges -= 8;
+    activateSoulStorm();
+    
+    // Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
+    // Check if player is standing adjacent to an enemy
+    let isAdjacentToEnemy = false;
+    let sx = p.x, sy = p.y;
+    if (swordDir === 'up') sy--;
+    if (swordDir === 'down') sy++;
+    if (swordDir === 'left') sx--;
+    if (swordDir === 'right') sx++;
+    
+    // Check if there's an enemy one tile away in the sword direction
+    if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
+        isAdjacentToEnemy = enemies.some(e => e.x === sx && e.y === sy);
+    }
+    
+    // Only shoot projectiles if not standing adjacent to an enemy
+    // Also disable when player is exactly 1 tile away from any enemy (within 1 tile radius)
+    let isNearEnemy = false;
+    const adjacentPositions = [
+        {x: p.x, y: p.y - 1}, // Up
+        {x: p.x, y: p.y + 1}, // Down
+        {x: p.x - 1, y: p.y}, // Left
+        {x: p.x + 1, y: p.y}  // Right
+    ];
+    
+    for (const pos of adjacentPositions) {
+        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
+            if (enemies.some(e => e.x === pos.x && e.y === pos.y)) {
+                isNearEnemy = true;
+                break;
+            }
+        }
+    }
+    
+    // Only shoot projectiles if not standing adjacent to an enemy
+    if (!isAdjacentToEnemy && !isNearEnemy) {
+        let startSx = p.x, startSy = p.y; // Start at player's position
+        if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
+            projectiles.push({ x: startSx, y: startSy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
+            sounds.shoot_sword.pause();
+            sounds.shoot_sword.currentTime = 0;
+            sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
+        }
+    }
+} else if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
     // Check if player is standing adjacent to an enemy
     let isAdjacentToEnemy = false;
     let sx = p.x, sy = p.y;
@@ -4989,6 +5283,316 @@ function usePotion() {
     moveEnemies();
     updatePlayerState();
     needsRedraw = true;
+}
+
+// Add these functions near the other utility functions
+function openSoulTerminal() {
+    if (p.inSoulTerminal) return; // Already in terminal
+    
+    p.inSoulTerminal = true;
+    p.soulTerminalActive = true;
+    p.soulTerminalCommand = '';
+    p.soulTerminalCursorPos = 0;
+    
+    // Show soul terminal overlay
+    const overlay = document.getElementById('soul-terminal-overlay');
+    const content = document.getElementById('soul-terminal-content');
+    const input = document.getElementById('soul-terminal-input');
+    
+    // Clear content and add welcome message
+    content.innerHTML = '';
+    addTerminalLineToContent('Welcome to Soul Terminal!');
+    addTerminalLineToContent('Type "help" for available commands.');
+    updateSoulTerminalInventory();
+    
+    // Show overlay and focus input
+    overlay.style.display = 'flex';
+    setTimeout(() => {
+        input.focus();
+    }, 100);
+}
+
+function closeSoulTerminal() {
+    p.inSoulTerminal = false;
+    p.soulTerminalActive = false;
+    p.soulTerminalCommand = '';
+    p.soulTerminalCursorPos = 0;
+    
+    // Hide soul terminal overlay
+    const overlay = document.getElementById('soul-terminal-overlay');
+    overlay.style.display = 'none';
+    
+    // Restore input control
+    inputBlocked = false;
+    
+    // Ensure player is properly positioned after terminal exit
+    // This prevents teleportation issues when exiting soul terminal
+    updateFogMap(p.x, p.y);
+    
+    needsRedraw = true;
+}
+
+function addTerminalLine(line) {
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value += line + '\n';
+    battleEvents.scrollTop = battleEvents.scrollHeight;
+}
+
+function addTerminalLineToContent(line) {
+    const content = document.getElementById('soul-terminal-content');
+    const lineElement = document.createElement('div');
+    lineElement.textContent = line;
+    content.appendChild(lineElement);
+    content.scrollTop = content.scrollHeight;
+}
+
+function updateSoulTerminalInventory() {
+//    addTerminalLineToContent('');
+            const clearContent = document.getElementById('soul-terminal-content');
+            clearContent.innerHTML = '';
+            addTerminalLineToContent('Soul Terminal Shell v1.0');
+            addTerminalLineToContent('Type "help" for help.');
+            addTerminalLineToContent('');  
+    // Display soul-related items
+    addTerminalLineToContent('--- Soul Inventory ---');
+    addTerminalLineToContent(`Soul Stones: ${p.soulStones}`);
+    addTerminalLineToContent(`Soul Shards: ${p.soulShards}`);
+    addTerminalLineToContent(`Soul Orbs: ${p.soulOrbs}`);
+    addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
+    addTerminalLineToContent('');
+    
+    // Display regular inventory items
+    addTerminalLineToContent('--- Regular Inventory ---');
+    addTerminalLineToContent(`Health: ${p.hp}`);
+    addTerminalLineToContent(`Potions: ${p.potions}`);
+    addTerminalLineToContent(`Pickaxes: ${p.pickaxes}`);
+    addTerminalLineToContent(`Diamonds: ${diamonds}`);
+    addTerminalLineToContent(`Perfectly Cut Diamonds: ${document.getElementById('perfectlyCutDiamonds').textContent}`);
+    addTerminalLineToContent(`Runes: ${document.getElementById('runes').textContent}`);
+    addTerminalLineToContent('');
+}
+
+function processSoulCommand(command) {
+    const trimmed = command.trim();
+    
+    if (trimmed === '') return;
+    
+    // Clear screen before executing any command (always)
+    const content = document.getElementById('soul-terminal-content');
+    content.innerHTML = '';
+            addTerminalLineToContent('Soul Terminal Shell v1.0');
+            addTerminalLineToContent('Type "help" for help.');
+            addTerminalLineToContent('');   
+    // Parse command and arguments
+    const parts = trimmed.split(' ');
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1);
+    
+    switch (cmd) {
+case 'ls':
+            updateSoulTerminalInventory();
+            break;
+        case 'clear':
+            const clearContent = document.getElementById('soul-terminal-content');
+            clearContent.innerHTML = '';
+            addTerminalLineToContent('Soul Terminal Shell v1.0');
+            addTerminalLineToContent('Type "help" for help.');
+            addTerminalLineToContent('');    
+            break;
+        case 'exit':
+            closeSoulTerminal();
+            return;
+        case 'help':
+            addTerminalLineToContent('Available commands:');
+            addTerminalLineToContent('  ls          - View inventory');
+            addTerminalLineToContent('  clear       - Clear screen');
+            addTerminalLineToContent('  convert     - Convert soul items');
+            addTerminalLineToContent('  exit        - Exit terminal');
+            break;
+case 'convert':
+            if (args.length === 0) {
+                addTerminalLineToContent('Convert soul items.');
+                addTerminalLineToContent('Usage: convert stones');
+                addTerminalLineToContent('Usage: convert shards');
+            } else {
+                const type = args[0].toLowerCase();
+                switch (type) {
+                    case 'stones':
+                        if (p.soulStones >= 3) {
+                            p.soulStones -= 3;
+                            p.soulShards++;
+                            addTerminalLineToContent('Converted 3 Soul Stones into 1 Soul Shard.');
+                        } else {
+                            addTerminalLineToContent(`Need at least 3 Soul Stones, you have ${p.soulStones}.`);
+                        }
+                        break;
+                    case 'shards':
+                        if (p.soulShards >= 2) {
+                            p.soulShards -= 2;
+                            p.soulOrbs++;
+                            addTerminalLineToContent('Converted 2 Soul Shards into 1 Soul Orb.');
+                        } else {
+                            addTerminalLineToContent(`Need at least 2 Soul Shards, you have ${p.soulShards}.`);
+                        }
+                        break;
+                    default:
+                        addTerminalLineToContent('Unknown convert type. Use: stones, shards');
+                }
+            }
+            break;
+        default:
+            addTerminalLineToContent(`Command not found: ${cmd}`);
+    }
+}
+
+function activateSoulStorm() {
+    // Create a horizontal wave of 3 tiles that lights up with soul light
+    const damageArea = [];
+    
+    // Determine damage tiles based on direction
+    if (swordDir === 'up') {
+        const close_y = p.y - 1;
+        const far_y = p.y - 2;
+        for (let dx = -1; dx <= 1; dx++) {
+            damageArea.push({x: p.x + dx, y: close_y});
+        }
+        for (let dx = -2; dx <= 2; dx++) {
+            damageArea.push({x: p.x + dx, y: far_y});
+        }
+    } else if (swordDir === 'down') {
+        const close_y = p.y + 1;
+        const far_y = p.y + 2;
+        for (let dx = -1; dx <= 1; dx++) {
+            damageArea.push({x: p.x + dx, y: close_y});
+        }
+        for (let dx = -2; dx <= 2; dx++) {
+            damageArea.push({x: p.x + dx, y: far_y});
+        }
+    } else if (swordDir === 'left') {
+        const close_x = p.x - 1;
+        const far_x = p.x - 2;
+        for (let dy = -1; dy <= 1; dy++) {
+            damageArea.push({x: close_x, y: p.y + dy});
+        }
+        for (let dy = -2; dy <= 2; dy++) {
+            damageArea.push({x: far_x, y: p.y + dy});
+        }
+    } else if (swordDir === 'right') {
+        const close_x = p.x + 1;
+        const far_x = p.x + 2;
+        for (let dy = -1; dy <= 1; dy++) {
+            damageArea.push({x: close_x, y: p.y + dy});
+        }
+        for (let dy = -2; dy <= 2; dy++) {
+            damageArea.push({x: far_x, y: p.y + dy});
+        }
+    }
+    
+    // Apply damage to all valid tiles in the area
+    const damage = 1; // 1 damage per hit
+    let enemiesHit = 0;
+    let totalDamage = 0;
+    
+    highlightTiles = []; // Clear previous highlights
+    for (const tile of damageArea) {
+        const {x, y} = tile;
+        
+        // Check if tile is within bounds and not a wall
+        if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
+            highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
+            
+            // Check if there's an enemy at this tile
+            const enemy = enemies.find(e => e.x === x && e.y === y);
+            
+            if (enemy) {
+                // Apply damage to enemy
+                enemy.hp -= damage;
+                logBattleEvent(`Soul Storm hits ${enemy.type.name} for ${damage} DMG`);
+                
+                if (enemy.hp <= 0) {
+                    kills[enemy.type.name]++;
+                    let dropPlaced = false;
+                    
+                    // Drop satoshi
+                    if (map[enemy.y][enemy.x] === 0) {
+                        map[enemy.y][enemy.x] = 3;
+                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                        dropPlaced = true;
+                    } else {
+                        const adjacent = [
+                            {x: enemy.x, y: enemy.y - 1},
+                            {x: enemy.x, y: enemy.y + 1},
+                            {x: enemy.x - 1, y: enemy.y},
+                            {x: enemy.x + 1, y: enemy.y}
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 3;
+                                satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                                dropPlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    enemies = enemies.filter(en => en !== enemy);
+                    enemiesHit++;
+                }
+                totalDamage += damage;
+            }
+        }
+    }
+    
+    if (enemiesHit > 0) {
+        logBattleEvent(`Soul Storm hit ${enemiesHit} enemies for ${totalDamage} total damage!`);
+    } else {
+        logBattleEvent('Soul Storm hits empty space!');
+    }
+}
+
+function handleTerminalInput(e) {
+    const key = e.key;
+    
+    if (key === 'Enter') {
+        e.preventDefault();
+        processSoulCommand(p.soulTerminalCommand);
+        p.soulTerminalCommand = '';
+        p.soulTerminalCursorPos = 0;
+        return;
+    }
+    
+    if (key === 'Backspace') {
+        if (p.soulTerminalCursorPos > 0) {
+            p.soulTerminalCommand = 
+                p.soulTerminalCommand.slice(0, p.soulTerminalCursorPos - 1) + 
+                p.soulTerminalCommand.slice(p.soulTerminalCursorPos);
+            p.soulTerminalCursorPos--;
+        }
+        return;
+    }
+    
+    if (key === 'ArrowLeft' && p.soulTerminalCursorPos > 0) {
+        p.soulTerminalCursorPos--;
+        return;
+    }
+    
+    if (key === 'ArrowRight' && p.soulTerminalCursorPos < p.soulTerminalCommand.length) {
+        p.soulTerminalCursorPos++;
+        return;
+    }
+    
+    // Add regular character
+    if (key.length === 1 && key !== 'Enter') {
+        const before = p.soulTerminalCommand.slice(0, p.soulTerminalCursorPos);
+        const after = p.soulTerminalCommand.slice(p.soulTerminalCursorPos);
+        p.soulTerminalCommand = before + key + after;
+        p.soulTerminalCursorPos++;
+    }
 }
 
 function cleanupEventListeners() {
@@ -5174,6 +5778,11 @@ function restart() {
     p.hasDiamondArmor = false;
     p.hasDiamondHand = false;
     p.perfectlyCutDiamonds = 0;
+    // Reset soul items
+    p.soulStones = 0;
+    p.soulShards = 0;
+    p.soulOrbs = 0;
+    p.soulStormCharges = 0;
     currentTheme = 'dungeon';            // default theme
     p.maxHP = 24;                       // default max HP
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
@@ -5456,6 +6065,15 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         }
         if (map[y][x] === 17) { // Rune Whisperer
             c.drawImage(assets.rune_whisperer, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 18) { // Hooded Heirloom
+            c.drawImage(assets.hooded_heirloom, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 19) { // Soul Stash
+            c.drawImage(assets.soul_stash, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 20) { // Soul Stone
+            c.drawImage(assets.soul_stone, x * S, y * S, S, S);
         }
         if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
     }
@@ -5937,6 +6555,12 @@ if (gameOver && hasPlayedOnce) {
     }
     if (gameOver || splashActive) return;
 
+    // Handle terminal input when active
+    if (p.inSoulTerminal && p.soulTerminalActive) {
+        handleTerminalInput(e);
+        return;
+    }
+
     /*
     // DEBUG: Runeword testing with keys 1-9 - comment out when not needed
     if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
@@ -5984,6 +6608,25 @@ if (gameOver && hasPlayedOnce) {
                 }
             }
         }, 50); // Poll frequently, moves capped at 200ms
+    }
+});
+
+// Add this after the main document.addEventListener('keydown', ... line
+document.getElementById('soul-terminal-input').addEventListener('keydown', function(e) {
+    if (p.inSoulTerminal && p.soulTerminalActive) {
+        // Prevent default for Enter to avoid duplicate handling
+        if (e.key === 'Enter') {
+            e.preventDefault();
+        }
+        handleTerminalInput(e);
+        
+        // Handle Enter key for terminal input
+        if (e.key === 'Enter') {
+            const command = this.value;
+            processSoulCommand(command);
+            this.value = '';
+            this.focus();
+        }
     }
 });
 
@@ -6398,6 +7041,25 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         initTouchControls();
     }, 100);
+    
+    // Add event listener for soul terminal input
+    const soulTerminalInput = document.getElementById('soul-terminal-input');
+    if (soulTerminalInput) {
+        soulTerminalInput.addEventListener('keydown', function(e) {
+            if (p.inSoulTerminal && p.soulTerminalActive) {
+                handleTerminalInput(e);
+                
+                // Handle Enter key for terminal input
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const command = this.value;
+                    processSoulCommand(command);
+                    this.value = '';
+                    this.focus();
+                }
+            }
+        });
+    }
 });
 
 // Add this to prevent context menu issues
