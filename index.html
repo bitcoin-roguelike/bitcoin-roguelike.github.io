@@ -805,7 +805,7 @@ button:hover {
 <!-- Soul Terminal Overlay -->
 <div id="soul-terminal-overlay">
     <div id="soul-terminal">
-        <div id="soul-terminal-header">Soul Terminal v1.0</div>
+        <div id="soul-terminal-header">BTC-DUNGEON</div>
         <div id="soul-terminal-content"></div>
         <div id="soul-terminal-input-container">
             <span id="soul-terminal-prompt">soul@terminal:~$ </span>
@@ -5350,8 +5350,7 @@ function updateSoulTerminalInventory() {
 //    addTerminalLineToContent('');
             const clearContent = document.getElementById('soul-terminal-content');
             clearContent.innerHTML = '';
-            addTerminalLineToContent('Soul Terminal Shell v1.0');
-            addTerminalLineToContent('Type "help" for help.');
+            addTerminalLineToContent('Soul Terminal ver 1.0');
             addTerminalLineToContent('');  
     // Display soul-related items
     addTerminalLineToContent('--- Soul Inventory ---');
@@ -5369,7 +5368,8 @@ function updateSoulTerminalInventory() {
     addTerminalLineToContent(`Diamonds: ${diamonds}`);
     addTerminalLineToContent(`Perfectly Cut Diamonds: ${document.getElementById('perfectlyCutDiamonds').textContent}`);
     addTerminalLineToContent(`Runes: ${document.getElementById('runes').textContent}`);
-    addTerminalLineToContent('');
+    addTerminalLineToContent('_____________________');
+    addTerminalLineToContent('Type "help" for help.');
 }
 
 function processSoulCommand(command) {
@@ -5380,9 +5380,8 @@ function processSoulCommand(command) {
     // Clear screen before executing any command (always)
     const content = document.getElementById('soul-terminal-content');
     content.innerHTML = '';
-            addTerminalLineToContent('Soul Terminal Shell v1.0');
-            addTerminalLineToContent('Type "help" for help.');
-            addTerminalLineToContent('');   
+            addTerminalLineToContent('Soul Terminal ver 1.0');
+            addTerminalLineToContent('');
     // Parse command and arguments
     const parts = trimmed.split(' ');
     const cmd = parts[0].toLowerCase();
@@ -5395,9 +5394,9 @@ case 'ls':
         case 'clear':
             const clearContent = document.getElementById('soul-terminal-content');
             clearContent.innerHTML = '';
-            addTerminalLineToContent('Soul Terminal Shell v1.0');
-            addTerminalLineToContent('Type "help" for help.');
-            addTerminalLineToContent('');    
+            addTerminalLineToContent('Soul Terminal ver 1.0');
+            addTerminalLineToContent('_____________________');
+    	    addTerminalLineToContent('Type "help" for help.');
             break;
         case 'exit':
             closeSoulTerminal();
@@ -5408,12 +5407,15 @@ case 'ls':
             addTerminalLineToContent('  clear       - Clear screen');
             addTerminalLineToContent('  convert     - Convert soul items');
             addTerminalLineToContent('  exit        - Exit terminal');
+            addTerminalLineToContent('_____________________');
+            addTerminalLineToContent('Type "help" for help.');
             break;
 case 'convert':
             if (args.length === 0) {
-                addTerminalLineToContent('Convert soul items.');
                 addTerminalLineToContent('Usage: convert stones');
                 addTerminalLineToContent('Usage: convert shards');
+                addTerminalLineToContent('_____________________');
+                addTerminalLineToContent('Type "help" for help.');
             } else {
                 const type = args[0].toLowerCase();
                 switch (type) {
@@ -5422,8 +5424,12 @@ case 'convert':
                             p.soulStones -= 3;
                             p.soulShards++;
                             addTerminalLineToContent('Converted 3 Soul Stones into 1 Soul Shard.');
+                            addTerminalLineToContent('_____________________');
+    	                    addTerminalLineToContent('Type "help" for help.');
                         } else {
                             addTerminalLineToContent(`Need at least 3 Soul Stones, you have ${p.soulStones}.`);
+                            addTerminalLineToContent('_____________________');
+    	                    addTerminalLineToContent('Type "help" for help.');
                         }
                         break;
                     case 'shards':
@@ -5431,17 +5437,25 @@ case 'convert':
                             p.soulShards -= 2;
                             p.soulOrbs++;
                             addTerminalLineToContent('Converted 2 Soul Shards into 1 Soul Orb.');
+                            addTerminalLineToContent('_____________________');
+    	                    addTerminalLineToContent('Type "help" for help.');
                         } else {
                             addTerminalLineToContent(`Need at least 2 Soul Shards, you have ${p.soulShards}.`);
+                            addTerminalLineToContent('_____________________');
+    	                    addTerminalLineToContent('Type "help" for help.');
                         }
                         break;
                     default:
                         addTerminalLineToContent('Unknown convert type. Use: stones, shards');
+                        addTerminalLineToContent('_____________________');
+    	                addTerminalLineToContent('Type "help" for help.');
                 }
             }
             break;
         default:
             addTerminalLineToContent(`Command not found: ${cmd}`);
+            addTerminalLineToContent('_____________________');
+            addTerminalLineToContent('Type "help" for help.');
     }
 }
 
