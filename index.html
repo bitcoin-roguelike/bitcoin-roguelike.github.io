@@ -167,6 +167,7 @@
     border: none;
     font-family: 'VT323', monospace;
     font-size: 16px;
+    font-weight: 900;
     outline: none;
     padding: 5px;
 }
@@ -1477,6 +1478,7 @@ let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
 let activatedRunewords = [];
 let lastDrawTime = null;
+let borderLastUpdate = null;
 let map = [],
     p = {
         x: 2,
@@ -5460,9 +5462,31 @@ case 'convert':
                 addTerminalLineToContent('Type "help" for help.');
             } else {
                 const type = args[0].toLowerCase();
+                let count = 1; // Default to 1 if no count specified
+                
+                // Check if a count was provided (second argument)
+                if (args.length > 1 && !isNaN(args[1])) {
+                    count = parseInt(args[1]);
+                }
+                
                 switch (type) {
                     case 'stones':
-                        if (p.soulStones >= 3) {
+                        const maxStonesToConvert = Math.floor(p.soulStones / 3) * 3; // Ensure we convert in multiples of 3
+                        if (args.length > 1 && !isNaN(args[1])) {
+                            count = Math.min(count, maxStonesToConvert);
+                        } else {
+                            count = maxStonesToConvert;
+                        }
+                        
+                        if (count >= 3) {
+                            const shardsToGain = Math.floor(count / 3);
+                            p.soulStones -= count;
+                            p.soulShards += shardsToGain;
+                            addTerminalLineToContent(`Converted ${count} Soul Stones into ${shardsToGain} Soul Shards.`);
+                            addTerminalLineToContent('_____________________');
+    	                    addTerminalLineToContent('Type "help" for help.');
+                        } else if (p.soulStones >= 3) {
+                            // If no count specified or count < 3, convert minimum
                             p.soulStones -= 3;
                             p.soulShards++;
                             addTerminalLineToContent('Converted 3 Soul Stones into 1 Soul Shard.');
@@ -5475,7 +5499,22 @@ case 'convert':
                         }
                         break;
                     case 'shards':
-                        if (p.soulShards >= 2) {
+                        const maxShardsToConvert = Math.floor(p.soulShards / 2) * 2; // Ensure we convert in multiples of 2
+                        if (args.length > 1 && !isNaN(args[1])) {
+                            count = Math.min(count, maxShardsToConvert);
+                        } else {
+                            count = maxShardsToConvert;
+                        }
+                        
+                        if (count >= 2) {
+                            const orbsToGain = Math.floor(count / 2);
+                            p.soulShards -= count;
+                            p.soulOrbs += orbsToGain;
+                            addTerminalLineToContent(`Converted ${count} Soul Shards into ${orbsToGain} Soul Orbs.`);
+                            addTerminalLineToContent('_____________________');
+    	                    addTerminalLineToContent('Type "help" for help.');
+                        } else if (p.soulShards >= 2) {
+                            // If no count specified or count < 2, convert minimum
                             p.soulShards -= 2;
                             p.soulOrbs++;
                             addTerminalLineToContent('Converted 2 Soul Shards into 1 Soul Orb.');
@@ -5488,7 +5527,9 @@ case 'convert':
                         }
                         break;
                     default:
-                        addTerminalLineToContent('Unknown convert type. Use: stones, shards');
+                        addTerminalLineToContent('ERROR!');
+                        addTerminalLineToContent('Usage: convert stones');
+                        addTerminalLineToContent('Usage: convert shards');
                         addTerminalLineToContent('_____________________');
     	                addTerminalLineToContent('Type "help" for help.');
                 }
@@ -6514,41 +6555,31 @@ if (isVisible) {
         c.restore();
     }
 });
-    // Draw low-health warning border
-    if (p.hp <= 4 && !gameOver && !splashActive) {
-        const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Smoother pulse
-        c.strokeStyle = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
-        c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
-        c.beginPath();
-        // Top border
-        c.moveTo(0, 0);
-        c.lineTo(W * S, 0);
-        // Right border
-        c.moveTo(W * S, 0);
-        c.lineTo(W * S, H * S);
-        // Bottom border
-        c.moveTo(W * S, H * S);
-        c.lineTo(0, H * S);
-        // Left border
-        c.moveTo(0, H * S);
-        c.lineTo(0, 0);
-        c.stroke();
-    } else if (p.hp > 4 && p.hp < 9 && !gameOver && !splashActive) {
-        const alpha = Math.min(0.9, Math.pow(Math.sin(Date.now() / 500) + 1, 0.5) - 0.5); // Same pulsing effect
-        c.strokeStyle = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 13
-        c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5);
-        c.beginPath();
-        // Draw the same border as above
-        c.moveTo(0, 0);
-        c.lineTo(W * S, 0);
-        c.moveTo(W * S, 0);
-        c.lineTo(W * S, H * S);
-        c.moveTo(W * S, H * S);
-        c.lineTo(0, H * S);
-        c.moveTo(0, H * S);
-        c.lineTo(0, 0);
-        c.stroke();
+// Draw low-health warning border with smooth transition
+if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
+    // Use a smooth, consistent pulse instead of frame-rate dependent flashing
+    const pulse = Math.sin(Date.now() / 100); // Slower, smoother pulse
+    let alpha, color;
+    
+    if (p.hp <= 4) {
+        alpha = 0.5 + 0.1 * pulse; // Smooth red transition (0.7 to 1.0)
+        color = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
+    } else {
+        alpha = 0.5 + 0.1 * pulse; // Smooth orange transition (0.5 to 0.8)
+        color = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 9
     }
+    
+    c.strokeStyle = color;
+    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
+    c.beginPath();
+    // Draw the border around the entire canvas
+    c.moveTo(0, 0);
+    c.lineTo(W * S, 0);
+    c.lineTo(W * S, H * S);
+    c.lineTo(0, H * S);
+    c.closePath();
+    c.stroke();
+}
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
