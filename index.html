@@ -3494,7 +3494,7 @@ function isSolid(x, y) {
     return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
 }
 
-// Animation controller for movement timing
+// Animation controller for movement timing with 20 FPS capped animation
 class AnimationController {
     constructor() {
         this.movementStartTime = 0;
@@ -3502,8 +3502,9 @@ class AnimationController {
         this.currentDirection = null;
         this.nextMoveQueue = [];
         this.animationDuration = 200; // Total animation time
-        this.frameInterval = 50; // 4 frames per move (200ms/50ms)
+        this.frameInterval = 50; // 4 frames per move (200ms/50ms) - this is now our 20 FPS cap
         this.lastFrameTime = 0;
+        this.lastDrawTime = 0; // Track last draw time for FPS limiting
     }
 
     startMovement(direction) {
@@ -3545,6 +3546,12 @@ class AnimationController {
         if (!this.isMoving) return 0;
         const elapsed = performance.now() - this.lastFrameTime;
         return elapsed / this.frameInterval;
+    }
+    
+    // Check if we should update frame based on FPS cap (20 FPS = 50ms)
+    shouldUpdateFrame() {
+        const now = performance.now();
+        return now - this.lastFrameTime >= this.frameInterval; // 50ms = 20 FPS
     }
 }
 
@@ -3607,7 +3614,8 @@ function move(dir) {
         p.y = ny;
 if (animController.isAnimating) {
     const now = performance.now();
-    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+    // Cap animation updates to 20 FPS (50ms)
+    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -3635,7 +3643,8 @@ if (animController.isAnimating) {
         p.y = ny;
 if (animController.isAnimating) {
     const now = performance.now();
-    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+    // Cap animation updates to 20 FPS (50ms)
+    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -6065,11 +6074,30 @@ function draw() {
     }
     lastDrawTime = now;
     
-    // Add movement animation effect
+    // Ensure animation frames are updated at 20 FPS cap
+    if (animController.isAnimating) {
+        const animNow = performance.now();
+        if (animNow - animController.lastFrameTime >= 50) { // 20 FPS capped
+            // Update animation frame index here if needed
+            animController.lastFrameTime = animNow;
+        }
+    }
+    
+// Add this to the existing draw function for movement animation
 if (animController.isAnimating && !splashActive && !gameOver) {
     const offset = getMovementOffset(animController.currentDirection);
     drawX += offset.x;
     drawY += offset.y;
+}
+
+// Add frame rate limiting for animation updates in draw
+if (animController.isAnimating) {
+    const animNow = performance.now();
+    if (animNow - animController.lastFrameTime >= 50) { // 20 FPS capped
+        // Update animation frames for movement if needed
+        animController.lastFrameTime = animNow;
+        needsRedraw = true; // Ensure redraw happens at proper frame rate
+    }
 }
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
         console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
@@ -6215,10 +6243,12 @@ highlightTiles.forEach(tile => {
         }
     });
 // Draw player
+// Add this to the existing draw function for player rendering
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
 const now = performance.now();
 if (animController.isAnimating) {
-    if (now - p.anim.lastFrameTime >= p.anim.frameDuration) {
+    // Cap animation frame updates to 20 FPS (50ms)
+    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
