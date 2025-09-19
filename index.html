@@ -4134,8 +4134,8 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
 // Show runeword message with the whole rune part in uppercase
 const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
 
-floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
-        if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+//floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
+//        if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
     } else {
         // Show theme name for 3 s, then revert to floor number
         const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
@@ -5203,9 +5203,9 @@ if (hit) {
     }
     
 // Add soul storm charge consumption for each attack
-if (p.soulStormCharges >= 8 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
-    // Consume 8 charges for this attack
-    p.soulStormCharges -= 8;
+if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
+    // Consume 4 charges for this attack
+    p.soulStormCharges -= 4;
     activateSoulStorm();
     
     // Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
