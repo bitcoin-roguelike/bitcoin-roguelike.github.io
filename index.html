@@ -1895,7 +1895,8 @@ hideout: new Audio('hideout.mp3'),
     rune: { buffer: null, url: 'rune.wav', isPlaying: false, duration: 2000 },
     rune_drop: { buffer: null, url: 'rune_drop.wav', isPlaying: false, duration: 1000 },
     hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 745 },
-    town_portal: { buffer: null, url: 'town_portal.wav', isPlaying: false, duration: 535 }
+    town_portal: { buffer: null, url: 'town_portal.wav', isPlaying: false, duration: 535 },
+    buzz: { buffer: null, url: 'buzz.wav', isPlaying: false, duration: 1000 }
 };
 
 // Load Web Audio buffers
@@ -1919,6 +1920,7 @@ loadSoundBuffer('rune.wav', 'rune');
 loadSoundBuffer('rune_drop.wav', 'rune_drop');
 loadSoundBuffer('hole.wav', 'hole');
 loadSoundBuffer('town_portal.wav', 'town_portal');
+loadSoundBuffer('buzz.wav', 'buzz');
 
 class MusicManager {
   constructor() {
@@ -2005,7 +2007,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
+            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -2021,7 +2023,7 @@ function preloadSounds() {
 } else {
     // Non-iOS: Existing preload logic
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal') return; // Skip music and Web Audio sounds
+        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
@@ -4226,12 +4228,12 @@ if (map[ny][nx] === 19 && !inHideout) { // Soul stash tile
     return;
 }
         
-        if (map[ny][nx] === 20) { // Soul stone tile
-	    map[ny][nx] = 0;
-	    playWebAudioSound(sounds.pickup);
-	    logBattleEvent(`Floor ${floor} - Soul Stone collected!`);
-	    updatePlayerState();
-	}
+if (map[ny][nx] === 20) { // Soul stone tile
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Floor ${floor} - Soul Stone collected!`);
+    updatePlayerState();
+}
 
         if (map[ny][nx] === 14 && inHideout) { // Jeweller
             if (diamonds >= 3) {
@@ -4926,7 +4928,7 @@ if (hit) {
                             if (stonePlaced) {
                                 p.soulStones++;
                                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a Soul Stone!`);
-                                playWebAudioSound(sounds.pickup);
+                                playWebAudioSound(sounds.buzz);
                             }
                         }
 
@@ -5084,7 +5086,7 @@ if (hit) {
                 if (stonePlaced) {
                     p.soulStones++;
                     logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a Soul Stone!`);
-                    playWebAudioSound(sounds.pickup);
+                    playWebAudioSound(sounds.buzz);
                 }
             }
 
