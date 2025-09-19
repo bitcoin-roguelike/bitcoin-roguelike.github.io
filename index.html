@@ -1339,7 +1339,7 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
         const scoreWidth = 14;
         const numberWidth = 10;
         const floorWidth = 6;
-        const header = `Rank  Username                Score         Floor`;
+        const header = `Rank  Username               Score         Floor`;
         let rows = data.map((entry, index) => {
           const rank = (index + 1).toString().padStart(2, '0');
           const username = entry.username.length > maxUsernameLength
@@ -3188,7 +3188,8 @@ async function fetchTxs() {
               if (type.name !== 'Whale' && exit) {
                   continue;
               }
-              console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
+              //console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
+              console.log('Initial Spawn Tx: Checking 10 transactions for Enemies spawns'); // less bloat means win in the long run
               const r = rooms[Math.floor(Math.random() * rooms.length)];
               let x, y, attempts = 50;
               const auraRadius = 2; // 5x5 grid
@@ -4298,16 +4299,21 @@ if (map[ny][nx] === 20) { // Soul stone tile
         }
 
 if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
-            // Player can turn in soul orbs here for 256 charges each
-            if (p.soulOrbs > 0) {
-                p.soulOrbs--;
-                p.soulStormCharges = Math.min(256, p.soulStormCharges + 256);
-                logBattleEvent(`Hooded Heirloom: Received 256 Soul Storm Charges!`);
-                playWebAudioSound(sounds.pickup);
-            } else {
-                logBattleEvent(`Hooded Heirloom: No Soul Orbs to trade!`);
-            }
+    // Player can turn in soul orbs here for 256 charges each
+    if (p.soulOrbs > 0) {
+        if (p.soulStormCharges >= 256) {
+            logBattleEvent(`Hooded Heirloom: You already have the maximum 256 Soul Storm Charges!`);
+        } else {
+            p.soulOrbs--;
+            const chargesToAdd = Math.min(256 - p.soulStormCharges, 256);
+            p.soulStormCharges += chargesToAdd;
+            logBattleEvent(`Hooded Heirloom: Received ${chargesToAdd} Soul Storm Charges!`);
+            playWebAudioSound(sounds.pickup);
         }
+    } else {
+        logBattleEvent(`Hooded Heirloom: No Soul Orbs to trade!`);
+    }
+}
 
         if (map[ny][nx] === 8) {
             const rune = runeDrops.find(r => r.x === nx && r.y === ny);
