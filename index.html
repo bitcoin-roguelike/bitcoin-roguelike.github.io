@@ -2171,7 +2171,7 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
     
-    if (splashActive) {
+if (splashActive) {
         preloadSounds();
         // Ensure AudioContext is resumed for iOS
         if (audioContext.state === 'suspended') {
@@ -2201,13 +2201,9 @@ document.getElementById('start-button').addEventListener('click', () => {
         console.warn('Error resetting music manager:', e);
     }
     
-    // Set music volume to 0 when restarting
-    if (musicManager.current) {
-        const currentAudio = musicManager.audios[musicManager.current];
-        if (currentAudio) {
-            currentAudio.volume = 0;
-        }
-    }
+    // Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
+    setSoundVolume(0); // First time
+    setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -6776,7 +6772,7 @@ currentTheme = 'dungeon'; // Force default theme on game start
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
     
-    if (splashActive) {
+if (splashActive) {
         preloadSounds();
         // Ensure AudioContext is resumed for iOS
         if (audioContext.state === 'suspended') {
@@ -6794,28 +6790,21 @@ currentTheme = 'dungeon'; // Force default theme on game start
                 musicManager.play(currentTheme); // Play music if AudioContext is already running
             }
         }
-// Fix: Properly reset MusicManager state and ensure audio context is ready
+            // Fix: Properly reset MusicManager state and ensure audio context is ready
     try {
         if (audioContext && audioContext.state === 'suspended') {
         musicManager.current = null;
             audioContext.resume();
         }
 
-        musicManager.mute(musicMuted); // Ensure proper mute state from localStorage
-        // Set initial volumes
-        setSoundVolume(soundVolume);
-        setMusicVolume(musicVolume);
+        musicManager.mute(musicMuted); // Ensure proper mute state
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
     
-    // Set music volume to 0 when restarting
-    if (musicManager.current) {
-        const currentAudio = musicManager.audios[musicManager.current];
-        if (currentAudio) {
-            currentAudio.volume = 0;
-        }
-    }
+    // Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
+    setSoundVolume(0); // First time
+    setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
