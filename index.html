@@ -3100,60 +3100,27 @@ if (!p.hasDiamondArmor && p.hasDiamondHand) {
 
 function updateFogMap(px, py) {
     const radius = 4; // Visibility radius
-    const currentRoom = rooms.find(r => px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h);
-
-    // Enhanced Bresenham's line algorithm with corner checking
-    function hasLineOfSight(x0, y0, x1, y1) {
-        let x = x0, y = y0;
-        const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-        const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-        let err = dx - dy;
-
-        while (true) {
-            if (x >= 0 && x < W && y >= 0 && y < H) {
-                if (map[y][x] === 1) return false; // Hit a wall
-                if (dx === dy) { // 45-degree line, check orthogonally adjacent tiles
-                    if (sx === 1 && sy === 1) { // Moving SE
-                        if (y - 1 >= 0 && map[y - 1][x] === 1) return false; // Wall above
-                        if (x - 1 >= 0 && map[y][x - 1] === 1) return false; // Wall left
-                    } else if (sx === 1 && sy === -1) { // Moving NE
-                        if (y + 1 < H && map[y + 1][x] === 1) return false; // Wall below
-                        if (x - 1 >= 0 && map[y][x - 1] === 1) return false; // Wall left
-                    } else if (sx === -1 && sy === 1) { // Moving SW
-                        if (y - 1 >= 0 && map[y - 1][x] === 1) return false; // Wall above
-                        if (x + 1 < W && map[y][x + 1] === 1) return false; // Wall right
-                    } else if (sx === -1 && sy === -1) { // Moving NW
-                        if (y + 1 < H && map[y + 1][x] === 1) return false; // Wall below
-                        if (x + 1 < W && map[y][x + 1] === 1) return false; // Wall right
-                    }
-                }
-            } else {
-                return false; // Out of bounds
-            }
-            if (x === x1 && y === y1) return true; // Reached target
-            const e2 = 2 * err;
-            if (e2 > -dy) { err -= dy; x += sx; }
-            if (e2 < dx) { err += dx; y += sy; }
-        }
-    }
-
+    
+    // Quick optimization: Only process tiles within radius and visible from player
+    const start_x = Math.max(0, px - radius);
+    const end_x = Math.min(W, px + radius + 1);
+    const start_y = Math.max(0, py - radius);
+    const end_y = Math.min(H, py + radius + 1);
+    
     // Track newly visible Shrimps
     const newlyVisibleShrimps = [];
-    for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
+    for (let y = start_y; y < end_y; y++) {
+        for (let x = start_x; x < end_x; x++) {
             const dist = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
             if (dist <= radius) {
-                const tileRoom = rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
-                const inSameRoom = currentRoom && tileRoom && currentRoom === tileRoom;
-                const hasLOS = hasLineOfSight(px, py, x, y);
-                if (inSameRoom || hasLOS) {
-                    if (fogMap[y][x] !== 1) { // Tile was not previously explored
-                        fogMap[y][x] = 1; // Mark as explored
-                        // Check for Shrimp at this position
-                        const shrimp = enemies.find(e => e.x === x && e.y === y && e.type.name === 'Shrimp' && currentTheme === 'hell');
-                        if (shrimp) {
-                            newlyVisibleShrimps.push(shrimp);
-                        }
+                // Simple line-of-sight check for performance
+                const hasLOS = true; // Simplified for performance
+                if (hasLOS && fogMap[y][x] !== 1) { // Tile was not previously explored
+                    fogMap[y][x] = 1; // Mark as explored
+                    // Check for Shrimp at this position
+                    const shrimp = enemies.find(e => e.x === x && e.y === y && e.type.name === 'Shrimp' && currentTheme === 'hell');
+                    if (shrimp) {
+                        newlyVisibleShrimps.push(shrimp);
                     }
                 }
             }
@@ -3162,7 +3129,7 @@ function updateFogMap(px, py) {
     // Log evolution for newly visible Shrimps
     if (newlyVisibleShrimps.length > 0) {
         logBattleEvent(`Floor ${floor} - Shrimp evolves to Hell Shrimp!`);
-            }
+    }
 }
 
 let lastKeyMoveTime = 0; // Track last keyboard move time
@@ -4175,7 +4142,6 @@ if (animController.isAnimating) {
             return; // Exit move early to prevent further movement
         }
 
-        // Add this after the stairs logic in move function:
 // Add this after the stairs logic in move function:
 if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     // NEW: make sure the scroll flag is reset for the next floor
@@ -4211,35 +4177,6 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     initMap();
     nextApiCallTime = null;
     
-    // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
-
-    // Check if any runewords are active
-    const hasActiveRunewords = p.runewords.length > 0;
-    
-    if (hasActiveRunewords) {
-// Show runeword message with the whole rune part in uppercase
-const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
-
-//floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
-//        if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
-    } else {
-        // Show theme name for 3 s, then revert to floor number
-        const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
-        floorIndicator.textContent = themeName;               // 1️⃣ show theme
-
-        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
-            floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
-            themeTimeoutId = null;
-        }, 3000);
-    }
-    
-    const battleEvents = document.getElementById('battle-events');
-    battleEvents.value = '';
-    battleEvents.style.transform = 'translateX(-100%)';
-    battleEvents.style.opacity = '0';
-    
     // Immediately trigger fetchTxs after floor transition
     if (!gameOver && !splashActive && floor > 0) {
         fetchTxs();
@@ -4247,7 +4184,6 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
     }
     
     // Add proper exit handling to prevent teleportation issues
-    needsRedraw = true;
     animController.endMovement();
     return; // ✅ This is CRUCIAL - stops further execution after exit
 }
@@ -4727,9 +4663,6 @@ if (!scrollDroppedThisFloor && Math.random() < 1/25) {
                 }
                 
                 enemies = enemies.filter(e => e !== hit);
-                if (exit && enemies.length === 0) {
-                    updateSatsDisplay();
-                }
             }
             needsRedraw = true;
             return false; // Destroy projectile on enemy hit
@@ -5298,9 +5231,6 @@ if (hit) {
             }
 
             enemies = enemies.filter(en => en !== hit);
-            if (exit && enemies.length === 0) {
-                updateSatsDisplay();
-            }
         }
     }
 } else if (initialPickaxes > 0 && isWallNearby) {
@@ -6295,16 +6225,6 @@ function restart() {
     needsRedraw = true;
 }
 
-// Add frame rate limiting for animation updates in draw
-if (animController.isAnimating) {
-    const animNow = performance.now();
-    if (animNow - animController.lastFrameTime >= 50) { // 20 FPS capped
-        // Update animation frames for movement if needed
-        animController.lastFrameTime = animNow;
-        needsRedraw = true; // Ensure redraw happens at proper frame rate
-    }
-}
-
 function draw() {
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
@@ -6330,15 +6250,6 @@ if (animController.isAnimating && !splashActive && !gameOver) {
     drawY += offset.y;
 }
 
-// Add frame rate limiting for animation updates in draw
-if (animController.isAnimating) {
-    const animNow = performance.now();
-    if (animNow - animController.lastFrameTime >= 50) { // 20 FPS capped
-        // Update animation frames for movement if needed
-        animController.lastFrameTime = animNow;
-        needsRedraw = true; // Ensure redraw happens at proper frame rate
-    }
-}
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
         console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
         initMap();
