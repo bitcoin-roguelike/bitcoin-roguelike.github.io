@@ -1901,6 +1901,44 @@ hideout: new Audio('hideout.mp3'),
     buzz: { buffer: null, url: 'buzz.wav', isPlaying: false, duration: 1000 }
 };
 
+// Volume control
+let soundVolume = localStorage.getItem('soundVolume') || 1.0;
+let musicVolume = localStorage.getItem('musicVolume') || 1.0;
+
+function setSoundVolume(volume) {
+    soundVolume = Math.max(0, Math.min(1, volume));
+    localStorage.setItem('soundVolume', soundVolume);
+    
+    // Update all sound volumes
+    Object.entries(sounds).forEach(([key, sound]) => {
+        // Skip music tracks which are handled by musicManager
+        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout') {
+            return; // Skip music tracks
+        }
+        if (sound.buffer) {
+            // Web Audio sounds need to be handled via gain nodes - we'll handle this in playWebAudioSound
+            return;
+        }
+        if (sound instanceof Audio) {
+            sound.volume = soundVolume;
+        }
+    });
+}
+
+function setMusicVolume(volume) {
+    musicVolume = Math.max(0, Math.min(1, volume));
+    localStorage.setItem('musicVolume', musicVolume);
+    
+    // Update music manager volume
+    if (musicManager) {
+        musicManager.volume = musicVolume;
+        if (musicManager.current && musicManager.audios[musicManager.current]) {
+            const currentAudio = musicManager.audios[musicManager.current];
+            currentAudio.volume = musicManager.muted ? 0 : musicVolume;
+        }
+    }
+}
+
 // Load Web Audio buffers
 function loadSoundBuffer(url, key) {
     fetch(url)
@@ -1940,6 +1978,7 @@ class MusicManager {
     Object.values(this.audios).forEach(audio => {
       audio.loop = true;
       audio.onerror = () => console.error(`Failed to load music: ${audio.src}`);
+      audio.volume = musicVolume; // Set initial volume from global
     });
   }
   play(theme) {
@@ -1954,7 +1993,7 @@ class MusicManager {
     if (this.current) {
       this.fadeOut(this.audios[this.current]);
     }
-audio.volume = this.muted ? 0 : 1; // Set initial volume based on muted state
+audio.volume = this.muted ? 0 : musicVolume; // Set initial volume based on muted state
 audio.muted = this.muted;
 audio.play().catch(e => console.error('Music play failed:', e));
 if (!this.muted) {
@@ -1988,6 +2027,7 @@ if (!this.muted) {
     this.muted = muted;
     if (this.current) {
       this.audios[this.current].muted = muted;
+      this.audios[this.current].volume = muted ? 0 : musicVolume;
     }
   }
 }
@@ -2014,12 +2054,12 @@ function preloadSounds() {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
                     const tempAudio = new Audio(instance.src);
-                    tempAudio.volume = 1.0; // Set normal volume for later use
+                    tempAudio.volume = soundVolume; // Set volume from global setting
                 });
             } else if (sound instanceof Audio && sound.src) {
                 // Create a new Audio object to trigger caching
                 const tempAudio = new Audio(sound.src);
-                tempAudio.volume = 1.0;
+                tempAudio.volume = soundVolume;
             }
         });
 } else {
@@ -2029,20 +2069,20 @@ function preloadSounds() {
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
-                    instance.volume = 0; // Mute for preloading
+                    instance.volume = soundVolume; // Set volume from global setting
                     instance.play().then(() => {
                         instance.pause();
                         instance.currentTime = 0;
-                        instance.volume = 1.0;
+                        instance.volume = soundVolume;
                     }).catch(e => console.error(`Preload sound error for ${instance.src}:`, e));
                 }
             });
         } else if (sound instanceof Audio && sound.src) {
-            sound.volume = 0;
+            sound.volume = soundVolume; // Set volume from global setting
             sound.play().then(() => {
                 sound.pause();
                 sound.currentTime = 0;
-                sound.volume = 1.0;
+                sound.volume = soundVolume;
             }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
         }
     });
@@ -2065,7 +2105,7 @@ function playWebAudioSound(soundObj) {
     const source = audioContext.createBufferSource();
     source.buffer = soundObj.buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = 1.0; // Max volume
+    gainNode.gain.value = soundVolume; // Use global sound volume setting
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -5418,6 +5458,10 @@ checkRunewords();
         }
     }
     addTerminalLineToContent(`Runes: ${displayRunes}`);
+    addTerminalLineToContent('');
+//    addTerminalLineToContent('--- Audio Settings ---');
+//    addTerminalLineToContent(`Sound Volume: ${(soundVolume * 100).toFixed(0)}%`);
+//    addTerminalLineToContent(`Music Volume: ${(musicVolume * 100).toFixed(0)}%`);
     addTerminalLineToContent('_____________________');
     addTerminalLineToContent('Type "help" for help.');
 }
@@ -5441,25 +5485,32 @@ function processSoulCommand(command) {
 case 'ls':
             updateSoulTerminalInventory();
             break;
-        case 'clear':
+case 'clear':
             const clearContent = document.getElementById('soul-terminal-content');
-            clearContent.innerHTML = '';
-            addTerminalLineToContent('Soul Terminal ver 1.0');
-            addTerminalLineToContent('_____________________');
-    	    addTerminalLineToContent('Type "help" for help.');
+            // Check if there are arguments after 'clear'
+            if (args.length > 0) {
+                // Join all arguments with spaces to create the ASCII art text
+                const asciiText = args.join(' ');
+                // Create a simple ASCII art effect by displaying each character
+                clearContent.innerHTML = '';
+                addTerminalLineToContent(asciiText.padEnd(54));
+            } else {
+                clearContent.innerHTML = '';
+            }
             break;
         case 'exit':
             closeSoulTerminal();
             return;
-        case 'help':
-            addTerminalLineToContent('Available commands:');
-            addTerminalLineToContent('  ls          - View inventory');
-            addTerminalLineToContent('  clear       - Clear screen');
-            addTerminalLineToContent('  convert     - Convert soul items');
-            addTerminalLineToContent('  exit        - Exit terminal');
-            addTerminalLineToContent('_____________________');
-            addTerminalLineToContent('Type "help" for help.');
-            break;
+case 'help':
+    addTerminalLineToContent('Available commands:');
+    addTerminalLineToContent('  ls ------ View inventory');
+    addTerminalLineToContent('  convert - Convert soul items');
+    addTerminalLineToContent('  set ----- Settings');
+    addTerminalLineToContent('  clear --- Clear screen');
+    addTerminalLineToContent('  exit ---- Exit terminal');
+    addTerminalLineToContent('_____________________');
+    addTerminalLineToContent('Type "help" for help.');
+    break;
 case 'convert':
             if (args.length === 0) {
                 addTerminalLineToContent('Usage: convert stones');
@@ -5541,6 +5592,66 @@ case 'convert':
                 }
             }
             break;
+case 'set':
+    if (args.length === 0) {
+        addTerminalLineToContent('Settings:');
+        addTerminalLineToContent('  set sound ------ Control sound volume');
+        addTerminalLineToContent('  set music ------ Control music volume');
+        addTerminalLineToContent('_____________________');
+        addTerminalLineToContent('Type "help" for help.');
+    } else {
+        const subCmd = args[0].toLowerCase();
+        switch (subCmd) {
+            case 'sound':
+                if (args.length < 2) {
+                    addTerminalLineToContent('Usage: set sound [volume]');
+                    addTerminalLineToContent('Example: set sound 50');
+                } else {
+                    const volume = parseFloat(args[1]);
+                    if (isNaN(volume) || volume < 0 || volume > 100) {
+                        addTerminalLineToContent('ERROR!');
+                        addTerminalLineToContent('Usage: set sound [volume]');
+                        addTerminalLineToContent('Example: set sound 50');
+                        addTerminalLineToContent('_____________________');
+                        addTerminalLineToContent('Type "help" for help.');
+                    } else {
+                        setSoundVolume(volume / 100);
+                        addTerminalLineToContent(`Sound volume set to ${(soundVolume * 100).toFixed(0)}%`);
+                        addTerminalLineToContent('_____________________');
+                        addTerminalLineToContent('Type "help" for help.');
+                    }
+                }
+                break;
+            case 'music':
+                if (args.length < 2) {
+                    addTerminalLineToContent('Usage: set music [volume]');
+                    addTerminalLineToContent('Example: set music 75');
+                } else {
+                    const volume = parseFloat(args[1]);
+                    if (isNaN(volume) || volume < 0 || volume > 100) {
+                        addTerminalLineToContent('ERROR!');
+                        addTerminalLineToContent('Usage: set music [volume]');
+                        addTerminalLineToContent('Example: set music 75');
+                        addTerminalLineToContent('_____________________');
+                        addTerminalLineToContent('Type "help" for help.');
+                    } else {
+                        setMusicVolume(volume / 100);
+                        addTerminalLineToContent(`Music volume set to ${(musicVolume * 100).toFixed(0)}%`);
+                        addTerminalLineToContent('_____________________');
+                        addTerminalLineToContent('Type "help" for help.');
+                    }
+                }
+                break;
+            default:
+                addTerminalLineToContent('ERROR!');
+                addTerminalLineToContent('Available commands:');
+                addTerminalLineToContent('  Usage: set sound       - Control sound volume');
+                addTerminalLineToContent('  Usage: set music       - Control music volume');
+                addTerminalLineToContent('_____________________');
+                addTerminalLineToContent('Type "help" for help.');
+        }
+    }
+    break;
         default:
             addTerminalLineToContent(`Command not found: ${cmd}`);
             addTerminalLineToContent('_____________________');
@@ -6011,6 +6122,9 @@ function restart() {
         }
 
         musicManager.mute(musicMuted); // Ensure proper mute state from localStorage
+        // Set initial volumes
+        setSoundVolume(soundVolume);
+        setMusicVolume(musicVolume);
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
@@ -6680,15 +6794,17 @@ currentTheme = 'dungeon'; // Force default theme on game start
                 musicManager.play(currentTheme); // Play music if AudioContext is already running
             }
         }
-            // Fix: Properly reset MusicManager state and ensure audio context is ready
+// Fix: Properly reset MusicManager state and ensure audio context is ready
     try {
         if (audioContext && audioContext.state === 'suspended') {
         musicManager.current = null;
             audioContext.resume();
         }
 
-        musicManager.mute(false); // Ensure unmuted
-        musicMuted = false;
+        musicManager.mute(musicMuted); // Ensure proper mute state from localStorage
+        // Set initial volumes
+        setSoundVolume(soundVolume);
+        setMusicVolume(musicVolume);
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
