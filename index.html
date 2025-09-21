@@ -2046,6 +2046,9 @@ function isIOSorSafari() {
 }
 
 function preloadSounds() {
+    // Save current volume before setting to 0
+    const savedSoundVolume = soundVolume;
+    
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
@@ -2054,12 +2057,12 @@ function preloadSounds() {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
                     const tempAudio = new Audio(instance.src);
-                    tempAudio.volume = soundVolume; // Set volume from global setting
+                    tempAudio.volume = 0; // Set volume to 0 during preload
                 });
             } else if (sound instanceof Audio && sound.src) {
                 // Create a new Audio object to trigger caching
                 const tempAudio = new Audio(sound.src);
-                tempAudio.volume = soundVolume;
+                tempAudio.volume = 0;
             }
         });
 } else {
@@ -2069,24 +2072,29 @@ function preloadSounds() {
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
-                    instance.volume = soundVolume; // Set volume from global setting
+                    instance.volume = 0; // Set volume to 0 during preload
                     instance.play().then(() => {
                         instance.pause();
                         instance.currentTime = 0;
-                        instance.volume = soundVolume;
+                        instance.volume = 0; // Keep at 0 during preload
                     }).catch(e => console.error(`Preload sound error for ${instance.src}:`, e));
                 }
             });
         } else if (sound instanceof Audio && sound.src) {
-            sound.volume = soundVolume; // Set volume from global setting
+            sound.volume = 0; // Set volume to 0 during preload
             sound.play().then(() => {
                 sound.pause();
                 sound.currentTime = 0;
-                sound.volume = soundVolume;
+                sound.volume = 0; // Keep at 0 during preload
             }).catch(e => console.error(`Preload sound error for ${sound.src}:`, e));
         }
     });
 }
+    
+    // Restore original volume after preloading is complete
+    setTimeout(() => {
+        setSoundVolume(savedSoundVolume);
+    }, 100);
 }
 
 function playWebAudioSound(soundObj) {
@@ -2201,9 +2209,13 @@ if (splashActive) {
         console.warn('Error resetting music manager:', e);
     }
     
-    // Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
-    setSoundVolume(0); // First time
-    setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
+// Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
+setSoundVolume(0); // First time
+setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -2215,13 +2227,17 @@ if (splashActive) {
     }
     
     // Set music volume to max when starting
-    if (musicManager.current) {
-        const currentAudio = musicManager.audios[musicManager.current];
-        if (currentAudio) {
-            currentAudio.currentTime = 0;
-            currentAudio.volume = 1;
-        }
+if (musicManager.current) {
+    const currentAudio = musicManager.audios[musicManager.current];
+    if (currentAudio) {
+        currentAudio.currentTime = 0;
+        currentAudio.volume = 1;
     }
+}
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
 });
 
 function toggleMute() {
@@ -6802,9 +6818,13 @@ if (splashActive) {
         console.warn('Error resetting music manager:', e);
     }
     
-    // Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
-    setSoundVolume(0); // First time
-    setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
+// Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
+setSoundVolume(0); // First time
+setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -6816,13 +6836,17 @@ if (splashActive) {
     }
     
     // Set music volume to max when starting
-    if (musicManager.current) {
-        const currentAudio = musicManager.audios[musicManager.current];
-        if (currentAudio) {
-            currentAudio.currentTime = 0;
-            currentAudio.volume = 1;
-        }
+if (musicManager.current) {
+    const currentAudio = musicManager.audios[musicManager.current];
+    if (currentAudio) {
+        currentAudio.currentTime = 0;
+        currentAudio.volume = 1;
     }
+}
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
 
             fadeSplash();
             setTimeout(() => {
