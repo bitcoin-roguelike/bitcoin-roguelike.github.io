@@ -1656,7 +1656,8 @@ const assets = {
     town_portal: [new Image(), new Image(), new Image()],
     soul_stash: new Image(),
     soul_stone: new Image(),
-    hooded_heirloom: new Image()
+    hooded_heirloom: new Image(),
+    soul_orb_statue: new Image()
 };
 
 // Initialize sprite frames for all enemy types
@@ -1773,6 +1774,7 @@ types.forEach(t => {
 	assets.themes.hideout.floor.src = 'town_floor.png';
 	assets.themes.hideout.wall.src = 'town_wall.png';
 	assets.themes.hideout.diamond_wall.src = 'diamond_wall.png';
+	assets.soul_orb_statue.src = 'soul_orb_statue.png';
 	assets.jeweller.src = 'jeweller.png';
 	assets.blacksmith.src = 'blacksmith.png';
 	assets.waypoint.src = 'waypoint.png';
@@ -2209,9 +2211,8 @@ if (splashActive) {
         console.warn('Error resetting music manager:', e);
     }
     
-// Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
-setSoundVolume(0); // First time
-setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
+// Set music volume to 0 when restarting
+setSoundVolume(0);
 // Restore sound volume after preloading
 setTimeout(() => {
     setSoundVolume(soundVolume);
@@ -2790,6 +2791,41 @@ if (!inHideout) {
         }
     }
 }
+
+// After placing soul stash, spawn soul orb statues
+if (!inHideout && floor > 1) { // Don't spawn on floor 1 to avoid conflicts
+	// Add soul orb statue spawning logic here
+	function spawnSoulOrbStatue() {
+		if (inHideout) return; // Don't spawn in hideout
+		
+		// 5% chance to spawn a soul orb statue
+		if (Math.random() < 0.05) {
+			let attempts = 0;
+			const maxAttempts = 50;
+			
+			do {
+				let x = Math.floor(Math.random() * W);
+				let y = Math.floor(Math.random() * H);
+				
+				// Ensure it's a floor tile, not a wall, not occupied by player or items
+				if (map[y][x] === 0 && 
+					!(x === p.x && y === p.y) &&
+					!enemies.some(e => e.x === x && e.y === y) &&
+					!satoshiDrops.some(d => d.x === x && d.y === y) &&
+					!runeDrops.some(r => r.x === x && r.y === y) &&
+					!scrollDrops.some(s => s.x === x && s.y === y) &&
+					!portals.some(p => p.x === x && p.y === y)) {
+					
+					map[y][x] = 21; // Soul orb statue tile
+					return {x, y};
+				}
+				attempts++;
+			} while (attempts < maxAttempts);
+		}
+	}
+	spawnSoulOrbStatue();
+}
+
         exit = null;
         initialWaveSpawned = false;
         needsRedraw = true;
@@ -3549,7 +3585,7 @@ function isSolid(x, y) {
     return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
 }
 
-// Animation controller for movement timing with 20 FPS capped animation
+// New animation controller with 20 FPS capped animation
 class AnimationController {
     constructor() {
         this.movementStartTime = 0;
@@ -4290,6 +4326,28 @@ if (map[ny][nx] === 19 && !inHideout) { // Soul stash tile
     openSoulTerminal();
     animController.endMovement();
     return;
+}
+
+// Add soul orb statue interaction
+if (map[ny][nx] === 21 && !inHideout) { // Soul orb statue tile
+	// Check if player already collected from this statue on current floor
+	const currentFloorStatueKey = `statue_${floor}_${nx}_${ny}`;
+	if (!p.collectedFromStatue || !p.collectedFromStatue[currentFloorStatueKey]) {
+		p.soulOrbs++;
+		logBattleEvent(`Block 74638: You received 1 Soul Orb!`);
+		if (!p.collectedFromStatue) {
+			p.collectedFromStatue = {};
+		}
+		p.collectedFromStatue[currentFloorStatueKey] = true;
+		//map[ny][nx] = 0; // Remove statue after collection
+		playWebAudioSound(sounds.buzz);
+		updatePlayerState();
+	} else {
+		logBattleEvent(`Seek the masked relics’ refuge, where souls gather.`);
+		needsRedraw = true;
+	}
+	animController.endMovement();
+	return;
 }
         
 if (map[ny][nx] === 20) { // Soul stone tile
@@ -6237,7 +6295,16 @@ function restart() {
     needsRedraw = true;
 }
 
-// Add to draw function for visual movement effect
+// Add frame rate limiting for animation updates in draw
+if (animController.isAnimating) {
+    const animNow = performance.now();
+    if (animNow - animController.lastFrameTime >= 50) { // 20 FPS capped
+        // Update animation frames for movement if needed
+        animController.lastFrameTime = animNow;
+        needsRedraw = true; // Ensure redraw happens at proper frame rate
+    }
+}
+
 function draw() {
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
@@ -6385,6 +6452,9 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         }
         if (map[y][x] === 20) { // Soul Stone
             c.drawImage(assets.soul_stone, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 21) { // Soul Orb Statue
+            c.drawImage(assets.soul_orb_statue, x * S, y * S, S, S);
         }
         if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
     }
@@ -6748,8 +6818,16 @@ function gameLoop(timestamp) {
         }
         needsRedraw = true;
     }
+    
     updateProjectiles();
-    if ((needsRedraw || p.hp <= 8) && !splashActive) draw();
+    
+    // Check for invisible health warning animation (activated at above 8 HP)
+    const showInvisibleHealthWarning = p.hp > 8; // Trigger animation at higher threshold
+    
+    if ((needsRedraw || p.hp <= 8 || showInvisibleHealthWarning) && !splashActive) {
+        draw();
+    }
+    
 // Final death check (after all updates)
 if (p.hp <= 0 && !gameOver) {
     if (p.immortal) {
@@ -6818,9 +6896,8 @@ if (splashActive) {
         console.warn('Error resetting music manager:', e);
     }
     
-// Set music volume to 0 when restarting - RUN TWICE AS REQUESTED
-setSoundVolume(0); // First time
-setSoundVolume(0); // Second time - ensures all sounds are properly muted including buzz
+// Set music volume to 0 when restarting
+setSoundVolume(0);
 // Restore sound volume after preloading
 setTimeout(() => {
     setSoundVolume(soundVolume);
@@ -6957,6 +7034,17 @@ document.addEventListener('keyup', e => {
         keyStates[e.key] = false;
     }
 });
+
+// Add a global animation update for continuous animation when player moves or health changes
+function animateHealthWarning() {
+    // This function will be called periodically to trigger invisible animations
+    if (p.hp > 8 && !gameOver && !splashActive) {
+        needsRedraw = true;
+    }
+}
+
+// Set up interval for invisible health warning animation updates
+setInterval(animateHealthWarning, 100); // Update every 100ms when health is above threshold
 
 document.getElementById('game-over').addEventListener('click', (event) => {
     if (
@@ -7166,7 +7254,6 @@ function startGame() {
         }
     }, 2000); // Match original start-button delay
 }
-
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
     if (gamepadIndex === null) {
