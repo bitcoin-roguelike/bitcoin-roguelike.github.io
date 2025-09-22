@@ -3099,7 +3099,7 @@ if (!p.hasDiamondArmor && p.hasDiamondHand) {
 }
 
 function updateFogMap(px, py) {
-    const radius = 4; // Visibility radius
+    const radius = 3; // Visibility radius
     
     // Quick optimization: Only process tiles within radius and visible from player
     const start_x = Math.max(0, px - radius);
@@ -4176,6 +4176,35 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     document.getElementById('wave').textContent = wave;
     initMap();
     nextApiCallTime = null;
+
+    // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+
+    // Check if any runewords are active
+    const hasActiveRunewords = p.runewords.length > 0;
+    
+    if (hasActiveRunewords) {
+// Show runeword message with the whole rune part in uppercase
+const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
+
+//floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
+//        if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+    } else {
+        // Show theme name for 3 s, then revert to floor number
+        const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
+        floorIndicator.textContent = themeName;               // 1️⃣ show theme
+
+        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+            floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+            themeTimeoutId = null;
+        }, 3000);
+    }
+    
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value = '';
+    battleEvents.style.transform = 'translateX(-100%)';
+    battleEvents.style.opacity = '0';
     
     // Immediately trigger fetchTxs after floor transition
     if (!gameOver && !splashActive && floor > 0) {
@@ -4279,7 +4308,7 @@ if (map[ny][nx] === 21 && !inHideout) { // Soul orb statue tile
 		playWebAudioSound(sounds.buzz);
 		updatePlayerState();
 	} else {
-		logBattleEvent(`Seek the masked relics’ refuge, where souls gather.`);
+		logBattleEvent(`Block 74638: Seek the masked relics’ refuge, where souls gather.`);
 		needsRedraw = true;
 	}
 	animController.endMovement();
@@ -7647,3 +7676,4 @@ document.addEventListener('keydown', function (e) {
     </script>
 </body>
 </html>
+
