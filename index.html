@@ -3740,8 +3740,14 @@ if (map[ny][nx] === 6 && !inHideout) {
             logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
             playWebAudioSound(sounds.pickup);
         }
-    }
-            
+        // Additional condition for armor users with less than 36 HP
+        else if (p.hasArmor && p.hp < 36) {
+            const oldHP = p.hp;
+            p.hp = 36; // Fill up to 36 HP for armor-wearing players
+            logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
+            playWebAudioSound(sounds.pickup);
+        }
+    }       
             // If p.hp > 36, do nothing and continue
             
             // Desert – Sludge pit
