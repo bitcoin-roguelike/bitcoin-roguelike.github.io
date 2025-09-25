@@ -834,264 +834,148 @@ button:hover {
             </div>
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.10.0/dist/axios.min.js"></script>
     <script>
 
 const names = [
-    "Acrocanthosaurus",
-    "Aerith",
-    "Agilisaurus",
-    "Albertosaurus",
-    "Alex",
-    "Allosaurus",
-    "Alucard",
-    "Ankylosaur",
-    "Ankylosaurus",
-    "Apatosaurus",
-    "Argentinosaurus",
-    "Attak Trak",
-    "Azeroth",
-    "Barret",
-    "Bashasaurus",
-    "Battle Cat",
-    "Battle Ram",
-    "Beast Man",
-    "Birdo",
-    "Blade",
-    "Blanka",
-    "Blaise",
-    "Blast-Attak",
-    "Bomberman",
-    "Bowser",
-    "Brachiosaurus",
-    "Bronto",
-    "Brontosaurus",
-    "Brother",
-    "Bub",
-    "Bubblun",
-    "Buzz-Off",
-    "Cait Sith",
-    "Camptosaurus",
-    "Captain Falcon",
-    "Carnotaurus",
-    "Castle Grayskull",
-    "Catra",
-    "Cecil",
-    "Centrosaurus",
-    "Ceratosaurus",
-    "Chasmosaurus",
-    "Chocobo",
-    "Chuck Norris",
-    "Chun-Li",
-    "Cid",
-    "Clawful",
-    "Clubtail",
-    "Coelophysis",
-    "Compsognathus",
-    "Corythosaurus",
-    "Cringer",
-    "Daspletosaurus",
-    "Deinonychus",
-    "Dhalsim",
-    "Diddy Kong",
-    "Dig Dug",
-    "Dilophosaurus",
-    "Diplodocus",
-    "Donkey Kong",
-    "Dr. Robotnik",
-    "Dr. Wily",
-    "Dracorex",
-    "Dragon Walker",
-    "Dragstor",
-    "Dromaeosaurus",
-    "Dryosaurus",
-    "Edmontosaurus",
-    "Elasmosaurus",
-    "Entrapta",
-    "Eoraptor",
-    "Eternia",
-    "Evil-Lyn",
-    "Faker",
-    "Father",
-    "Fire Mario",
-    "Fisto",
-    "Fox McCloud",
-    "Frogger",
-    "Galaga",
-    "Gallimimus",
-    "Ganon",
-    "Gerden",
-    "Gorgosaurus",
-    "Goomba",
-    "Granamyr",
-    "Grayskull",
-    "Grizzlor",
-    "Guile",
-    "Gwildor",
-    "Hadrosaurus",
-    "Hammer Bro",
-    "He-Man",
-    "Herrerasaurus",
-    "Homalocephale",
-    "Hordak",
-    "Hypsilophodon",
-    "Ichthyosaurus",
-    "Iguanodon",
-    "Impa",
-    "Jitsu",
-    "Joanna Dark",
-    "Kain",
-    "Kentrosaurus",
-    "King",
-    "King Hiss",
-    "King K. Rool",
-    "King Randor",
-    "Kirby",
-    "Knuckles",
-    "Kobra Khan",
-    "Koopa",
-    "Kraid",
-    "Kratos",
-    "Lakitu",
-    "Lambeosaurus",
-    "Leech",
-    "Leptoceratops",
-    "Lesothosaurus",
-    "Link",
-    "Lizard Man",
-    "Luigi",
-    "M. Bison",
-    "Maiasaura",
-    "Man-At-Arms",
-    "Man-E-Faces",
-    "Mario",
-    "Marth",
-    "Mantenna",
-    "Mega Man",
-    "Mekaneck",
-    "Mer-Man",
-    "Meta Knight",
-    "Microraptor",
-    "Modulok",
-    "Mosasaurus",
-    "Moss Man",
-    "Mother",
-    "Ms. Pac-Man",
-    "Multi-Bot",
-    "Nea",
-    "Ness",
-    "Night Stalker",
-    "Orko",
-    "Ornithomimus",
-    "Othnielia",
-    "Ouranosaurus",
-    "Oviraptor",
-    "Pac-Man",
-    "Pachycephalosaurus",
-    "Panthor",
-    "Parasaurolophus",
-    "Patrich",
-    "Peach",
-    "Peppy Hare",
-    "Plesiosaurus",
-    "Point Dread",
-    "Ponyo",
-    "Prenocephale",
-    "Prince Adam",
-    "Protoceratops",
-    "Proto Man",
-    "Psittacosaurus",
-    "Pteranodon",
-    "Pterodactyl",
-    "Q*bert",
-    "Queen Marlena",
-    "Raccoon Mario",
-    "Ram Man",
-    "Rambo",
-    "Raptor",
-    "Rattlor",
-    "Red XIII",
-    "Revolver Ocelot",
-    "Ridley",
-    "Road Ripper",
-    "Robo",
-    "Rocky",
-    "Rokkon",
-    "Rydia",
-    "Ryu",
-    "Sagat",
-    "Samus",
-    "Satoshi Nakamoto",
-    "Saurornithoides",
-    "Saurod",
-    "Scelidosaurus",
-    "Scorpia",
-    "Screeech",
-    "Scutellosaurus",
-    "Sephiroth",
-    "Shadow Weaver",
-    "Simon Belmont",
-    "Sinornithoides",
-    "Sinornitholestes",
-    "Sister",
-    "Skeletor",
-    "Slippy Toad",
-    "Snake Face",
-    "Snake Mountain",
-    "Solan",
-    "Solid Snake",
-    "Sonic",
-    "Sorceress",
-    "Spiketail",
-    "Spikor",
-    "Spinosaurus",
-    "Sssqueeze",
-    "Stego",
-    "Stegosaurus",
-    "Stinkor",
-    "Stonedar",
-    "Stratos",
-    "Stridor",
-    "Struthiomimus",
-    "Stygimoloch",
-    "Suchomimus",
-    "Sy-Klone",
-    "Tails",
-    "Talon Fighter",
-    "Tanooki Mario",
-    "Teela",
-    "Therizinosaurus",
-    "Tifa",
-    "Tingle",
-    "Titanosaur",
-    "Toad",
-    "Torosaurus",
-    "Trap Jaw",
-    "Triceratops",
-    "Tri-Klops",
-    "Troodon",
-    "Tsintaosaurus",
-    "Tung Lashor",
-    "Two Bad",
-    "Tyrannosaurus",
-    "T-Rex",
-    "Tytus",
-    "Utahraptor",
-    "Vega",
-    "Velociraptor",
-    "Vincent",
-    "Wario",
-    "Wart",
-    "Webstor",
-    "Whiplash",
-    "Wind Raider",
-    "Yoshi",
-    "Yuffie",
-    "Zangief",
-    "Zelda",
-    "Zero",
-    "Zoar"
+    "Alan-Soul",
+    "Alex-Cipher",
+    "Amanda-Quest",
+    "Amy-Crypt",
+    "Andrea-Haze",
+    "Andrew-Fury",
+    "Angela-Shade",
+    "Ann-Shadow",
+    "Anthony-Smog",
+    "Arthur-Sky",
+    "Ashley-Guild",
+    "Azeroth-Blade",
+    "Barbara-Storm",
+    "Benjamin-Bolt",
+    "Blaise-Crypt",
+    "Brian-Block",
+    "Brother-Void",
+    "Bruce-Ice",
+    "Carl-Fissure",
+    "Catherine-Dark",
+    "Charles-Claw",
+    "Cheryl-Vine",
+    "Christina-Spark",
+    "Christopher-Blade",
+    "Cindy-Breath",
+    "Craig-Mark",
+    "Crystal-Gale",
+    "Cynthia-Frost",
+    "Daniel-Hex",
+    "David-Rune",
+    "Deborah-Spear",
+    "Dennis-Pulse",
+    "Diane-Blood",
+    "Donald-Ward",
+    "Donna-Slash",
+    "Edward-Blaze",
+    "Elizabeth-Fog",
+    "Emily-Dusk",
+    "Eric-Iron",
+    "Eugene-Dream",
+    "Father-Rune",
+    "Frank-Tide",
+    "Gary-Grip",
+    "George-Drift",
+    "Gerden-Skull",
+    "Gregory-Doom",
+    "Heather-Knight",
+    "Helen-Fire",
+    "Howard-Wild",
+    "James-Miner",
+    "Jane-Trace",
+    "Janet-Spine",
+    "Jason-Void",
+    "Jeffrey-Glare",
+    "Jennifer-Vault",
+    "Jeremy-Rage",
+    "Jessica-Hash",
+    "Joan-Tempest",
+    "John-Flame",
+    "Jonathan-Mist",
+    "Joseph-Nexus",
+    "Joshua-Coin",
+    "Judith-Shock",
+    "Julie-Fade",
+    "Karen-Fell",
+    "Kathleen-Howl",
+    "Kelly-Wind",
+    "Kenneth-Glow",
+    "Kevin-Wisp",
+    "Kimberly-Grim",
+    "Kristin-Curse",
+    "Larry-Vortex",
+    "Laura-Veil",
+    "Lauren-Bane",
+    "Linda-Dawn",
+    "Lisa-Torch",
+    "Lori-Swarm",
+    "Maria-Crag",
+    "Mark-Wraith",
+    "Mary-Raven",
+    "Matt-Dread",
+    "Matthew-Shard",
+    "Megan-Sword",
+    "Melissa-Cipher",
+    "Michael-Chain",
+    "Michelle-Viper",
+    "Mother-Wraith",
+    "Nancy-Byte",
+    "Nathan-Bind",
+    "Nicole-Rift",
+    "Pamela-Node",
+    "Patrich-Hex",
+    "Patrick-Maze",
+    "Paul-Hawk",
+    "Philip-Wave",
+    "Ponyo-Shard",
+    "Rachel-Fang",
+    "Randy-Clash",
+    "Rebecca-Dust",
+    "Richard-Lore",
+    "Robert-Skull",
+    "Roger-Light",
+    "Ronald-Guard",
+    "Ruth-Vow",
+    "Ryan-Crow",
+    "Sarah-Ledger",
+    "Satoshi-Chain",
+    "Scott-Ghost",
+    "Sharon-Chill",
+    "Shawn-Trail",
+    "Sister-Gloom",
+    "Solan-Fury",
+    "Stephanie-Talon",
+    "Steve-Burst",
+    "Steven-Pool",
+    "Susan-Thorn",
+    "Terry-Edge",
+    "Theresa-Stone",
+    "Thomas-Gloom",
+    "Tiffany-Flux",
+    "Timothy-Night",
+    "Tina-Fall",
+    "Todd-Rush",
+    "Tony-Realm",
+    "Tracy-Wolf",
+    "Victoria-Seer",
+    "Walter-Hunt",
+    "William-Dagger"
 ];
+
+const uniqueMonsterNames = {
+    'Shrimp': ['Fire-Shrimp', 'Gray-Shrimp', 'Gut-Shrimp', 'Sharp-Shrimp', 'Sin-Shrimp', 'Spirit-Shrimp', 'Steel-Shrimp', 'Storm-Shrimp', 'Viper-Shrimp'],
+    'Crab': ['Blade-Crab', 'Death-Crab', 'Gloom-Crab', 'Mind-Crab', 'Ooze-Crab', 'Pit-Crab', 'Rust-Crab', 'Vile-Crab', 'Wind-Crab'],
+    'Squid': ['Chaos-Squid', 'Cold-Squid', 'Dire-Squid', 'Dragon-Squid', 'Gore-Squid', 'Mold-Squid', 'Puke-Squid', 'Soul-Squid', 'Warp-Squid'],
+    'Dolphin': ['Black-Dolphin', 'Blight-Dolphin', 'Demon-Dolphin', 'Dread-Dolphin', 'Flesh-Dolphin', 'Night-Dolphin', 'Seethe-Dolphin', 'Snot-Dolphin', 'Wrath-Dolphin'],
+    'Shark': ['Bile-Shark', 'Bone-Shark', 'Doom-Shark', 'Grief-Shark', 'Moon-Shark', 'Plague-Shark', 'Pox-Shark', 'Shadow-Shark', 'Sharp-Shark'],
+    'Whale': ['Ash-Whale', 'Bane-Whale', 'Blood-Whale', 'Fester-Whale', 'Foul-Whale', 'Haze-Whale', 'Rot-Whale', 'Spine-Whale', 'Star-Whale']
+};
 
 // Show info message
 function showInfo() {
@@ -1479,6 +1363,8 @@ let highlightTiles = [];
 let activatedRunewords = [];
 let lastDrawTime = null;
 let borderLastUpdate = null;
+let activeUniqueMonsterName = null;
+let shrinePositions = [];
 let map = [],
     p = {
         x: 2,
@@ -1513,6 +1399,11 @@ let map = [],
             lastFrameTime: 0,
             frameDuration: 200
         },
+	// Add shrine charge tracking
+	shrineCharges: 0,
+	maxShrineCharges: 24,
+	shrineUsedThisFloor: false, // Track if shrine was used on this floor
+	
         // Add soul system properties
         soulStones: 0,
         soulShards: 0,
@@ -1524,6 +1415,7 @@ let map = [],
         soulTerminalActive: false, // Whether soul terminal is currently open
         // Add diamond hand properties
         hasDiamondHand: false, // Track if player has diamond hand
+        moveCounter: 0,
     }, 
     enemies = [], 
     rooms = [];
@@ -1657,7 +1549,8 @@ const assets = {
     soul_stash: new Image(),
     soul_stone: new Image(),
     hooded_heirloom: new Image(),
-    soul_orb_statue: new Image()
+    soul_orb_statue: new Image(),
+    shrine: new Image()
 };
 
 // Initialize sprite frames for all enemy types
@@ -1775,6 +1668,7 @@ types.forEach(t => {
 	assets.themes.hideout.wall.src = 'town_wall.png';
 	assets.themes.hideout.diamond_wall.src = 'diamond_wall.png';
 	assets.soul_orb_statue.src = 'soul_orb_statue.png';
+	assets.shrine.src = 'shrine.png';
 	assets.jeweller.src = 'jeweller.png';
 	assets.blacksmith.src = 'blacksmith.png';
 	assets.waypoint.src = 'waypoint.png';
@@ -1900,7 +1794,8 @@ hideout: new Audio('hideout.mp3'),
     rune_drop: { buffer: null, url: 'rune_drop.wav', isPlaying: false, duration: 1000 },
     hole: { buffer: null, url: 'hole.wav', isPlaying: false, duration: 745 },
     town_portal: { buffer: null, url: 'town_portal.wav', isPlaying: false, duration: 535 },
-    buzz: { buffer: null, url: 'buzz.wav', isPlaying: false, duration: 1000 }
+    buzz: { buffer: null, url: 'buzz.wav', isPlaying: false, duration: 1000 },
+    unique_monster: { buffer: null, url: 'unique_monster.wav', isPlaying: false, duration: 1400 }
 };
 
 // Volume control
@@ -1963,6 +1858,7 @@ loadSoundBuffer('rune_drop.wav', 'rune_drop');
 loadSoundBuffer('hole.wav', 'hole');
 loadSoundBuffer('town_portal.wav', 'town_portal');
 loadSoundBuffer('buzz.wav', 'buzz');
+loadSoundBuffer('unique_monster.wav', 'unique_monster');
 
 class MusicManager {
   constructor() {
@@ -2054,7 +1950,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz') return; // Skip music and Web Audio sounds
+            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz' || key === 'unique_monster') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -2070,7 +1966,7 @@ function preloadSounds() {
 } else {
     // Non-iOS: Existing preload logic
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz') return; // Skip music and Web Audio sounds
+        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz' || key === 'unique_monster') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
@@ -2180,7 +2076,34 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashImg.src = currentSplashImage;
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
-    
+
+wakeLock = null;
+
+// Function to request wake lock
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake lock activated');
+      wakeLock.addEventListener('release', () => {
+        console.log('Wake lock released');
+      });
+    } else {
+      console.warn('Wake Lock API not supported in this browser. Adjust OS power settings manually.');
+      alert('Wake Lock not supported. To prevent sleep, disable screen timeout in your OS settings or play a silent audio loop.');
+    }
+  } catch (err) {
+    console.error('Wake lock error:', err);
+  }
+}
+
+// Re-request wake lock if visibility changes (e.g., tab switch)
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+});
+
 if (splashActive) {
         preloadSounds();
         // Ensure AudioContext is resumed for iOS
@@ -2220,6 +2143,7 @@ setTimeout(() => {
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
+                requestWakeLock();  // ← Add this to request wake lock on game start
                 fetchTxs();
                 lastUpdate = Date.now();
                 console.log('Initial fetchTxs triggered after splash, wave=', wave);
@@ -2426,6 +2350,21 @@ function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer
     }
 
     return positions;
+}
+
+function playUniqueMonsterSound(uniqueName) {
+    // Check if we have a unique monster sound file
+    if (isIOSorSafari()) {
+        // iOS/Safari version - use existing audio handling
+        const audio = sounds.unique_monster;
+        if (audio && audio.src) {
+            audio.currentTime = 0;
+            audio.play().catch(e => console.error('Unique monster sound error:', e));
+        }
+    } else {
+        // Non-iOS version - use Web Audio
+        playWebAudioSound(sounds.unique_monster);
+    }
 }
 
 function initMap() {
@@ -2826,9 +2765,39 @@ if (!inHideout && floor > 1) { // Don't spawn on floor 1 to avoid conflicts
 	spawnSoulOrbStatue();
 }
 
+// In the initMap function where items are placed, add shrine placement:
+// Place shrine (20% chance, except in hideout)
+if (!inHideout && Math.random() < 0.20) {
+    let attempts = 0;
+    const maxAttempts = 50;
+    
+    do {
+        let x = Math.floor(Math.random() * W);
+        let y = Math.floor(Math.random() * H);
+        
+        // Ensure it's a floor tile, not a wall, not occupied by player or items
+        if (map[y][x] === 0 && 
+            !(x === p.x && y === p.y) &&
+            !enemies.some(e => e.x === x && e.y === y) &&
+            !satoshiDrops.some(d => d.x === x && d.y === y) &&
+            !runeDrops.some(r => r.x === x && r.y === y) &&
+            !scrollDrops.some(s => s.x === x && s.y === y) &&
+            !portals.some(p => p.x === x && p.y === p.y)) {
+            
+            map[y][x] = 22; // Shrine tile
+            shrinePositions.push({x, y});
+            break;
+        }
+        attempts++;
+    } while (attempts < maxAttempts);
+}
+
         exit = null;
         initialWaveSpawned = false;
         needsRedraw = true;
+
+        // Reset shrine usage tracking for new floor
+        p.shrineUsedThisFloor = false;
 
         // Check runewords at floor start
         checkRunewordsAtFloorStart();
@@ -3136,11 +3105,12 @@ let lastKeyMoveTime = 0; // Track last keyboard move time
 let pendingKeyDir = null; // Track latest keyboard direction
 let isKeyHeld = false; // Track if a key is held
 let enemiesSpawnedThisFloor = 0;
+let uniqueMonstersSpawnedThisFloor = 0; // Track unique monsters spawned this floor
 let scrollDroppedThisFloor = false; // Track if a scroll has dropped on this floor
 let nextApiCallTime = null;
 let initialSpawnDoneThisFloor = false;
 let apiTimeoutId = null;
-const API_INTERVAL = 20000; // 20 seconds
+const API_INTERVAL = 30000; // 30 seconds
 
 function shouldSpawn() {
   // If we are in hideout, or we have just stepped into it, abort.
@@ -3270,7 +3240,36 @@ async function fetchTxs() {
                   address, 
                   sats: Math.round(btc * 1e8) 
               };
-              
+    
+// I am starting to think 10% chance to spawn an unique monster actually means per regular enemy spawned (10%,10%,10%,10%,10%,10%,10%,10%,10%,10% instead of just 10%)
+if (floor > 1 && Math.random() < 0.10) {
+    const randomUniqueName = uniqueMonsterNames[type.name][Math.floor(Math.random() * uniqueMonsterNames[type.name].length)];
+    // Check if we've already spawned a unique monster of this type on this floor
+    const hasUniqueSpawned = enemies.some(e => e.uniqueName && 
+        e.uniqueName.includes(type.name) && 
+        !e.uniqueName.includes('Shrimp') || // Allow multiple Shrimp types
+        (type.name === 'Shrimp' && e.type.name === 'Shrimp'));
+    
+    if (!hasUniqueSpawned && uniqueMonstersSpawnedThisFloor < 1) {
+        newEnemy.uniqueName = randomUniqueName;
+        // Make unique monster stronger
+        newEnemy.atk = type.atk * 2;
+        newEnemy.hp = type.hp * 2;
+        
+        // Play unique monster sound on first spawn of this type
+        playUniqueMonsterSound(randomUniqueName);        
+        
+        logBattleEvent(`Floor ${floor} - Unique ${type.name} Spawn: ${btc.toFixed(2)} BTC`);
+        uniqueMonstersSpawnedThisFloor++;
+    } else {
+        const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
+        logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+    }
+} else {
+    const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
+    logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+}
+          
               if (!validPosition) {
                   // Fallback: try any floor tile in any room
                   for (let r of rooms) {
@@ -3640,6 +3639,21 @@ function move(dir) {
     if (dir === 'left') { nx--; newDirection = 'left'; }
     if (dir === 'right') { nx++; newDirection = 'right'; }
 
+// In the move function, before updating position:
+p.moveCounter++;
+if (p.moveCounter >= 2) {
+    if (p.shrineCharges > 0) {
+        p.hp++;
+        p.shrineCharges--;
+        // Log only every 8 charges spent to reduce spam
+        if ((p.maxShrineCharges - p.shrineCharges) % 8 === 0) {
+            logBattleEvent(`Floor ${floor} - Shrine refills health! (${p.shrineCharges}/${p.maxShrineCharges})`);
+        }
+        updatePlayerState();
+    }
+    p.moveCounter = 0;
+}
+
     // Validate move before starting animation
     if (nx < 0 || nx >= W || ny < 0 || ny >= H || isSolid(nx, ny)) {
         p.anim.direction = newDirection; // Update direction for rendering
@@ -3717,15 +3731,16 @@ if (animController.isAnimating) {
             playWebAudioSound(sounds.pickup);
         }
         
-        if (map[ny][nx] === 6 && !inHideout) {
-            if (currentTheme === 'paradise') {
-                if (p.hp <= 36) {
-                    const oldHP = p.hp;
-                    p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
-                    logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
-                    playWebAudioSound(sounds.pickup);
-                }
-            }
+if (map[ny][nx] === 6 && !inHideout) {
+    if (currentTheme === 'paradise') {
+        // Only restore HP if we're below the threshold
+        if (p.hp < 24) {  // Or use p.hp < 36 if that's your desired cutoff
+            const oldHP = p.hp;
+            p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
+            logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
+            playWebAudioSound(sounds.pickup);
+        }
+    }
             
             // If p.hp > 36, do nothing and continue
             
@@ -4154,6 +4169,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     }
     
     enemiesSpawnedThisFloor = 0;
+    uniqueMonstersSpawnedThisFloor = 0; // Reset unique monster spawn counter
     initialSpawnDoneThisFloor = false;
     enemies = [];
     floor++;
@@ -4293,6 +4309,18 @@ if (map[ny][nx] === 19 && !inHideout) { // Soul stash tile
     return;
 }
 
+// In the move function, add shrine pickup logic:
+if (map[ny][nx] === 22 && !inHideout) { // Shrine tile
+    if (!p.shrineUsedThisFloor) {
+        p.shrineCharges = 24; // Give 24 charges immediately
+        p.shrineUsedThisFloor = true; // Mark that shrine was used on this floor
+        logBattleEvent(`Floor ${floor} - Shrine charges activated! (24/24 charges)`);
+        playWebAudioSound(sounds.pond);
+    } else {
+        logBattleEvent(`Floor ${floor} - Shrine already used this floor!`);
+    }
+}
+
 // Add soul orb statue interaction
 if (map[ny][nx] === 21 && !inHideout) { // Soul orb statue tile
 	// Check if player already collected from this statue on current floor
@@ -4415,23 +4443,91 @@ if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
             }
         }
 
-        // Check if player moved from a rune tile
-        if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
-            const floorIndicator = document.getElementById('floor-indicator');
-            if (floorIndicator.textContent.startsWith("Rune Found:") || 
-                floorIndicator.textContent.startsWith("Rune:")) {
-                // Reset to normal floor text if leaving rune tile
-                setTimeout(() => {
-                    // Double-check that player is still not on a rune tile before resetting
-                    const stillOnRuneTile = map[p.y][p.x] === 9 && 
-                        runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
-                    
-                    if (!stillOnRuneTile) {
-                        floorIndicator.textContent = `Floor ${floor}`;
-                    }
-                }, 100); // Small delay to prevent flicker
+// Check for unique monster in fog of war
+function checkUniqueMonsterInFog() {
+    if (activeUniqueMonsterName) return;
+    
+    const visibleUniqueMonsters = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 1);
+    
+    if (visibleUniqueMonsters.length > 0 && !activeUniqueMonsterName) {
+        const firstVisible = visibleUniqueMonsters[0];
+        activeUniqueMonsterName = firstVisible.uniqueName;
+        
+        // Show unique monster name in floor indicator
+        const floorIndicator = document.getElementById('floor-indicator');
+        floorIndicator.textContent = activeUniqueMonsterName;
+        
+        // Auto-clear after 5 seconds like Harbringer message
+        setTimeout(() => {
+            if (activeUniqueMonsterName === firstVisible.uniqueName) {
+                activeUniqueMonsterName = null;
+                const currentText = floorIndicator.textContent;
+                if (currentText === activeUniqueMonsterName || 
+                    currentText.includes(firstVisible.uniqueName)) {
+                    floorIndicator.textContent = `Floor ${floor}`;
+                }
             }
-        }
+        }, 5000);
+    }
+}
+
+// Check for unique monster in fog of war when moving
+// Only check when we DON'T have an active unique monster name
+if (!activeUniqueMonsterName) {
+    const visibleUniqueMonsters = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 1);
+    
+    if (visibleUniqueMonsters.length > 0) {
+        const firstVisible = visibleUniqueMonsters[0];
+        activeUniqueMonsterName = firstVisible.uniqueName;
+        
+        // Show unique monster name in floor indicator
+        const floorIndicator = document.getElementById('floor-indicator');
+        floorIndicator.textContent = activeUniqueMonsterName;
+        
+        // Auto-clear after 5 seconds like Harbringer message
+        setTimeout(() => {
+            if (activeUniqueMonsterName === firstVisible.uniqueName) {
+                activeUniqueMonsterName = null;
+                const currentText = floorIndicator.textContent;
+                if (currentText === activeUniqueMonsterName || 
+                    currentText.includes(firstVisible.uniqueName)) {
+                    floorIndicator.textContent = `Floor ${floor}`;
+                }
+            }
+        }, 5000);
+    }
+}
+
+// Check for unique monster in fog of war
+const uniqueMonstersInFog = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 0);
+if (uniqueMonstersInFog.length > 0 && !activeUniqueMonsterName) {
+    const firstInFog = uniqueMonstersInFog[0];
+    // Show the harbinger message
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (!floorIndicator.textContent.includes("A harbinger of doom draws near")) {
+        floorIndicator.textContent = "A harbinger of doom draws near.";
+        // Don't auto-clear - keep static until enemy is found or dead
+        // Clear only when enemy is killed or when leaving the area
+    }
+}
+
+// Check if player moved from a rune tile
+if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (floorIndicator.textContent.startsWith("Rune Found:") || 
+        floorIndicator.textContent.startsWith("Rune:")) {
+        // Reset to normal floor text if leaving rune tile
+        setTimeout(() => {
+            // Double-check that player is still not on a rune tile before resetting
+            const stillOnRuneTile = map[p.y][p.x] === 9 && 
+                runeDrops.some(r => r.x === p.x && r.y === p.y && r.specific);
+            
+            if (!stillOnRuneTile) {
+                floorIndicator.textContent = `Floor ${floor}`;
+            }
+        }, 100); // Small delay to prevent flicker
+    }
+}
 
         updateFogMap(p.x, p.y);
     }
@@ -4956,6 +5052,52 @@ if (hit) {
                     if (enemy.hp <= 0) {
                         kills[enemy.type.name]++;
                         let dropPlaced = false;
+
+if (hit.uniqueName) {
+    // Reward for unique monster: up to x4 the normal sats/btc
+    const baseReward = hit.sats;
+    const multiplier = 1 + Math.random() * 3; // Random multiplier from 1x to 4x
+    const reward = Math.round(baseReward * multiplier);
+    
+    // Add bitcoin drops around the monster position
+    let dropPlaced = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 3;
+        satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
+        dropPlaced = true;
+    } else {
+        const adjacent = [
+            {x: hit.x, y: hit.y - 1},
+            {x: hit.x, y: hit.y + 1},
+            {x: hit.x - 1, y: hit.y},
+            {x: hit.x + 1, y: hit.y}
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny)
+            ) {
+                map[ny][nx] = 3;
+                satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
+                dropPlaced = true;
+                break;
+            }
+        }
+    }
+    
+    if (dropPlaced) {
+        const rewardBtc = reward / 1e8;
+	const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
+	logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
+        // Also add to satsEarned for proper display
+        satsEarned[hit.type.name] += reward;
+        updateSatsDisplay();
+    } else {
+        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
+    }
+}
                         
                         // Drop satoshi
                         if (map[enemy.y][enemy.x] === 0) {
@@ -5114,37 +5256,85 @@ if (hit) {
         hit.hp -= damage;
         logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
         playWebAudioSound(sounds.hit);
-        if (hit.hp <= 0) {
-            kills[hit.type.name]++;
-            let dropPlaced = false;
-            if (map[hit.y][hit.x] === 0) {
-                map[hit.y][hit.x] = 3;
-                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+if (hit.hp <= 0) {
+    kills[hit.type.name]++;
+    let dropPlaced = false;
+    
+// Handle unique monster rewards differently
+if (hit.uniqueName) {
+    // Reward for unique monster: up to x4 the normal sats/btc
+    const baseReward = hit.sats;
+    const multiplier = 1 + Math.random() * 3; // Random multiplier from 1x to 4x
+    const reward = Math.round(baseReward * multiplier);
+    
+    // Add bitcoin drops around the monster position
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 3;
+        satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
+        dropPlaced = true;
+    } else {
+        const adjacent = [
+            {x: hit.x, y: hit.y - 1},
+            {x: hit.x, y: hit.y + 1},
+            {x: hit.x - 1, y: hit.y},
+            {x: hit.x + 1, y: hit.y}
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny)
+            ) {
+                map[ny][nx] = 3;
+                satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
                 dropPlaced = true;
-            } else {
-                const adjacent = [
-                    {x: hit.x, y: hit.y - 1},
-                    {x: hit.x, y: hit.y + 1},
-                    {x: hit.x - 1, y: hit.y},
-                    {x: hit.x + 1, y: hit.y}
-                ];
-                for (const pos of adjacent) {
-                    const nx = pos.x, ny = pos.y;
-                    if (
-                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                        map[ny][nx] === 0 &&
-                        !enemies.some(e => e.x === nx && e.y === ny)
-                    ) {
-                        map[ny][nx] = 3;
-                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                        dropPlaced = true;
-                        break;
-                    }
+                break;
+            }
+        }
+    }
+    
+    if (dropPlaced) {
+        const rewardBtc = reward / 1e8;
+	const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
+	logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
+        // Also add to satsEarned for proper display
+        satsEarned[hit.type.name] += reward;
+        updateSatsDisplay();
+    } else {
+        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
+    }
+} else {
+        // Normal enemy reward
+        if (map[hit.y][hit.x] === 0) {
+            map[hit.y][hit.x] = 3;
+            satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+            dropPlaced = true;
+        } else {
+            const adjacent = [
+                {x: hit.x, y: hit.y - 1},
+                {x: hit.x, y: hit.y + 1},
+                {x: hit.x - 1, y: hit.y},
+                {x: hit.x + 1, y: hit.y}
+            ];
+            for (const pos of adjacent) {
+                const nx = pos.x, ny = pos.y;
+                if (
+                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                    map[ny][nx] === 0 &&
+                    !enemies.some(e => e.x === nx && e.y === ny)
+                ) {
+                    map[ny][nx] = 3;
+                    satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                    dropPlaced = true;
+                    break;
                 }
             }
-            if (!dropPlaced) {
-                // No space for satoshi drop
-            }
+        }
+        if (!dropPlaced) {
+            // No space for satoshi drop
+        }
+    }
 
             // Soul stone drop logic (5% chance)
             if (Math.random() < 0.05) {
@@ -6062,6 +6252,7 @@ function initTouchControls() {
    Restart the game – reset state & re‑initialise listeners
    ------------------------------------------------------------------ */
 function restart() {
+
     /* ------------------------------------------------------------------
        1. Clean up old listeners/timers
        ------------------------------------------------------------------ */
@@ -6088,6 +6279,9 @@ function restart() {
     p.soulShards = 0;
     p.soulOrbs = 0;
     p.soulStormCharges = 0;
+    // Reset shrine tracking
+    p.shrineCharges = 0;
+    p.shrineUsedThisFloor = false;
     currentTheme = 'dungeon';            // default theme
     p.maxHP = 24;                       // default max HP
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
@@ -6119,12 +6313,13 @@ function restart() {
     gameOver = false;
     gameOverSoundPlayed = false;
     autoSubmitTriggered = false;
-    enemiesSpawnedThisFloor = 0;
-    whalesSpawnedThisFloor = 0;
-    scrollDroppedThisFloor = false;
-    initialSpawnDoneThisFloor = false;
-    initialWaveSpawned = false;
-    waveActive = false;
+enemiesSpawnedThisFloor = 0;
+uniqueMonstersSpawnedThisFloor = 0; // Reset unique monster spawn counter
+whalesSpawnedThisFloor = 0;
+scrollDroppedThisFloor = false;
+initialSpawnDoneThisFloor = false;
+initialWaveSpawned = false;
+waveActive = false;
     nextApiCallTime = null;
     whaleHashIds = ['Whale Transactions:'];
     battleLog = [];
@@ -6396,9 +6591,17 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 21) { // Soul Orb Statue
             c.drawImage(assets.soul_orb_statue, x * S, y * S, S, S);
         }
+        if (map[y][x] === 22) { // Shrine
+            c.drawImage(assets.shrine, x * S, y * S, S, S);
+        }
         if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
     }
 }
+
+///////////
+// NOTICE: DRAW ORDER IS A THING! ;)
+/////////
+
 // Draw flash effect for diamond hand AOE damage
 highlightTiles.forEach(tile => {
     if (Date.now() - tile.highlightStart < 200 && tile.x >= 0 && tile.x < W && tile.y >= 0 && tile.y < H && map[tile.y][tile.x] !== 1) {
@@ -6412,6 +6615,21 @@ highlightTiles.forEach(tile => {
         }
     }
 });
+
+// In the draw function, after drawing items but before drawing player:
+// Draw shrines with fog handling
+for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+        const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+        const isVisible = fogMap[y][x] === 1 || dist <= radius;
+        
+        if (map[y][x] === 22 && isVisible) { // Shrine tile
+            c.drawImage(assets.shrine, x * S, y * S, S, S);
+            needsRedraw = true; // Add this to ensure proper redraw after shrine drawing
+        }
+    }
+}
+
 // Draw projectiles, skipping player's position
     projectiles.forEach(proj => {
         if (proj.x >= 0 && proj.x < W && proj.y >= 0 && proj.y < H && 
@@ -6581,11 +6799,17 @@ const pulseAlphaMin = 0.5;
 const pulseAlphaMax = 1;
 const pulseAlpha = pulseAlphaMin + (pulseAlphaMax - pulseAlphaMin) * (Math.sin(Date.now() / pulsePeriod * Math.PI) + 1) / 2;
 
+
+
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
     if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
         const dist = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
         const isVisible = fogMap[e.y][e.x] === 1 || dist <= radius;
+        
+        // Check if this enemy is a unique monster
+        const isUniqueMonster = e.uniqueName !== undefined;
+        
         c.save();
         // Create a temporary canvas for rendering
         const tempCanvas = document.createElement('canvas');
@@ -6611,90 +6835,130 @@ enemies.forEach(e => {
             img = e.type.img;
         }
         
-let spriteCanvas, spriteCtx;
-if (isVisible) {
-    spriteCanvas = document.createElement('canvas');
-    spriteCanvas.width = S;
-    spriteCanvas.height = S;
-    spriteCtx = spriteCanvas.getContext('2d');
-    spriteCtx.imageSmoothingEnabled = false;
-    spriteCtx.drawImage(img, 0, 0, S, S);
-    
-    // Apply theme-based effects to the sprite canvas
-    if (currentTheme === 'desert') {
-        const imageData = spriteCtx.getImageData(0, 0, S, S);
-        const data = imageData.data;
-        punchHoleThroughRed(imageData); // Mark eye pixels
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i + 3] === 1) { // Eye pixel
-                data[i] = 255;     // Red
-                data[i + 1] = 0;   // Green
-                data[i + 2] = 0;   // Blue
-                data[i + 3] = 255; // Full opacity
-            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                data[i] = 255;     // Red
-                data[i + 1] = 242; // Green
-                data[i + 2] = 230; // Blue
-                data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+        let spriteCanvas, spriteCtx;
+        if (isVisible) {
+            spriteCanvas = document.createElement('canvas');
+            spriteCanvas.width = S;
+            spriteCanvas.height = S;
+            spriteCtx = spriteCanvas.getContext('2d');
+            spriteCtx.imageSmoothingEnabled = false;
+            spriteCtx.drawImage(img, 0, 0, S, S);
+            
+            // Apply theme-based effects to the sprite canvas
+            if (currentTheme === 'desert') {
+                const imageData = spriteCtx.getImageData(0, 0, S, S);
+                const data = imageData.data;
+                punchHoleThroughRed(imageData); // Mark eye pixels
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] === 1) { // Eye pixel
+                        data[i] = 255;     // Red
+                        data[i + 1] = 0;   // Green
+                        data[i + 2] = 0;   // Blue
+                        data[i + 3] = 255; // Full opacity
+                    } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                        data[i] = 255;     // Red
+                        data[i + 1] = 242; // Green
+                        data[i + 2] = 230; // Blue
+                        data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                    }
+                }
+                spriteCtx.putImageData(imageData, 0, 0);
+            } else if (currentTheme === 'ruins') {
+                const imageData = spriteCtx.getImageData(0, 0, S, S);
+                const data = imageData.data;
+                punchHoleThroughRed(imageData); // Mark eye pixels
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] === 1) { // Eye pixel
+                        data[i] = 255;     // Red
+                        data[i + 1] = 0;   // Green
+                        data[i + 2] = 0;   // Blue
+                        data[i + 3] = 255; // Full opacity
+                    } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                        data[i] = 144;     // Red
+                        data[i + 1] = 126; // Green
+                        data[i + 2] = 105; // Blue
+                        data[i + 3] = 255; // Full opacity (removed 95% opacity)
+                    }
+                }
+                spriteCtx.putImageData(imageData, 0, 0);
+            } else if (currentTheme === 'hell') {
+                // Apply red tint for hell theme
+                spriteCtx.globalCompositeOperation = 'source-atop';
+                spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                spriteCtx.fillRect(0, 0, S, S);
+                spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+            } else if (currentTheme === 'paradise') {
+                // Apply purple tint for paradise theme
+                spriteCtx.globalCompositeOperation = 'source-atop';
+                spriteCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
+                spriteCtx.fillRect(0, 0, S, S);
+                spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+            }
+            
+            // Special handling for unique monsters (poison green with red eyes)
+            if (isUniqueMonster) {
+                const imageData = spriteCtx.getImageData(0, 0, S, S);
+                const data = imageData.data;
+                punchHoleThroughRed(imageData); // Mark eye pixels
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] === 1) { // Eye pixel - make red
+                        data[i] = 255;     // Red
+                        data[i + 1] = 0;   // Green
+                        data[i + 2] = 0;   // Blue
+                        data[i + 3] = 255; // Full opacity
+                    } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - make poison green
+                        data[i] = 0;       // Red
+                        data[i + 1] = 255; // Green (poison green)
+                        data[i + 2] = 0;   // Blue
+                        data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                    }
+                }
+                spriteCtx.putImageData(imageData, 0, 0);
             }
         }
-        spriteCtx.putImageData(imageData, 0, 0);
-    } else if (currentTheme === 'ruins') {
-        const imageData = spriteCtx.getImageData(0, 0, S, S);
-        const data = imageData.data;
-        punchHoleThroughRed(imageData); // Mark eye pixels
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i + 3] === 1) { // Eye pixel
-                data[i] = 255;     // Red
-                data[i + 1] = 0;   // Green
-                data[i + 2] = 0;   // Blue
-                data[i + 3] = 255; // Full opacity
-            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                data[i] = 144;     // Red
-                data[i + 1] = 126; // Green
-                data[i + 2] = 105; // Blue
-                data[i + 3] = 255; // Full opacity (removed 95% opacity)
-            }
-        }
-        spriteCtx.putImageData(imageData, 0, 0);
-    } else if (currentTheme === 'hell') {
-        // Apply red tint for hell theme
-        spriteCtx.globalCompositeOperation = 'source-atop';
-        spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-        spriteCtx.fillRect(0, 0, S, S);
-        spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-    } else if (currentTheme === 'paradise') {
-        // Apply purple tint for paradise theme
-        spriteCtx.globalCompositeOperation = 'source-atop';
-        spriteCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
-        spriteCtx.fillRect(0, 0, S, S);
-        spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-    }
-}
         
-// Draw the sprite on the temporary canvas
-if (isVisible) {
-    tempCtx.globalAlpha = pulseAlpha;
-    tempCtx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red
-    const centerX = S / 2;
-    const centerY = S / 2;
-    const radius = S / 2;
-    tempCtx.beginPath();
-    tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    tempCtx.fill();
-    tempCtx.globalAlpha = 1.0;
-}
-tempCtx.imageSmoothingEnabled = false;
-if (isVisible) {
-    tempCtx.drawImage(spriteCanvas, 0, 0, S, S);
-} else {
-    // Outside fog of war, draw original sprite to show red eyes
-    tempCtx.drawImage(img, 0, 0, S, S);
-}
+        // Draw the sprite on the temporary canvas
+        if (isVisible) {
+            tempCtx.globalAlpha = pulseAlpha;
+            tempCtx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red
+            const centerX = S / 2;
+            const centerY = S / 2;
+            const radius = S / 2;
+            tempCtx.beginPath();
+            tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            tempCtx.fill();
+            tempCtx.globalAlpha = 1.0;
+        }
+        tempCtx.imageSmoothingEnabled = false;
+        if (isVisible) {
+            tempCtx.drawImage(spriteCanvas, 0, 0, S, S);
+        } else {
+            // Outside fog of war, draw original sprite to show red eyes
+            tempCtx.drawImage(img, 0, 0, S, S);
+        }
         
         // Draw the processed sprite to the main canvas
         c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
         c.restore();
+        
+// Show unique monster name when enemy becomes visible (fog of war)
+if (isUniqueMonster && isVisible && !activeUniqueMonsterName) {
+    activeUniqueMonsterName = e.uniqueName;
+    const floorIndicator = document.getElementById('floor-indicator');
+    floorIndicator.textContent = activeUniqueMonsterName;
+    
+    // Auto-clear after 5 seconds like Harbringer message
+    setTimeout(() => {
+        if (activeUniqueMonsterName === e.uniqueName) {
+            activeUniqueMonsterName = null;
+            const currentText = floorIndicator.textContent;
+            if (currentText === activeUniqueMonsterName || 
+                currentText.includes(e.uniqueName)) {
+                floorIndicator.textContent = `Floor ${floor}`;
+            }
+        }
+    }, 5000);
+}
     }
 });
 // Draw low-health warning border with smooth transition
@@ -6726,6 +6990,23 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
     needsRedraw = false;
+    
+if (activeUniqueMonsterName) {
+    // Display unique monster name in battle log if not already shown
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (!floorIndicator.textContent.includes(activeUniqueMonsterName)) {
+        floorIndicator.textContent = activeUniqueMonsterName;
+        
+        // Auto-clear after 5 seconds like Harbringer message
+        setTimeout(() => {
+            if (activeUniqueMonsterName && 
+                floorIndicator.textContent === activeUniqueMonsterName) {
+                activeUniqueMonsterName = null;
+                floorIndicator.textContent = `Floor ${floor}`;
+            }
+        }, 5000);
+    }
+}
 }
 
 function gameLoop(timestamp) {
@@ -6875,6 +7156,7 @@ setTimeout(() => {
             }, 2000); // Match delay in start-button and startGame
             return;
         }
+        
 if (gameOver && hasPlayedOnce) {
     restart();
     return;
@@ -7446,6 +7728,30 @@ function getMovementOffset(direction) {
     return { x: offsetX, y: offsetY };
 }
 
+function displayUniqueMonsterName() {
+    if (!activeUniqueMonsterName) return;
+    
+    // Check if any visible unique monsters are present
+    const visibleUniqueMonsters = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 1);
+    
+    if (visibleUniqueMonsters.length > 0) {
+        // Clear previous display
+        activeUniqueMonsterName = null;
+        return;
+    }
+    
+    // Check if unique monster is in fog of war but still has a name to show
+    const uniqueMonsterInFog = enemies.find(e => e.uniqueName && fogMap[e.y][e.x] === 0);
+    
+    if (uniqueMonsterInFog && !activeUniqueMonsterName) {
+        activeUniqueMonsterName = uniqueMonsterInFog.uniqueName;
+        logBattleEvent(`A harbinger of doom draws near.`);
+        
+// Clear only when enemy is killed or when leaving the area
+// No auto-clear timeout needed anymore
+    }
+}
+
 // Screensaver: black background, slow drifting orange ball (#f7931a) with white "₿" and soft glows.
 // Smooth fade-out/fade-in, minimal breathing and drift.
 
@@ -7676,4 +7982,3 @@ document.addEventListener('keydown', function (e) {
     </script>
 </body>
 </html>
-
