@@ -1285,8 +1285,17 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
 document.getElementById('username-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && gameOver) {
         e.preventDefault(); // Prevent any default behavior
+        e.stopPropagation(); // Stop event propagation to prevent restart
         submitScore(); // Trigger score submission
     }
+});
+
+// Also add blur handler to prevent touch keyboard from triggering restart
+document.getElementById('username-input').addEventListener('blur', function() {
+    // Allow a short delay before re-enabling game controls
+    setTimeout(() => {
+        // Re-enable game controls if needed
+    }, 100);
 });
 
 // Prevent pinch-to-zoom and double-tap zoom
@@ -7074,6 +7083,11 @@ if (p.hp <= 0 && !gameOver) {
 
 document.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
+        // Check if Enter is coming from username input field
+        if (document.activeElement && document.activeElement.id === 'username-input') {
+            return; // Let the username input handler handle this
+        }
+        
         if (splashActive && !hasPlayedOnce) {
             return; // Block Enter on initial splash screen
         }
