@@ -4691,6 +4691,10 @@ if (hit) {
     if (hit.hp <= 0) {
         kills[hit.type.name]++;
         let dropPlaced = false;
+        
+// Handle unique monster rewards using new function
+handleUniqueMonsterReward(hit);
+        
         // Remove enemy immediately to prevent further hits
         enemies = enemies.filter(e => e !== hit);
                 if (map[hit.y][hit.x] === 0) {
@@ -4968,6 +4972,56 @@ function checkRunewordsAtFloorStart() {
     needsRedraw = true;
 }
 
+function handleUniqueMonsterReward(hit) {
+    if (!hit.uniqueName) return false;
+    
+    // Reward for unique monster: up to x4 the normal sats/btc
+    const baseReward = hit.sats;
+    const multiplier = 1 + Math.random() * 3; // Random multiplier from 1x to 4x
+    const reward = Math.round(baseReward * multiplier);
+    
+    // Add bitcoin drops around the monster position
+    let dropPlaced = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = 3;
+        satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
+        dropPlaced = true;
+    } else {
+        const adjacent = [
+            {x: hit.x, y: hit.y - 1},
+            {x: hit.x, y: hit.y + 1},
+            {x: hit.x - 1, y: hit.y},
+            {x: hit.x + 1, y: hit.y}
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny)
+            ) {
+                map[ny][nx] = 3;
+                satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
+                dropPlaced = true;
+                break;
+            }
+        }
+    }
+    
+    if (dropPlaced) {
+        const rewardBtc = reward / 1e8;
+        const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
+        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
+        // Also add to satsEarned for proper display
+        satsEarned[hit.type.name] += reward;
+        updateSatsDisplay();
+    } else {
+        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
+    }
+    
+    return true;
+}
+
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
     if (gameOver || splashActive) return;
@@ -5068,51 +5122,8 @@ if (hit) {
                         kills[enemy.type.name]++;
                         let dropPlaced = false;
 
-if (hit.uniqueName) {
-    // Reward for unique monster: up to x4 the normal sats/btc
-    const baseReward = hit.sats;
-    const multiplier = 1 + Math.random() * 3; // Random multiplier from 1x to 4x
-    const reward = Math.round(baseReward * multiplier);
-    
-    // Add bitcoin drops around the monster position
-    let dropPlaced = false;
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 3;
-        satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
-        dropPlaced = true;
-    } else {
-        const adjacent = [
-            {x: hit.x, y: hit.y - 1},
-            {x: hit.x, y: hit.y + 1},
-            {x: hit.x - 1, y: hit.y},
-            {x: hit.x + 1, y: hit.y}
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny)
-            ) {
-                map[ny][nx] = 3;
-                satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
-                dropPlaced = true;
-                break;
-            }
-        }
-    }
-    
-    if (dropPlaced) {
-        const rewardBtc = reward / 1e8;
-	const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
-	logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
-        // Also add to satsEarned for proper display
-        satsEarned[hit.type.name] += reward;
-        updateSatsDisplay();
-    } else {
-        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
-    }
-}
+// Handle unique monster rewards using new function
+handleUniqueMonsterReward(hit);
                         
                         // Drop satoshi
                         if (map[enemy.y][enemy.x] === 0) {
@@ -5275,51 +5286,9 @@ if (hit.hp <= 0) {
     kills[hit.type.name]++;
     let dropPlaced = false;
     
-// Handle unique monster rewards differently
-if (hit.uniqueName) {
-    // Reward for unique monster: up to x4 the normal sats/btc
-    const baseReward = hit.sats;
-    const multiplier = 1 + Math.random() * 3; // Random multiplier from 1x to 4x
-    const reward = Math.round(baseReward * multiplier);
-    
-    // Add bitcoin drops around the monster position
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 3;
-        satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
-        dropPlaced = true;
-    } else {
-        const adjacent = [
-            {x: hit.x, y: hit.y - 1},
-            {x: hit.x, y: hit.y + 1},
-            {x: hit.x - 1, y: hit.y},
-            {x: hit.x + 1, y: hit.y}
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny)
-            ) {
-                map[ny][nx] = 3;
-                satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
-                dropPlaced = true;
-                break;
-            }
-        }
-    }
-    
-    if (dropPlaced) {
-        const rewardBtc = reward / 1e8;
-	const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
-	logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
-        // Also add to satsEarned for proper display
-        satsEarned[hit.type.name] += reward;
-        updateSatsDisplay();
-    } else {
-        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
-    }
-} else {
+// Handle unique monster rewards using new function
+handleUniqueMonsterReward(hit);
+
         // Normal enemy reward
         if (map[hit.y][hit.x] === 0) {
             map[hit.y][hit.x] = 3;
@@ -5349,7 +5318,6 @@ if (hit.uniqueName) {
         if (!dropPlaced) {
             // No space for satoshi drop
         }
-    }
 
             // Soul stone drop logic (5% chance)
             if (Math.random() < 0.05) {
