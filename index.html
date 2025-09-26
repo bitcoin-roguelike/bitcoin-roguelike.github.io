@@ -3560,7 +3560,7 @@ function isSolid(x, y) {
     return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
 }
 
-// New animation controller with 20 FPS capped animation
+// New animation controller with 20 FPS capped animation and LerpMover
 class AnimationController {
     constructor() {
         this.movementStartTime = 0;
@@ -3571,6 +3571,11 @@ class AnimationController {
         this.frameInterval = 50; // 4 frames per move (200ms/50ms) - this is now our 20 FPS cap
         this.lastFrameTime = 0;
         this.lastDrawTime = 0; // Track last draw time for FPS limiting
+        
+        // LerpMover specific properties
+        this.lerpProgress = 0; // Current lerp progress (0.0 to 1.0)
+        this.lerpStartTime = 0;
+        this.lerpDuration = 200;
     }
 
     startMovement(direction) {
@@ -3583,6 +3588,10 @@ class AnimationController {
         this.currentDirection = direction;
         this.movementStartTime = performance.now();
         this.lastFrameTime = performance.now();
+        // Initialize lerp progress
+        this.lerpProgress = 0;
+        this.lerpStartTime = performance.now();
+        needsRedraw = true; // CRITICAL: Trigger redraw when starting new animation!
         
         return true;
     }
@@ -3618,6 +3627,27 @@ class AnimationController {
     shouldUpdateFrame() {
         const now = performance.now();
         return now - this.lastFrameTime >= this.frameInterval; // 50ms = 20 FPS
+        needsRedraw = true; // CRITICAL: Trigger redraw when we update animation frames!
+    }
+    
+    // Get lerp progress for smooth movement visualization
+    getLerpProgress() {
+        if (!this.isMoving) return 0;
+        const elapsed = performance.now() - this.lerpStartTime;
+        this.lerpProgress = Math.min(elapsed / this.lerpDuration, 1);
+        
+        // Apply wedge progression: 0.2, 0.4, 0.6, 0.8, 1.0
+        if (this.lerpProgress < 0.2) {
+            return 0.2 * (this.lerpProgress / 0.2); // Progress from 0 to 0.2
+        } else if (this.lerpProgress < 0.4) {
+            return 0.2 + 0.2 * ((this.lerpProgress - 0.2) / 0.2); // Progress from 0.2 to 0.4
+        } else if (this.lerpProgress < 0.6) {
+            return 0.4 + 0.2 * ((this.lerpProgress - 0.4) / 0.2); // Progress from 0.4 to 0.6
+        } else if (this.lerpProgress < 0.8) {
+            return 0.6 + 0.2 * ((this.lerpProgress - 0.6) / 0.2); // Progress from 0.6 to 0.8
+        } else {
+            return 0.8 + 0.2 * ((this.lerpProgress - 0.8) / 0.2); // Progress from 0.8 to 1.0
+        }
     }
 }
 
@@ -3648,7 +3678,7 @@ function move(dir) {
     if (dir === 'left') { nx--; newDirection = 'left'; }
     if (dir === 'right') { nx++; newDirection = 'right'; }
 
-// In the move function, before updating position:
+// In the move function, after updating position:
 p.moveCounter++;
 if (p.moveCounter >= 2) {
     if (p.shrineCharges > 0) {
@@ -6454,9 +6484,10 @@ function draw() {
         }
     }
     
-// Add this to the existing draw function for movement animation
+// Add this to the existing draw function for movement animation with lerp progress
 if (animController.isAnimating && !splashActive && !gameOver) {
-    const offset = getMovementOffset(animController.currentDirection);
+    const lerpProgress = animController.getLerpProgress();
+    const offset = getMovementOffset(animController.currentDirection, lerpProgress);
     drawX += offset.x;
     drawY += offset.y;
 }
@@ -6639,6 +6670,7 @@ if (animController.isAnimating) {
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
+        needsRedraw = true; // CRITICAL: Trigger redraw when animation frame changes!
     }
 } else {
     // Optional: Handle non-animating state or just let it be
@@ -6648,7 +6680,8 @@ if (animController.isAnimating) {
         let drawX = p.x * S;
         let drawY = p.y * S;
 if (animController.isAnimating && !splashActive && !gameOver) {
-    const offset = getMovementOffset(animController.currentDirection);
+    const lerpProgress = animController.getLerpProgress();
+    const offset = getMovementOffset(animController.currentDirection, lerpProgress);
     drawX += offset.x;
     drawY += offset.y;
 }
@@ -7705,8 +7738,8 @@ function getMovementAnimationProgress() {
     return 0;
 }
 
-function getMovementOffset(direction) {
-    const progress = animController.getProgress();
+function getMovementOffset(direction, lerpProgress = null) {
+    const progress = lerpProgress !== null ? lerpProgress : animController.getProgress();
     if (progress === 0) return { x: 0, y: 0 };
     
     let offsetX = 0, offsetY = 0;
