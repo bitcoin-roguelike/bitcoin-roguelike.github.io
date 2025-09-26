@@ -4174,6 +4174,10 @@ if (map[ny][nx] === 6 && !inHideout) {
 
 // Add this after the stairs logic in move function:
 if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
+
+    // clear console log for each stage to keep it from blowing up
+    console.clear()
+
     // NEW: make sure the scroll flag is reset for the next floor
     scrollDroppedThisFloor = false;
 
