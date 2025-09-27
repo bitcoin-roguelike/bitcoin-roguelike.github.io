@@ -1499,7 +1499,7 @@ let scrollDrops = []; // Array to store scroll drops with positions
 let portals = []; // Array to store active portal positions and animation state
 let splashActive = true;
 let waveActive = false;
-let musicMuted = true; // Start with music muted by default
+let musicMuted = localStorage.getItem('musicMuted') === 'true';        
 let swordDir = 'right', swordActive = false, swordStart = 0;
 let gameOverSoundPlayed = false;
 let fogMap = [];
@@ -7552,7 +7552,7 @@ let currentAxes = null;
 
 // Start game function for splash screen
 function startGame() {
-    document.getElementById('mute').textContent = 'X'; // Always show X for muted state on start
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
     if (!splashActive) {
         return;
     }
@@ -7592,7 +7592,7 @@ function startGame() {
     
     currentTheme = 'dungeon'; // Force default theme on game start
     // Set mute state based on saved preference
-    musicManager.mute(true); // Always start with music muted
+    musicManager.mute(musicMuted);
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
     musicManager.current = null; // Reset MusicManager state
     musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
@@ -7607,6 +7607,9 @@ function startGame() {
         musicManager.audios[currentTheme].oncanplaythrough = () => {
             console.log('Audio ready, playing from start:', currentTheme); // Debug log
             musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play once ready only if we should unmute
+            }
         };
     }
     
@@ -8156,3 +8159,4 @@ document.addEventListener('keydown', function (e) {
     </script>
 </body>
 </html>
+
