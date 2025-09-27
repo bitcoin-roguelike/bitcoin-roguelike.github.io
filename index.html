@@ -784,7 +784,11 @@ button:hover {
     <pre id="leaderboard-output"></pre>
     <canvas id="game-over-canvas" width="320" height="320"></canvas>
     <div style="position: absolute; top: 60%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 15px;"> <!-- Increased gap from 10px to 15px -->
-        <input id="username-input" type="text" placeholder="Enter Username" maxlength="20" list="name-list" style="background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 8px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; width: 200px;">
+<input id="username-input" type="text" placeholder="Enter Username" maxlength="20" list="name-list" style="background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 8px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; width: 200px;">
+   <div style="margin-top: 10px;">
+       <input type="checkbox" id="random-name-checkbox" style="margin-right: 5px;">
+       <label for="random-name-checkbox" style="color: #ff8c00; font-family: 'VT323', monospace; font-size: 16px;">Use Random Name</label>
+   </div>
 <datalist id="name-list"></datalist>
         <button id="submit-score" onclick="submitScore()">Submit Score</button>
         <button id="view-leaderboard" onclick="fetchLeaderboard()">Leaderboard</button>
@@ -1075,41 +1079,43 @@ function getScoreWithMultiplier(rawScore, currentFloor) {
 
 // Modified submitScore function with nearest name matching and random fallback
 async function submitScore() {
-    if (!gameOver) return;
-    if (scoreSubmitted) {
-        document.getElementById('leaderboard-output').textContent = 'Score already submitted for this game!';
-        document.getElementById('leaderboard-output').style.display = 'block';
-        console.log('Score submission blocked: already submitted');
-        return;
-    }
-    if (floor < 3) {
-        document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
-        document.getElementById('leaderboard-output').style.display = 'block';
-        console.log('Score submission blocked: floor=', floor, '< 3');
-        return;
-    }
-    let username = document.getElementById('username-input').value.trim();
-    if (!username) {
-        // Select random name if input is empty
-        username = names[Math.floor(Math.random() * names.length)];
-        console.log(`Empty username, selected random name: '${username}'`);
-    } else if (!names.includes(username)) {
-        // Find the closest matching name using enhanced algorithm
-        const closestName = findClosestName(username, names);
-        
-        // Check if we found a match and it's different from input
-        if (closestName !== username && closestName.toLowerCase() !== username.toLowerCase()) {
-            console.log(`Username '${username}' matched to '${closestName}'`);
-            username = closestName;
-        } else {
-            // Select random name if no good match found
-            username = names[Math.floor(Math.random() * names.length)];
-            console.log(`Username '${username}' not matched, selected random name: '${username}'`);
-        }
-    }
-    const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-    // NEW: calculate the leaderboard score with the floor multiplier
-    const leaderboardScore = getScoreWithMultiplier(totalSats, floor);
+       if (!gameOver) return;
+       if (scoreSubmitted) {
+           document.getElementById('leaderboard-output').textContent = 'Score already submitted for this game!';
+           document.getElementById('leaderboard-output').style.display = 'block';
+           console.log('Score submission blocked: already submitted');
+           return;
+       }
+       if (floor < 3) {
+           document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
+           document.getElementById('leaderboard-output').style.display = 'block';
+           console.log('Score submission blocked: floor=', floor, '< 3');
+           return;
+       }
+       let username = document.getElementById('username-input').value.trim();
+       const useRandomName = document.getElementById('random-name-checkbox').checked;
+       
+       // If checkbox is checked OR no name entered, use random name
+       if (useRandomName || !username) {
+           username = names[Math.floor(Math.random() * names.length)];
+           console.log(`Random name selected: '${username}'`);
+       } else if (!names.includes(username)) {
+           // Find the closest matching name using enhanced algorithm
+           const closestName = findClosestName(username, names);
+           
+           // Check if we found a match and it's different from input
+           if (closestName !== username && closestName.toLowerCase() !== username.toLowerCase()) {
+               console.log(`Username '${username}' matched to '${closestName}'`);
+               username = closestName;
+           } else {
+               // Select random name if no good match found
+               username = names[Math.floor(Math.random() * names.length)];
+               console.log(`Username '${username}' not matched, selected random name: '${username}'`);
+           }
+       }
+       const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
+       // NEW: calculate the leaderboard score with the floor multiplier
+       const leaderboardScore = getScoreWithMultiplier(totalSats, floor);
     try {
     const response = await fetch(`${API_URL}?action=submit`, {
         method: 'POST',
@@ -1143,7 +1149,7 @@ async function submitScore() {
             await fetchLeaderboard(username, leaderboardScore, floor);
         } else {
             document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
-            if (response.status === 400 && text.includes('new row violates row-level security policy')) {
+            if (response.status === 400 && text.includes('new row-level security policy')) {
                 document.getElementById('leaderboard-output').textContent = 'Submission blocked: Must reach at least Floor 3!';
             }
             document.getElementById('leaderboard-output').style.display = 'block';
@@ -1312,21 +1318,40 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
     }
   }
 
-document.getElementById('username-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && gameOver) {
-        e.preventDefault(); // Prevent any default behavior
-        e.stopPropagation(); // Stop event propagation to prevent restart
-        submitScore(); // Trigger score submission
-    }
-});
-
-// Also add blur handler to prevent touch keyboard from triggering restart
-document.getElementById('username-input').addEventListener('blur', function() {
-    // Allow a short delay before re-enabling game controls
-    setTimeout(() => {
-        // Re-enable game controls if needed
-    }, 100);
-});
+   document.getElementById('username-input').addEventListener('keydown', (e) => {
+       if (e.key === 'Enter' && gameOver) {
+           e.preventDefault(); // Prevent any default behavior
+           e.stopPropagation(); // Stop event propagation to prevent restart
+           submitScore(); // Trigger score submission
+       }
+   });
+   
+   // Add event listener for the random name checkbox
+   document.getElementById('random-name-checkbox').addEventListener('change', function() {
+       if (this.checked) {
+           // When checked, automatically use a random name
+           const randomName = names[Math.floor(Math.random() * names.length)];
+           document.getElementById('username-input').value = randomName;
+           console.log(`Random name '${randomName}' auto-selected`);
+       } else {
+           // When unchecked, clear the input if it was previously filled with a random name
+           const currentInput = document.getElementById('username-input').value.trim();
+           if (currentInput && names.includes(currentInput)) {
+               // Keep the name if it's already in our names list
+               return;
+           }
+           // Otherwise, clear the input
+           document.getElementById('username-input').value = '';
+       }
+   });
+   
+   // Also add blur handler to prevent touch keyboard from triggering restart
+   document.getElementById('username-input').addEventListener('blur', function() {
+       // Allow a short delay before re-enabling game controls
+       setTimeout(() => {
+           // Re-enable game controls if needed
+       }, 100);
+   });
 
 // Prevent pinch-to-zoom and double-tap zoom
 document.addEventListener('touchstart', (e) => {
@@ -6465,6 +6490,13 @@ waveActive = false;
     scoreSubmitted = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     projectiles = []; // Add this line to reset projectiles array on restart
+    
+    // Clear random name checkbox state for new session
+    const randomCheckbox = document.getElementById('random-name-checkbox');
+    if (randomCheckbox) {
+        randomCheckbox.checked = false;
+    }
+    
     populateNameList();
     
 // Fix: Properly reset MusicManager state and ensure audio context is ready
@@ -7169,14 +7201,11 @@ function gameLoop(timestamp) {
         document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #leaderboard-output, #username-input, #sats-calc').forEach(el => {
             el.style.color = '#ff8c00';
         });
-        // Auto-submit score with random name from names array only if gamepad is connected
-        if (!scoreSubmitted && gamepadIndex !== null && !autoSubmitTriggered) {
-            autoSubmitTriggered = true;
-            setTimeout(() => {
-                document.getElementById('username-input').value = names[Math.floor(Math.random() * names.length)];
-                                submitScore();
-            }, 1000); // delay to ensure UI is rendered
-        }
+// Auto-submit score with random name from names array only if gamepad is connected
+   if (!scoreSubmitted && gamepadIndex !== null && !autoSubmitTriggered) {
+       autoSubmitTriggered = true;
+       // Do NOT auto-submit anymore - user must press B button to submit
+   }
         needsRedraw = true;
     }
     
@@ -7755,9 +7784,24 @@ function updateGamepad(timestamp) {
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // B Button (1) - attack
-    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive && !gameOver) {
-        attack();
+// B Button (1) - attack or submit score
+    if (buttons[1].pressed && !lastButtonsState[1] && !splashActive) {
+        // Check if we're in game over screen and should submit score
+        if (gameOver && !scoreSubmitted) {
+            // Toggle the random name checkbox and submit
+            const randomCheckbox = document.getElementById('random-name-checkbox');
+            randomCheckbox.checked = !randomCheckbox.checked;
+            
+            // If checkbox is now checked or no name entered, auto-fill with random name
+            const usernameInput = document.getElementById('username-input');
+            if (randomCheckbox.checked || !usernameInput.value.trim()) {
+                usernameInput.value = names[Math.floor(Math.random() * names.length)];
+            }
+            
+            submitScore();
+        } else if (!gameOver) {
+            attack();
+        }
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
