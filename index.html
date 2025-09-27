@@ -5146,10 +5146,15 @@ function checkRunewordsAtFloorStart() {
 function handleUniqueMonsterReward(hit) {
     if (!hit.uniqueName) return false;
     
-    // Reward for unique monster: up to x4 the normal sats/btc
+    // Reward for unique monster: at least 2X (up to 4X) the normal sats/btc
     const baseReward = hit.sats;
-    const multiplier = 1 + Math.random() * 3; // Random multiplier from 1x to 4x
-    const reward = Math.round(baseReward * multiplier);
+    const floorMultiplier = floor / 100; // Calculate floor multiplier
+    const added = Math.floor(baseReward * floorMultiplier); // Apply floor multiplier
+    const baseWithMultiplier = baseReward + added; // Base reward with floor multiplier
+    
+// Apply additional random multiplier for unique monsters (2x to 4x)
+    const randomMultiplier = 2 + Math.random() * 2; // Random multiplier from 2x to 4x
+    const reward = Math.round(baseWithMultiplier * randomMultiplier);
     
     // Add bitcoin drops around the monster position
     let dropPlaced = false;
@@ -5179,7 +5184,7 @@ function handleUniqueMonsterReward(hit) {
         }
     }
     
-    if (dropPlaced) {
+if (dropPlaced) {
         const rewardBtc = reward / 1e8;
         const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
         logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
