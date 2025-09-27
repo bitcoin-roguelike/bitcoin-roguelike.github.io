@@ -1019,6 +1019,43 @@ function levenshtein(a, b) {
     return matrix[b.length][a.length];
 }
 
+// Enhanced name matching function
+function findClosestName(input, nameList) {
+    const inputLower = input.toLowerCase();
+    
+    // First, try exact prefix match (case-insensitive)
+    const exactPrefixMatch = nameList.find(name => 
+        name.toLowerCase().startsWith(inputLower)
+    );
+    if (exactPrefixMatch) return exactPrefixMatch;
+    
+    // Then, try partial match (substring anywhere in the name)
+    const partialMatch = nameList.find(name => 
+        name.toLowerCase().includes(inputLower)
+    );
+    if (partialMatch) return partialMatch;
+    
+    // If no prefix or partial match, use Levenshtein distance
+    let minDistance = Infinity;
+    let closestName = input; // Default to input if no close match
+    
+    for (const name of nameList) {
+        const distance = levenshtein(inputLower, name.toLowerCase());
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestName = name;
+        }
+    }
+    
+    // Only use Levenshtein match if distance is reasonably small
+    // Adjust threshold as needed - 3 seems good for most cases
+    if (minDistance <= 3) {
+        return closestName;
+    }
+    
+    return input; // Return original if no good match found
+}
+
 /**
  * Calculates the score that will be sent to the leaderboard.
  *  • `floor` is the current floor number.
@@ -1057,24 +1094,17 @@ async function submitScore() {
         username = names[Math.floor(Math.random() * names.length)];
         console.log(`Empty username, selected random name: '${username}'`);
     } else if (!names.includes(username)) {
-        // Find the closest matching name (case-insensitive)
-        let minDistance = Infinity;
-        let closestName = username;
-        for (const name of names) {
-            const distance = levenshtein(username.toLowerCase(), name.toLowerCase());
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestName = name;
-            }
-        }
-        // Use closest name if distance is small enough (threshold: 3 edits)
-        if (minDistance <= 3) {
-            console.log(`Username '${username}' matched to '${closestName}' (distance=${minDistance})`);
+        // Find the closest matching name using enhanced algorithm
+        const closestName = findClosestName(username, names);
+        
+        // Check if we found a match and it's different from input
+        if (closestName !== username && closestName.toLowerCase() !== username.toLowerCase()) {
+            console.log(`Username '${username}' matched to '${closestName}'`);
             username = closestName;
         } else {
-            // Select random name if no close match
+            // Select random name if no good match found
             username = names[Math.floor(Math.random() * names.length)];
-            console.log(`Username '${username}' not matched (distance=${minDistance}), selected random name: '${username}'`);
+            console.log(`Username '${username}' not matched, selected random name: '${username}'`);
         }
     }
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
