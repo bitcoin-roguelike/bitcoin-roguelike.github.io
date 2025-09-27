@@ -3590,7 +3590,7 @@ function isSolid(x, y) {
     return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
 }
 
-// New animation controller with 20 FPS capped animation and LerpMover
+// New animation controller with 20 FPS capped animation and smooth movement lerping
 class AnimationController {
     constructor() {
         this.movementStartTime = 0;
@@ -3602,10 +3602,16 @@ class AnimationController {
         this.lastFrameTime = 0;
         this.lastDrawTime = 0; // Track last draw time for FPS limiting
         
-        // LerpMover specific properties
+        // Lerp properties for smooth movement
         this.lerpProgress = 0; // Current lerp progress (0.0 to 1.0)
         this.lerpStartTime = 0;
         this.lerpDuration = 200;
+        
+        // For interpolation tracking
+        this.startX = 0;
+        this.startY = 0;
+        this.endX = 0;
+        this.endY = 0;
     }
 
     startMovement(direction) {
@@ -3621,6 +3627,21 @@ class AnimationController {
         // Initialize lerp progress
         this.lerpProgress = 0;
         this.lerpStartTime = performance.now();
+        
+        // Store start position for interpolation
+        this.startX = p.x;
+        this.startY = p.y;
+        
+        // Calculate end position based on direction
+        let endX = p.x, endY = p.y;
+        if (direction === 'up') endY--;
+        if (direction === 'down') endY++;
+        if (direction === 'left') endX--;
+        if (direction === 'right') endX++;
+        
+        this.endX = endX;
+        this.endY = endY;
+        
         needsRedraw = true; // CRITICAL: Trigger redraw when starting new animation!
         
         return true;
@@ -3656,8 +3677,12 @@ class AnimationController {
     // Check if we should update frame based on FPS cap (20 FPS = 50ms)
     shouldUpdateFrame() {
         const now = performance.now();
-        return now - this.lastFrameTime >= this.frameInterval; // 50ms = 20 FPS
-        needsRedraw = true; // CRITICAL: Trigger redraw when we update animation frames!
+        const shouldUpdate = now - this.lastFrameTime >= this.frameInterval; // 50ms = 20 FPS
+        if (shouldUpdate) {
+            this.lastFrameTime = now;
+            needsRedraw = true; // CRITICAL: Trigger redraw when we update animation frames!
+        }
+        return shouldUpdate;
     }
     
     // Get lerp progress for smooth movement visualization
@@ -3678,6 +3703,25 @@ class AnimationController {
         } else {
             return 0.8 + 0.2 * ((this.lerpProgress - 0.8) / 0.2); // Progress from 0.8 to 1.0
         }
+    }
+    
+    // Get interpolated position for smooth movement rendering
+    getInterpolatedPosition() {
+        if (!this.isMoving) return { x: p.x, y: p.y };
+        
+        const progress = this.getLerpProgress();
+        const newX = this.startX + (this.endX - this.startX) * progress;
+        const newY = this.startY + (this.endY - this.startY) * progress;
+        return { x: newX, y: newY };
+    }
+    
+    // Update player position during animation for actual movement
+    updatePlayerPosition() {
+        if (!this.isMoving) return;
+        
+        const progress = this.getLerpProgress();
+        p.x = this.startX + (this.endX - this.startX) * progress;
+        p.y = this.startY + (this.endY - this.startY) * progress;
     }
 }
 
@@ -3748,23 +3792,58 @@ if (p.moveCounter >= 2) {
         return; // Shouldn't happen since we checked isAnimating
     }
 
-    // Update direction and position
+    // Update direction and position (will be interpolated during draw)
     p.anim.direction = newDirection;
+    
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
-        p.x = nx;
-        p.y = ny;
+        // Set target position for animation but don't update immediately
+        // Actual position will be updated during interpolation in draw()
+// Animation frame update logic here
 if (animController.isAnimating) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
+        // Update player position during animation
+        animController.updatePlayerPosition();
     }
 } else {
-    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-    p.anim.lastFrameTime = performance.now();
-}
+            p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+            p.anim.lastFrameTime = performance.now();
         }
+    }
+    
+    if (!map[ny] || map[ny][nx] === undefined) {
+        console.error('Invalid map access: nx=', nx, 'ny=', ny);
+        initMap();
+        needsRedraw = true;
+        return;
+    }
+    
+    // Always update direction for rendering, even if blocked by enemy
+    if (enemies.some(e => e.x === nx && e.y === ny)) {
+        needsRedraw = true; // Ensure redraw to reflect new direction
+        return;
+    }
+    
+    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
+        // Actual position update will happen during interpolation in draw()
+// Animation frame update logic here
+if (animController.isAnimating) {
+    const now = performance.now();
+    // Cap animation updates to 20 FPS (50ms)
+    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+        p.anim.lastFrameTime = now;
+        // Update player position during animation
+        animController.updatePlayerPosition();
+    }
+} else {
+            p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+            p.anim.lastFrameTime = performance.now();
+        }
+    }
     
     if (!map[ny] || map[ny][nx] === undefined) {
         console.error('Invalid map access: nx=', nx, 'ny=', ny);
@@ -3782,12 +3861,15 @@ if (animController.isAnimating) {
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         p.x = nx;
         p.y = ny;
+// Animation frame update logic here
 if (animController.isAnimating) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
+        // Update player position during animation
+        animController.updatePlayerPosition();
     }
 } else {
     p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
@@ -6505,14 +6587,17 @@ function draw() {
     }
     lastDrawTime = now;
     
-    // Ensure animation frames are updated at 20 FPS cap
-    if (animController.isAnimating) {
-        const animNow = performance.now();
-        if (animNow - animController.lastFrameTime >= 50) { // 20 FPS capped
-            // Update animation frame index here if needed
-            animController.lastFrameTime = animNow;
-        }
+// Animation frame update logic here
+if (animController.isAnimating) {
+    const now = performance.now();
+    // Cap animation updates to 20 FPS (50ms)
+    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+        p.anim.lastFrameTime = now;
+        // Update player position during animation
+        animController.updatePlayerPosition();
     }
+}
     
 // Add this to the existing draw function for movement animation with lerp progress
 if (animController.isAnimating && !splashActive && !gameOver) {
@@ -6695,26 +6780,31 @@ for (let y = 0; y < H; y++) {
 // Add this to the existing draw function for player rendering
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
 const now = performance.now();
+// Animation frame update logic here
 if (animController.isAnimating) {
-    // Cap animation frame updates to 20 FPS (50ms)
+    const now = performance.now();
+    // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
-        needsRedraw = true; // CRITICAL: Trigger redraw when animation frame changes!
+        // Update player position during animation
+        animController.updatePlayerPosition();
     }
 } else {
     // Optional: Handle non-animating state or just let it be
 }
         
-        // Apply movement animation offset
+        // Apply movement animation offset with smooth interpolation
         let drawX = p.x * S;
         let drawY = p.y * S;
-if (animController.isAnimating && !splashActive && !gameOver) {
-    const lerpProgress = animController.getLerpProgress();
-    const offset = getMovementOffset(animController.currentDirection, lerpProgress);
-    drawX += offset.x;
-    drawY += offset.y;
-}
+        
+        if (animController.isAnimating && !splashActive && !gameOver) {
+            const interpolatedPos = animController.getInterpolatedPosition();
+            
+            // Use the interpolated position for rendering but keep actual position updated
+            drawX = interpolatedPos.x * S;
+            drawY = interpolatedPos.y * S;
+        }
         
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
@@ -7768,6 +7858,8 @@ function getMovementAnimationProgress() {
     return 0;
 }
 
+// This function is no longer needed as we use interpolation in getInterpolatedPosition
+// But keep it for reference or compatibility
 function getMovementOffset(direction, lerpProgress = null) {
     const progress = lerpProgress !== null ? lerpProgress : animController.getProgress();
     if (progress === 0) return { x: 0, y: 0 };
