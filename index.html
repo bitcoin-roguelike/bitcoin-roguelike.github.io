@@ -3750,6 +3750,25 @@ class AnimationController {
 // Create global animation controller
 const animController = new AnimationController();
 
+// Add wedge animation for player movement
+function getWedgeOffset(direction, progress) {
+    // Calculate the wedge effect based on movement progress
+    const wedgeFactor = 0.2; // How much the sprite moves in the direction of travel
+    
+    switch (direction) {
+        case 'up':
+            return { x: 0, y: -S * wedgeFactor * progress };
+        case 'down':
+            return { x: 0, y: S * wedgeFactor * progress };
+        case 'left':
+            return { x: -S * wedgeFactor * progress, y: 0 };
+        case 'right':
+            return { x: S * wedgeFactor * progress, y: 0 };
+        default:
+            return { x: 0, y: 0 };
+    }
+}
+
 function move(dir) {
     if (gameOver || splashActive || inputBlocked) return;
     
@@ -3831,9 +3850,9 @@ if (animController.isAnimating) {
         animController.updatePlayerPosition();
     }
 } else {
-            p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-            p.anim.lastFrameTime = performance.now();
-        }
+        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+        p.anim.lastFrameTime = performance.now();
+    }
     }
     
     if (!map[ny] || map[ny][nx] === undefined) {
@@ -5209,6 +5228,7 @@ function checkRunewordsAtFloorStart() {
     needsRedraw = true;
 }
 
+// Modified handleUniqueMonsterReward function with fadeout before removing dangerous areas
 function handleUniqueMonsterReward(hit) {
     if (!hit.uniqueName) return false;
     
@@ -5261,6 +5281,28 @@ function handleUniqueMonsterReward(hit) {
         logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
     }
     
+    // Add fadeout effect before removing dangerous areas (5 seconds)
+    if (hit.uniqueName && hit.spell) {
+        const fadeStartTime = Date.now();
+        const fadeDuration = 5000; // 5 seconds
+        
+        function fadeOutEffect() {
+            const elapsed = Date.now() - fadeStartTime;
+            const progress = Math.min(elapsed / fadeDuration, 1);
+            
+            // Apply visual effect during fadeout
+            if (progress < 1) {
+                needsRedraw = true;
+                requestAnimationFrame(fadeOutEffect);
+            } else {
+                // Fadeout complete - remove dangerous areas
+                removeDangerousAreas(hit);
+            }
+        }
+        
+        fadeOutEffect();
+    }
+    
     return true;
 }
 
@@ -5283,6 +5325,17 @@ function assignUniqueMonsterSpell(enemy) {
     const spell = availableSpells[Math.floor(Math.random() * availableSpells.length)];
     enemy.spell = spell;
     return spell;
+}
+
+// Function to remove dangerous areas when a unique monster dies
+function removeDangerousAreas(monster) {
+    if (!monster.uniqueName || !monster.spell) return;
+    
+    // Remove all dangerous areas that match this spell type
+    dangerousAreas = dangerousAreas.filter(area => area.spellType !== monster.spell);
+    
+    // Redraw to reflect changes
+    needsRedraw = true;
 }
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
@@ -7060,6 +7113,15 @@ if (p.isFalling) {
 }
 	const frame = p.anim.frames[frameKey][p.anim.frameIndex];
         c.save();
+        
+        // Apply wedge effect for smooth movement
+        if (animController.isAnimating && !splashActive && !gameOver) {
+            const lerpProgress = animController.getLerpProgress();
+            const wedgeOffset = getWedgeOffset(animController.currentDirection, lerpProgress);
+            drawX += wedgeOffset.x;
+            drawY += wedgeOffset.y;
+        }
+        
         if (direction === 'left') {
             c.translate(drawX + S, drawY);
             c.scale(-1, 1);
