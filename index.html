@@ -5283,24 +5283,14 @@ function handleUniqueMonsterReward(hit) {
     
     // Add fadeout effect before removing dangerous areas (5 seconds)
     if (hit.uniqueName && hit.spell) {
-        const fadeStartTime = Date.now();
-        const fadeDuration = 5000; // 5 seconds
+        const startTime = Date.now();
+        uniqueMonsterDeathTimers.set(hit, { startTime, spellType: hit.spell });
         
-        function fadeOutEffect() {
-            const elapsed = Date.now() - fadeStartTime;
-            const progress = Math.min(elapsed / fadeDuration, 1);
-            
-            // Apply visual effect during fadeout
-            if (progress < 1) {
-                needsRedraw = true;
-                requestAnimationFrame(fadeOutEffect);
-            } else {
-                // Fadeout complete - remove dangerous areas
-                removeDangerousAreas(hit);
-            }
-        }
-        
-        fadeOutEffect();
+        // Schedule removal after 5 seconds
+        setTimeout(() => {
+            removeDangerousAreas(hit);
+            uniqueMonsterDeathTimers.delete(hit);
+        }, 5000);
     }
     
     return true;
@@ -5337,6 +5327,9 @@ function removeDangerousAreas(monster) {
     // Redraw to reflect changes
     needsRedraw = true;
 }
+
+// Track unique monster death with fadeout
+let uniqueMonsterDeathTimers = new Map();
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
@@ -7417,27 +7410,56 @@ dangerousAreas.forEach(area => {
     const isVisible = fogMap[area.y][area.x] === 1 || dist <= radius;
     
     if (isVisible) {
-        // Draw spell effect with semi-transparent overlay
-        c.save();
-        
-        let spellColor = 'rgba(255, 255, 255, 0.5)';
+        // Check if this area is associated with a recently killed unique monster
         let spellAlpha = 0.5;
+        let spellColor = 'rgba(255, 255, 255, 0.5)';
         
-        switch (area.spellType) {
-            case SPELL_TYPES.FIRE_WALL:
-                spellColor = 'rgba(255, 0, 0, 0.5)'; // Red for fire
-                break;
-            case SPELL_TYPES.LIGHTNING_STORM:
-                spellColor = 'rgba(255, 255, 0, 0.5)'; // Yellow for lightning
-                break;
-            case SPELL_TYPES.FROST_NOVA:
-                spellColor = 'rgba(0, 255, 255, 0.5)'; // Cyan for frost
-                break;
-            case SPELL_TYPES.POISON_CLOUD:
-                spellColor = 'rgba(0, 255, 0, 0.5)'; // Green for poison
-                break;
+        // Apply fadeout effect for recent unique monster deaths
+        const matchingTimer = Array.from(uniqueMonsterDeathTimers.values()).find(timer => 
+            timer.spellType === area.spellType
+        );
+        
+        if (matchingTimer) {
+            const elapsed = Date.now() - matchingTimer.startTime;
+            const fadeDuration = 5000; // 5 seconds
+            const progress = Math.min(elapsed / fadeDuration, 1);
+            
+            // Fade from full opacity to 0
+            spellAlpha = 0.5 * (1 - progress);
+            
+            switch (area.spellType) {
+                case SPELL_TYPES.FIRE_WALL:
+                    spellColor = 'rgba(255, 0, 0, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Red for fire
+                    break;
+                case SPELL_TYPES.LIGHTNING_STORM:
+                    spellColor = 'rgba(255, 255, 0, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Yellow for lightning
+                    break;
+                case SPELL_TYPES.FROST_NOVA:
+                    spellColor = 'rgba(0, 255, 255, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Cyan for frost
+                    break;
+                case SPELL_TYPES.POISON_CLOUD:
+                    spellColor = 'rgba(0, 255, 0, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Green for poison
+                    break;
+            }
+        } else {
+            // Standard drawing without fadeout
+            switch (area.spellType) {
+                case SPELL_TYPES.FIRE_WALL:
+                    spellColor = 'rgba(255, 0, 0, 0.5)'; // Red for fire
+                    break;
+                case SPELL_TYPES.LIGHTNING_STORM:
+                    spellColor = 'rgba(255, 255, 0, 0.5)'; // Yellow for lightning
+                    break;
+                case SPELL_TYPES.FROST_NOVA:
+                    spellColor = 'rgba(0, 255, 255, 0.5)'; // Cyan for frost
+                    break;
+                case SPELL_TYPES.POISON_CLOUD:
+                    spellColor = 'rgba(0, 255, 0, 0.5)'; // Green for poison
+                    break;
+            }
         }
         
+        c.save();
         c.fillStyle = spellColor;
         c.globalAlpha = spellAlpha;
         c.fillRect(area.x * S, area.y * S, S, S);
