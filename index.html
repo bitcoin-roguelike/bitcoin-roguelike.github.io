@@ -1455,9 +1455,12 @@ let map = [],
         // Add diamond hand properties
         hasDiamondHand: false, // Track if player has diamond hand
         moveCounter: 0,
+        // Add elemental immunity
+        elementImmunity: null, // Store the player's elemental immunity
     }, 
     enemies = [], 
     rooms = [];
+    dangerousAreas = []; // Track dangerous spell areas
     diamonds = 0;          // total diamonds collected in the current run
     let themeTimeoutId = null;   // <‑‑ new
     
@@ -1538,6 +1541,14 @@ class EnemyType {
         };
     }
 }
+
+// Spell types for unique monsters
+const SPELL_TYPES = {
+    FIRE_WALL: 'Fire Wall',
+    LIGHTNING_STORM: 'Lightning Storm',
+    FROST_NOVA: 'Frost Nova',
+    POISON_CLOUD: 'Poison Cloud'
+};
 
 const types = [
     new EnemyType('Shrimp', 0, 0.01, 2, 1, 1),
@@ -2116,6 +2127,10 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
+    // Assign random elemental immunity
+    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+
 wakeLock = null;
 
 // Function to request wake lock
@@ -2426,6 +2441,7 @@ function initMap() {
             runeDrops = runeDrops.filter(r => !r.specific);
             scrollDrops = [];
             portals = [];
+            dangerousAreas = []; // Clear dangerous areas
             currentRuneTile = null;
             jewellerPos = null;
             blacksmithPos = null;
@@ -2830,6 +2846,9 @@ if (!inHideout && Math.random() < 0.20) {
         attempts++;
     } while (attempts < maxAttempts);
 }
+
+// Initialize dangerous areas array for spells
+dangerousAreas = [];
 
         exit = null;
         initialWaveSpawned = false;
@@ -3294,6 +3313,9 @@ if (floor > 1 && Math.random() < 0.10) {
         // Make unique monster stronger
         newEnemy.atk = type.atk * 2;
         newEnemy.hp = type.hp * 2;
+        
+        // Assign a spell to this unique monster
+        const spell = assignUniqueMonsterSpell(newEnemy);
         
         // Play unique monster sound on first spawn of this type
         playUniqueMonsterSound(randomUniqueName);        
@@ -3875,6 +3897,9 @@ if (animController.isAnimating) {
     p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
     p.anim.lastFrameTime = performance.now();
 }
+
+        // Apply spell damage when moving onto dangerous areas
+        applySpellDamage(p.x, p.y);
         
         if (map[ny][nx] === 2) { 
             p.potions++; 
@@ -3903,35 +3928,45 @@ if (map[ny][nx] === 6 && !inHideout) {
             
             // Desert – Sludge pit
             if (currentTheme === 'desert') {
-                p.hp = Math.max(0, p.hp - 2);
-                logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0 && p.immortal) {
-                    p.hp = 1;
-                    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-                } else if (p.hp <= 0) {
-                    p.hp = 0;
-                    diamonds = 0;                // ← reset diamonds
-                    updatePlayerState();          // ← update display
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
+                // Check for poison immunity
+                if (p.elementImmunity === 'Poison') {
+                    logBattleEvent(`Floor ${floor} - Sludge Pit: Immune to Poison damage!`);
+                } else {
+                    p.hp = Math.max(0, p.hp - 2);
+                    logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
+                    playWebAudioSound(sounds.hit);
+                    if (p.hp <= 0 && p.immortal) {
+                        p.hp = 1;
+                        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+                    } else if (p.hp <= 0) {
+                        p.hp = 0;
+                        diamonds = 0;                // ← reset diamonds
+                        updatePlayerState();          // ← update display
+                        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                        gameOver = true;
+                    }
                 }
             }
 
             // Hell – Lava
             if (currentTheme === 'hell') {
-                p.hp = Math.max(0, p.hp - 8);
-                logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
-                playWebAudioSound(sounds.hit);
-                if (p.hp <= 0 && p.immortal) {
-                    p.hp = 1;
-                    logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-                } else if (p.hp <= 0) {
-                    p.hp = 0;
-                    diamonds = 0;
-                    updatePlayerState();
-                    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                    gameOver = true;
+                // Check for fire immunity
+                if (p.elementImmunity === 'Fire') {
+                    logBattleEvent(`Floor ${floor} - Lava: Immune to Fire damage!`);
+                } else {
+                    p.hp = Math.max(0, p.hp - 8);
+                    logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
+                    playWebAudioSound(sounds.hit);
+                    if (p.hp <= 0 && p.immortal) {
+                        p.hp = 1;
+                        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+                    } else if (p.hp <= 0) {
+                        p.hp = 0;
+                        diamonds = 0;
+                        updatePlayerState();
+                        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                        gameOver = true;
+                    }
                 }
             }
 
@@ -4665,8 +4700,8 @@ if (uniqueMonstersInFog.length > 0 && !activeUniqueMonsterName) {
     const firstInFog = uniqueMonstersInFog[0];
     // Show the harbinger message
     const floorIndicator = document.getElementById('floor-indicator');
-    if (!floorIndicator.textContent.includes("A harbinger of doom draws near")) {
-        floorIndicator.textContent = "A harbinger of doom draws near.";
+    if (!floorIndicator.textContent.includes("A harbinger of doom is near.")) {
+        floorIndicator.textContent = "A harbinger of doom is near.";
         // Don't auto-clear - keep static until enemy is found or dead
         // Clear only when enemy is killed or when leaving the area
     }
@@ -4799,6 +4834,62 @@ if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActiv
     }
 }
 
+}
+
+// Function to apply spell damage to player
+function applySpellDamage(x, y) {
+    // Check if player is standing on a dangerous area
+    const dangerousArea = dangerousAreas.find(area => area.x === x && area.y === y);
+    
+    if (dangerousArea) {
+        let damage = 0;
+        let damageType = "";
+        
+        switch (dangerousArea.spellType) {
+            case SPELL_TYPES.FIRE_WALL:
+                damage = 2;
+                damageType = "Fire";
+                break;
+            case SPELL_TYPES.LIGHTNING_STORM:
+                damage = 1;
+                damageType = "Lightning";
+                break;
+            case SPELL_TYPES.FROST_NOVA:
+                damage = 2;
+                damageType = "Frost";
+                break;
+            case SPELL_TYPES.POISON_CLOUD:
+                damage = 1;
+                damageType = "Poison";
+                break;
+        }
+        
+        // Check if player has immunity to this spell type
+        if (p.elementImmunity) {
+            const immunityType = p.elementImmunity.toLowerCase();
+            if (damageType.toLowerCase() === immunityType) {
+                logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
+                return; // Skip damage application
+            }
+        }
+        
+        p.hp -= damage;
+        logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
+        playWebAudioSound(sounds.hit);
+        
+        if (p.hp <= 0 && p.immortal) {
+            p.hp = 1;
+            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        } else if (p.hp <= 0) {
+            p.hp = 0;
+            diamonds = 0;                // reset diamonds
+            updatePlayerState();          // update inventory
+            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+            gameOver = true;
+        }
+        
+        updatePlayerState();
+    }
 }
 
 // Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
@@ -5173,6 +5264,27 @@ function handleUniqueMonsterReward(hit) {
     return true;
 }
 
+// Function to assign a spell to a unique monster when it spawns
+function assignUniqueMonsterSpell(enemy) {
+    // Only assign spells to unique monsters
+    if (!enemy.uniqueName || !uniqueMonsterNames[enemy.type.name]) {
+        return null;
+    }
+    
+    // Choose a random spell from the available list
+    const availableSpells = [
+        SPELL_TYPES.FIRE_WALL,
+        SPELL_TYPES.LIGHTNING_STORM,
+        SPELL_TYPES.FROST_NOVA,
+        SPELL_TYPES.POISON_CLOUD
+    ];
+    
+    // Select one spell for this unique monster
+    const spell = availableSpells[Math.floor(Math.random() * availableSpells.length)];
+    enemy.spell = spell;
+    return spell;
+}
+
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
     if (gameOver || splashActive) return;
@@ -5205,6 +5317,76 @@ function attack() {
         let hit = enemies.find(e => e.x === sx && e.y === sy);
         
 if (hit) {
+    // Check if the enemy is a unique monster that can cast spells
+    if (hit.uniqueName && hit.spell) {
+        // Unique monster uses its spell
+        const spellEffect = hit.spell;
+        logBattleEvent(`Floor ${floor} - ${hit.uniqueName} casts ${spellEffect}!`);
+        
+        // Create the spell effect area around the enemy position
+        switch (spellEffect) {
+            case SPELL_TYPES.FIRE_WALL:
+                // Create fire wall in a 3x3 area centered on the enemy
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const x = hit.x + dx;
+                        const y = hit.y + dy;
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            // Only create the spell area if it's not already a wall or another spell area
+                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
+                                createDangerousArea(x, y, spellEffect);
+                            }
+                        }
+                    }
+                }
+                break;
+            case SPELL_TYPES.LIGHTNING_STORM:
+                // Create lightning storm in a 5x5 area centered on the enemy
+                for (let dx = -2; dx <= 2; dx++) {
+                    for (let dy = -2; dy <= 2; dy++) {
+                        const x = hit.x + dx;
+                        const y = hit.y + dy;
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            // Only create the spell area if it's not already a wall or another spell area
+                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
+                                createDangerousArea(x, y, spellEffect);
+                            }
+                        }
+                    }
+                }
+                break;
+            case SPELL_TYPES.FROST_NOVA:
+                // Create frost nova in a 3x3 area centered on the enemy
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const x = hit.x + dx;
+                        const y = hit.y + dy;
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            // Only create the spell area if it's not already a wall or another spell area
+                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
+                                createDangerousArea(x, y, spellEffect);
+                            }
+                        }
+                    }
+                }
+                break;
+            case SPELL_TYPES.POISON_CLOUD:
+                // Create poison cloud in a 5x5 area centered on the enemy
+                for (let dx = -2; dx <= 2; dx++) {
+                    for (let dy = -2; dy <= 2; dy++) {
+                        const x = hit.x + dx;
+                        const y = hit.y + dy;
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            // Only create the spell area if it's not already a wall or another spell area
+                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
+                                createDangerousArea(x, y, spellEffect);
+                            }
+                        }
+                    }
+                }
+                break;
+        }
+    }
     if (p.hasDiamondHand && !(p.pickaxes > 0 && usePickaxeSword)) {
         // Diamond hand AOE damage - updated to match the specified pattern
         const damageArea = [];
@@ -5792,6 +5974,12 @@ checkRunewords();
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
     addTerminalLineToContent('');
     
+    // Display elemental immunity
+    if (p.elementImmunity) {
+        addTerminalLineToContent(`Resistance: ${p.elementImmunity} 100%`);
+        addTerminalLineToContent('');
+    }
+    
     // Display regular inventory items
     addTerminalLineToContent('--- Regular Inventory ---');
     addTerminalLineToContent(`Health: ${p.hp}`);
@@ -6201,6 +6389,30 @@ function handleBlurredTerminalInput(key) {
         // Update display
         input.value = p.soulTerminalCommand.substring(1);
     }
+}
+
+// Function to create dangerous spell area (called when unique monster uses a spell)
+function createDangerousArea(x, y, spellType) {
+    // Add the dangerous area to the array
+    dangerousAreas.push({
+        x: x,
+        y: y,
+        spellType: spellType
+    });
+    
+    // Draw immediate visual feedback
+    needsRedraw = true;
+}
+
+// Function to remove dangerous areas when a unique monster dies
+function removeDangerousAreas(monster) {
+    if (!monster.uniqueName || !monster.spell) return;
+    
+    // Remove all dangerous areas that match this spell type
+    dangerousAreas = dangerousAreas.filter(area => area.spellType !== monster.spell);
+    
+    // Redraw to reflect changes
+    needsRedraw = true;
 }
 
 function cleanupEventListeners() {
@@ -6669,6 +6881,32 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
     if (isVisible && map[y][x] !== 1) {
         c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+        
+        // Draw dangerous areas (spells) before other items
+        dangerousAreas.forEach(area => {
+            if (area.x === x && area.y === y) {
+                let spellColor = 'rgba(255, 255, 255, 0.5)';
+                switch (area.spellType) {
+                    case SPELL_TYPES.FIRE_WALL:
+                        spellColor = 'rgba(255, 0, 0, 0.5)'; // Red for fire
+                        break;
+                    case SPELL_TYPES.LIGHTNING_STORM:
+                        spellColor = 'rgba(255, 255, 0, 0.5)'; // Yellow for lightning
+                        break;
+                    case SPELL_TYPES.FROST_NOVA:
+                        spellColor = 'rgba(0, 255, 255, 0.5)'; // Cyan for frost
+                        break;
+                    case SPELL_TYPES.POISON_CLOUD:
+                        spellColor = 'rgba(0, 255, 0, 0.5)'; // Green for poison
+                        break;
+                }
+                c.fillStyle = spellColor;
+                c.globalAlpha = 0.5;
+                c.fillRect(x * S, y * S, S, S);
+                c.globalAlpha = 1;
+            }
+        });
+        
         if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
         if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
         if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
@@ -6732,7 +6970,10 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 22) { // Shrine
             c.drawImage(assets.shrine, x * S, y * S, S, S);
         }
-        if (exit && exit.x === x && exit.y === y) c.drawImage(assets.stairs, x * S, y * S, S, S);
+        // Draw stairs after portals to ensure proper visibility
+        if (exit && exit.x === x && exit.y === y) {
+            c.drawImage(assets.stairs, x * S, y * S, S, S);
+        }
     }
 }
 
@@ -7106,6 +7347,42 @@ if (isUniqueMonster && isVisible && !activeUniqueMonsterName) {
 }
     }
 });
+
+// Draw dangerous spell areas after enemies
+dangerousAreas.forEach(area => {
+    // Only draw if within fog of war or player's view radius
+    const dist = Math.sqrt((area.x - p.x) ** 2 + (area.y - p.y) ** 2);
+    const isVisible = fogMap[area.y][area.x] === 1 || dist <= radius;
+    
+    if (isVisible) {
+        // Draw spell effect with semi-transparent overlay
+        c.save();
+        
+        let spellColor = 'rgba(255, 255, 255, 0.5)';
+        let spellAlpha = 0.5;
+        
+        switch (area.spellType) {
+            case SPELL_TYPES.FIRE_WALL:
+                spellColor = 'rgba(255, 0, 0, 0.5)'; // Red for fire
+                break;
+            case SPELL_TYPES.LIGHTNING_STORM:
+                spellColor = 'rgba(255, 255, 0, 0.5)'; // Yellow for lightning
+                break;
+            case SPELL_TYPES.FROST_NOVA:
+                spellColor = 'rgba(0, 255, 255, 0.5)'; // Cyan for frost
+                break;
+            case SPELL_TYPES.POISON_CLOUD:
+                spellColor = 'rgba(0, 255, 0, 0.5)'; // Green for poison
+                break;
+        }
+        
+        c.fillStyle = spellColor;
+        c.globalAlpha = spellAlpha;
+        c.fillRect(area.x * S, area.y * S, S, S);
+        c.restore();
+    }
+});
+
 // Draw low-health warning border with smooth transition
 if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
     // Use a smooth, consistent pulse instead of frame-rate dependent flashing
@@ -7922,7 +8199,7 @@ function displayUniqueMonsterName() {
     
     if (uniqueMonsterInFog && !activeUniqueMonsterName) {
         activeUniqueMonsterName = uniqueMonsterInFog.uniqueName;
-        logBattleEvent(`A harbinger of doom draws near.`);
+        logBattleEvent(`A harbinger of doom is near.`);
         
 // Clear only when enemy is killed or when leaving the area
 // No auto-clear timeout needed anymore
@@ -8159,4 +8436,3 @@ document.addEventListener('keydown', function (e) {
     </script>
 </body>
 </html>
-
