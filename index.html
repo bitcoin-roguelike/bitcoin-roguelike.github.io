@@ -6521,6 +6521,53 @@ function cleanupEventListeners() {
             button._contextmenuHandler = null;
         }
     });
+    
+    // Clear existing touch listeners from gamepad buttons
+    if (gamepadIndex !== null && navigator.getGamepads) {
+        const gamepads = navigator.getGamepads();
+        if (gamepads[gamepadIndex]) {
+            const gamepad = gamepads[gamepadIndex];
+            if (gamepad.buttons && gamepad.buttons.length > 0) {
+                // Remove event listeners from gamepad buttons
+                for (let i = 0; i < gamepad.buttons.length; i++) {
+                    if (gamepad.buttons[i]._clickHandler) {
+                        gamepad.buttons[i].removeEventListener('click', gamepad.buttons[i]._clickHandler);
+                        gamepad.buttons[i]._clickHandler = null;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Clear existing event listeners from document
+    if (document._keydownHandler) {
+        document.removeEventListener('keydown', document._keydownHandler);
+        document._keydownHandler = null;
+    }
+    if (document._keyupHandler) {
+        document.removeEventListener('keyup', document._keyupHandler);
+        document._keyupHandler = null;
+    }
+    if (document._touchstartHandler) {
+        document.removeEventListener('touchstart', document._touchstartHandler);
+        document._touchstartHandler = null;
+    }
+    if (document._touchmoveHandler) {
+        document.removeEventListener('touchmove', document._touchmoveHandler);
+        document._touchmoveHandler = null;
+    }
+    if (document._touchendHandler) {
+        document.removeEventListener('touchend', document._touchendHandler);
+        document._touchendHandler = null;
+    }
+    if (document._gamepadConnectedHandler) {
+        window.removeEventListener('gamepadconnected', document._gamepadConnectedHandler);
+        document._gamepadConnectedHandler = null;
+    }
+    if (document._gamepadDisconnectedHandler) {
+        window.removeEventListener('gamepaddisconnected', document._gamepadDisconnectedHandler);
+        document._gamepadDisconnectedHandler = null;
+    }
 }
 
 /* ------------------------------------------------------------------
@@ -7767,6 +7814,44 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
+
+// Add global event listeners with proper cleanup handling
+document._keydownHandler = function(e) {
+    // Existing keydown handler logic here
+};
+document.addEventListener('keydown', document._keydownHandler);
+
+document._keyupHandler = function(e) {
+    // Existing keyup handler logic here
+};
+document.addEventListener('keyup', document._keyupHandler);
+
+// Add touch event listeners with proper cleanup
+document._touchstartHandler = function(e) {
+    // Existing touchstart handler logic here
+};
+document.addEventListener('touchstart', document._touchstartHandler);
+
+document._touchmoveHandler = function(e) {
+    // Existing touchmove handler logic here
+};
+document.addEventListener('touchmove', document._touchmoveHandler);
+
+document._touchendHandler = function(e) {
+    // Existing touchend handler logic here
+};
+document.addEventListener('touchend', document._touchendHandler);
+
+// Add gamepad event listeners with proper cleanup
+document._gamepadConnectedHandler = function(e) {
+    // Existing gamepadconnected handler logic here
+};
+window.addEventListener('gamepadconnected', document._gamepadConnectedHandler);
+
+document._gamepadDisconnectedHandler = function(e) {
+    // Existing gamepaddisconnected handler logic here
+};
+window.addEventListener('gamepaddisconnected', document._gamepadDisconnectedHandler);
 
 // Update key states on release
 document.addEventListener('keyup', e => {
