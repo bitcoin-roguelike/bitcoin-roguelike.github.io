@@ -1406,9 +1406,17 @@ let activeUniqueMonsterName = null;
 let shrinePositions = [];
 let map = [],
     p = {
-        x: 2,
-        y: 2,
-        hp: 36,
+x: 2,
+    y: 2,
+    currentX: 32,  // S * x
+    currentY: 32,  // S * y
+    moving: false,
+    stepsLeft: 0,
+    deltaX: 0,
+    deltaY: 0,
+    targetTileX: 0,
+    targetTileY: 0,
+    hp: 36,
         potions: 0,
         atk: 2,
         pickaxes: 0,
@@ -2541,9 +2549,17 @@ function initMap() {
                 console.warn('Failed to place hooded heirloom: tile occupied at', heirloomX, heirloomY);
             }
 
-            p.x = mainRoomX + 3;
-            p.y = mainRoomY + 6;
-            updateFogMap(p.x, p.y);
+p.x = mainRoomX + 3;
+p.y = mainRoomY + 6;
+p.currentX = p.x * S;
+p.currentY = p.y * S;
+p.moving = false;
+p.stepsLeft = 0;
+p.deltaX = 0;
+p.deltaY = 0;
+p.targetTileX = p.x;
+p.targetTileY = p.y;
+updateFogMap(p.x, p.y);
             needsRedraw = true;
             logBattleEvent(`Hideout - Entered the secret hideout!`);
             document.getElementById('floor-indicator').textContent = `Hideout`;
@@ -2644,14 +2660,26 @@ function initMap() {
         // Ensure map is valid
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
 
-        // Place player
-        p.x = rooms[0].x + 1; p.y = rooms[0].y + 1;
-        if (!map[p.y]?.[p.x] || map[p.y][p.x] !== 0) {
-            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) { p.x = x; p.y = y; break; }
-        }
-
-        // Mark initial player area as explored
-        updateFogMap(p.x, p.y);
+// Place player
+p.x = rooms[0].x + 1; p.y = rooms[0].y + 1;
+p.currentX = p.x * S;
+p.currentY = p.y * S;
+p.moving = false;
+p.stepsLeft = 0;
+p.deltaX = 0;
+p.deltaY = 0;
+p.targetTileX = p.x;
+p.targetTileY = p.y;
+if (!map[p.y]?.[p.x] || map[p.y][p.x] !== 0) {
+   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) {
+       p.x = x; p.y = y;
+       p.currentX = p.x * S; p.currentY = p.y * S;
+       p.targetTileX = p.x; p.targetTileY = p.y;
+       break;
+    }
+}
+// Mark initial player area as explored
+updateFogMap(p.x, p.y);
 
         // Place special tiles based on theme (pond, quicksand, lava)
         let specialPositions = [];
@@ -2808,7 +2836,8 @@ if (!inHideout && floor > 1) { // Don't spawn on floor 1 to avoid conflicts
 					!satoshiDrops.some(d => d.x === x && d.y === y) &&
 					!runeDrops.some(r => r.x === x && r.y === y) &&
 					!scrollDrops.some(s => s.x === x && s.y === y) &&
-					!portals.some(p => p.x === x && p.y === y)) {
+					!portals.some(p => p.x === x && p.y === y) &&
+					Math.abs(x - p.x) > 2 && Math.abs(y - p.y) > 2) {
 					
 					map[y][x] = 21; // Soul orb statue tile
 					return {x, y};
@@ -2837,7 +2866,8 @@ if (!inHideout && Math.random() < 0.20) {
             !satoshiDrops.some(d => d.x === x && d.y === y) &&
             !runeDrops.some(r => r.x === x && r.y === y) &&
             !scrollDrops.some(s => s.x === x && s.y === y) &&
-            !portals.some(p => p.x === x && p.y === p.y)) {
+            !portals.some(p => p.x === x && p.y === p.y) &&
+            Math.abs(x - p.x) > 2 && Math.abs(y - p.y) > 2) {
             
             map[y][x] = 22; // Shrine tile
             shrinePositions.push({x, y});
@@ -3290,13 +3320,21 @@ async function fetchTxs() {
                   attempts--;
               } while (attempts > 0 && !validPosition);
               
-              const newEnemy = { 
-                  x, 
-                  y, 
-                  type, 
-                  hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp, 
-                  address, 
-                  sats: Math.round(btc * 1e8) 
+const newEnemy = { 
+                 x,
+                 y,
+                  currentX: x * S,
+                  currentY: y * S,
+                  moving: false,
+                  stepsLeft: 0,
+                  deltaX: 0,
+                  deltaY: 0,
+                  targetTileX: 0,
+                  targetTileY: 0,
+                 type,
+                 hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp,
+                 address,
+                 sats: Math.round(btc * 1e8)
               };
     
 // I am starting to think 10% chance to spawn an unique monster actually means per regular enemy spawned (10%,10%,10%,10%,10%,10%,10%,10%,10%,10% instead of just 10%)
@@ -3345,6 +3383,11 @@ if (floor > 1 && Math.random() < 0.10) {
                               ) {
                                   newEnemy.x = x;
                                   newEnemy.y = y;
+                                  newEnemy.currentX = newEnemy.x * S;
+                                  newEnemy.currentY = newEnemy.y * S;
+                                  newEnemy.targetTileX = newEnemy.x;
+                                  newEnemy.targetTileY = newEnemy.y;
+                                  
                                   validPosition = true;
                                   break;
                               }
@@ -3612,163 +3655,6 @@ function isSolid(x, y) {
     return map[y][x] === 1 || map[y][x] === 13; // Standard walls and diamond walls
 }
 
-// New animation controller with 20 FPS capped animation and smooth movement lerping
-class AnimationController {
-    constructor() {
-        this.movementStartTime = 0;
-        this.isMoving = false;
-        this.currentDirection = null;
-        this.nextMoveQueue = [];
-        this.animationDuration = 200; // Total animation time
-        this.frameInterval = 50; // 4 frames per move (200ms/50ms) - this is now our 20 FPS cap
-        this.lastFrameTime = 0;
-        this.lastDrawTime = 0; // Track last draw time for FPS limiting
-        
-        // Lerp properties for smooth movement
-        this.lerpProgress = 0; // Current lerp progress (0.0 to 1.0)
-        this.lerpStartTime = 0;
-        this.lerpDuration = 200;
-        
-        // For interpolation tracking
-        this.startX = 0;
-        this.startY = 0;
-        this.endX = 0;
-        this.endY = 0;
-    }
-
-    startMovement(direction) {
-        if (this.isMoving) {
-            this.nextMoveQueue.push(direction);
-            return false;
-        }
-        
-        this.isMoving = true;
-        this.currentDirection = direction;
-        this.movementStartTime = performance.now();
-        this.lastFrameTime = performance.now();
-        // Initialize lerp progress
-        this.lerpProgress = 0;
-        this.lerpStartTime = performance.now();
-        
-        // Store start position for interpolation
-        this.startX = p.x;
-        this.startY = p.y;
-        
-        // Calculate end position based on direction
-        let endX = p.x, endY = p.y;
-        if (direction === 'up') endY--;
-        if (direction === 'down') endY++;
-        if (direction === 'left') endX--;
-        if (direction === 'right') endX++;
-        
-        this.endX = endX;
-        this.endY = endY;
-        
-        needsRedraw = true; // CRITICAL: Trigger redraw when starting new animation!
-        
-        return true;
-    }
-
-    endMovement() {
-        this.isMoving = false;
-        this.currentDirection = null;
-        
-        if (this.nextMoveQueue.length > 0) {
-            const nextDirection = this.nextMoveQueue.shift();
-            move(nextDirection);
-        }
-    }
-
-    get isAnimating() {
-        return this.isMoving;
-    }
-
-    getProgress() {
-        if (!this.isMoving) return 0;
-        const elapsed = performance.now() - this.movementStartTime;
-        return Math.min(elapsed / this.animationDuration, 1);
-    }
-    
-    // Get frame progress for animation cycling
-    getFrameProgress() {
-        if (!this.isMoving) return 0;
-        const elapsed = performance.now() - this.lastFrameTime;
-        return elapsed / this.frameInterval;
-    }
-    
-    // Check if we should update frame based on FPS cap (20 FPS = 50ms)
-    shouldUpdateFrame() {
-        const now = performance.now();
-        const shouldUpdate = now - this.lastFrameTime >= this.frameInterval; // 50ms = 20 FPS
-        if (shouldUpdate) {
-            this.lastFrameTime = now;
-            needsRedraw = true; // CRITICAL: Trigger redraw when we update animation frames!
-        }
-        return shouldUpdate;
-    }
-    
-    // Get lerp progress for smooth movement visualization
-    getLerpProgress() {
-        if (!this.isMoving) return 0;
-        const elapsed = performance.now() - this.lerpStartTime;
-        this.lerpProgress = Math.min(elapsed / this.lerpDuration, 1);
-        
-        // Apply wedge progression: 0.2, 0.4, 0.6, 0.8, 1.0
-        if (this.lerpProgress < 0.2) {
-            return 0.2 * (this.lerpProgress / 0.2); // Progress from 0 to 0.2
-        } else if (this.lerpProgress < 0.4) {
-            return 0.2 + 0.2 * ((this.lerpProgress - 0.2) / 0.2); // Progress from 0.2 to 0.4
-        } else if (this.lerpProgress < 0.6) {
-            return 0.4 + 0.2 * ((this.lerpProgress - 0.4) / 0.2); // Progress from 0.4 to 0.6
-        } else if (this.lerpProgress < 0.8) {
-            return 0.6 + 0.2 * ((this.lerpProgress - 0.6) / 0.2); // Progress from 0.6 to 0.8
-        } else {
-            return 0.8 + 0.2 * ((this.lerpProgress - 0.8) / 0.2); // Progress from 0.8 to 1.0
-        }
-    }
-    
-    // Get interpolated position for smooth movement rendering
-    getInterpolatedPosition() {
-        if (!this.isMoving) return { x: p.x, y: p.y };
-        
-        const progress = this.getLerpProgress();
-        const newX = this.startX + (this.endX - this.startX) * progress;
-        const newY = this.startY + (this.endY - this.startY) * progress;
-        return { x: newX, y: newY };
-    }
-    
-    // Update player position during animation for actual movement
-    updatePlayerPosition() {
-        if (!this.isMoving) return;
-        
-        const progress = this.getLerpProgress();
-        p.x = this.startX + (this.endX - this.startX) * progress;
-        p.y = this.startY + (this.endY - this.startY) * progress;
-    }
-}
-
-// Create global animation controller
-const animController = new AnimationController();
-
-// Add wedge animation for player movement
-function getWedgeOffset(direction, progress) {
-    // Calculate the wedge effect based on movement progress
-    const wedgeFactor = 0.2; // How much the sprite moves in the direction of travel
-    
-    switch (direction) {
-        case 'up':
-            return { x: 0, y: -S * wedgeFactor * progress };
-        case 'down':
-            return { x: 0, y: S * wedgeFactor * progress };
-        case 'left':
-            return { x: -S * wedgeFactor * progress, y: 0 };
-        case 'right':
-            return { x: S * wedgeFactor * progress, y: 0 };
-        default:
-            return { x: 0, y: 0 };
-    }
-}
-
 function move(dir) {
     if (gameOver || splashActive || inputBlocked) return;
     
@@ -3776,12 +3662,6 @@ function move(dir) {
     if (inHideout && map[p.y][p.x] === 16) {
         // Allow pausing when on waypoint in hideout
         // This is handled by the existing logic but we want to ensure it works properly
-    }
-
-    // If already animating, queue this move
-    if (animController.isAnimating) {
-        animController.nextMoveQueue.push(dir);
-        return;
     }
 
     swordDir = dir;
@@ -3828,11 +3708,6 @@ if (p.moveCounter >= 2) {
         return; // Don't start animation
     }
 
-    // Now start animation since move is valid
-    if (!animController.startMovement(dir)) {
-        return; // Shouldn't happen since we checked isAnimating
-    }
-
     // Update direction and position (will be interpolated during draw)
     p.anim.direction = newDirection;
     
@@ -3840,14 +3715,12 @@ if (p.moveCounter >= 2) {
         // Set target position for animation but don't update immediately
         // Actual position will be updated during interpolation in draw()
 // Animation frame update logic here
-if (animController.isAnimating) {
+if (p.moving) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
-        // Update player position during animation
-        animController.updatePlayerPosition();
     }
 } else {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
@@ -3871,14 +3744,12 @@ if (animController.isAnimating) {
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
         // Actual position update will happen during interpolation in draw()
 // Animation frame update logic here
-if (animController.isAnimating) {
+if (p.moving) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
-        // Update player position during animation
-        animController.updatePlayerPosition();
     }
 } else {
             p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
@@ -3900,17 +3771,25 @@ if (animController.isAnimating) {
     }
     
     if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
-        p.x = nx;
-        p.y = ny;
+    
+const oldX = p.x;
+const oldY = p.y;
+p.x = nx;
+p.y = ny;
+p.targetTileX = nx;
+p.targetTileY = ny;
+p.deltaX = (nx - oldX) * 2;
+p.deltaY = (ny - oldY) * 2;
+p.stepsLeft = 8;
+p.moving = true;
+p.anim.direction = newDirection;
 // Animation frame update logic here
-if (animController.isAnimating) {
+if (p.moving) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
-        // Update player position during animation
-        animController.updatePlayerPosition();
     }
 } else {
     p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
@@ -4342,12 +4221,27 @@ if (map[ny][nx] === 6 && !inHideout) {
 
                     // Update player position if valid
                     if (validPosition) {
-                        p.x = pushX;
-                        p.y = pushY;
+p.x = pushX;
+p.y = pushY;
+p.currentX = p.x * S;
+p.currentY = p.y * S;
+p.moving = false;
+p.stepsLeft = 0;
+p.deltaX = 0;
+p.deltaY = 0;
+p.targetTileX = p.x;
+p.targetTileY = p.y;
                     } else {
                         // Fallback: keep player at original position if no valid move
-                        p.x = oldX;
-                        p.y = oldY;
+p.currentX = p.x * S;
+p.currentY = p.y * S;
+p.moving = false;
+p.stepsLeft = 0;
+p.deltaX = 0;
+p.deltaY = 0;
+p.targetTileX = p.x;
+p.targetTileY = p.y;
+return;
                     }
 
                     // Reset falling flag and animation state
@@ -4364,7 +4258,6 @@ if (map[ny][nx] === 6 && !inHideout) {
             // Ensure we reset to first frame before starting animation
             p.anim.frameIndex = 0;
             animateFall();
-            animController.endMovement();
             return; // Exit move early to prevent further movement
         }
 
@@ -4444,7 +4337,6 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
     }
     
     // Add proper exit handling to prevent teleportation issues
-    animController.endMovement();
     return; // ✅ This is CRUCIAL - stops further execution after exit
 }
 
@@ -4453,7 +4345,6 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
             playWebAudioSound(sounds.town_portal);
             inHideout = true;
             initMap();
-            animController.endMovement();
             return;
         }
 
@@ -4478,9 +4369,17 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
                 waveActive = previousFloorState.waveActive;
                 currentTheme = previousFloorState.currentTheme;
                 const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
-                p.x = portal ? portal.x : 2;
-                p.y = portal ? portal.y : 2;
-                inHideout = false;
+p.x = portal ? portal.x : 2;
+p.y = portal ? portal.y : 2;
+p.currentX = p.x * S;
+p.currentY = p.y * S;
+p.moving = false;
+p.stepsLeft = 0;
+p.deltaX = 0;
+p.deltaY = 0;
+p.targetTileX = p.x;
+p.targetTileY = p.y;
+inHideout = false;
                 document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
                 updateFogMap(p.x, p.y);
                 needsRedraw = true;
@@ -4489,7 +4388,6 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
                 document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
                     el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
                 });
-                animController.endMovement();
                 return;
             } else {
                 inHideout = false;
@@ -4503,7 +4401,6 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
                 document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
                     el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
                 });
-                animController.endMovement();
                 return;
             }
         }
@@ -4520,7 +4417,6 @@ if (map[ny][nx] === 19 && !inHideout) { // Soul stash tile
     const stashX = nx;
     const stashY = ny;
     openSoulTerminal();
-    animController.endMovement();
     return;
 }
 
@@ -4554,7 +4450,6 @@ if (map[ny][nx] === 21 && !inHideout) { // Soul orb statue tile
 		logBattleEvent(`Block 74638: Seek the masked relics’ refuge, where souls gather.`);
 		needsRedraw = true;
 	}
-	animController.endMovement();
 	return;
 }
         
@@ -4786,9 +4681,7 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
     }
     
     needsRedraw = true;
-    
-    // End the animation
-    animController.endMovement();
+
 }
 
 function moveEnemies() {
@@ -4797,26 +4690,50 @@ function moveEnemies() {
         let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
         if (dist <= 5) {
             let moves = e.type.move, steps = 0;
-            while (steps < moves) {
-                let nx = e.x, ny = e.y;
-                if (e.type.name === 'Crab') {
-                    nx += dx > 0 ? 1 : -1;
-                } else if (e.type.name === 'Shrimp' || e.type.name === 'Dolphin' || e.type.name === 'Shark') {
-                    if (Math.abs(dx) > Math.abs(dy)) nx += dx > 0 ? 1 : -1;
-                    else ny += dy > 0 ? 1 : -1;
-                } else {
-                    if (Math.abs(dx) > Math.abs(dy)) nx += dx > 0 ? 1 : -1;
-                    else ny += dy > 0 ? 1 : -1;
-                }
-                if (
-                    nx >= 0 && nx < W && ny >= 0 && ny < H && 
-                    map[ny][nx] !== 1 && !(nx === p.x && ny === p.y) && 
-                    !enemies.some(en => en.x === nx && en.y === ny && en !== e)
-                ) {
-                    e.x = nx; e.y = ny;
-                } else break;
-                steps++;
-                dx = p.x - e.x; dy = p.y - e.y;
+let startX = e.x, startY = e.y;
+let finalX = e.x, finalY = e.y;
+let numTileSteps = 0;
+let tempDx = dx, tempDy = dy;
+while (steps < moves) {
+    let nx = finalX, ny = finalY;
+    if (e.type.name === 'Crab') {
+        nx += tempDx > 0 ? 1 : -1;
+    } else if (e.type.name === 'Shrimp' || e.type.name === 'Dolphin' || e.type.name === 'Shark') {
+        if (Math.abs(tempDx) > Math.abs(tempDy)) nx += tempDx > 0 ? 1 : -1;
+        else ny += tempDy > 0 ? 1 : -1;
+    } else {
+        if (Math.abs(tempDx) > Math.abs(tempDy)) nx += tempDx > 0 ? 1 : -1;
+        else ny += tempDy > 0 ? 1 : -1;
+    }
+    if (
+       nx >= 0 && nx < W && ny >= 0 && ny < H &&
+       map[ny][nx] !== 1 && !(nx === p.x && ny === p.y) &&
+        !enemies.some(en => en.x === nx && en.y === ny && en !== e)
+    ) {
+        finalX = nx;
+        finalY = ny;
+        numTileSteps++;
+    } else break;
+    steps++;
+    tempDx = p.x - finalX; tempDy = p.y - finalY;
+}
+if (numTileSteps > 0) {
+    const totalDeltaX = (finalX - startX) * S;
+    const totalDeltaY = (finalY - startY) * S;
+    const totalDistance = Math.abs(totalDeltaX) + Math.abs(totalDeltaY);
+    const numSubSteps = totalDistance / 2;
+    e.deltaX = totalDeltaX > 0 ? 2 : (totalDeltaX < 0 ? -2 : 0);
+    e.deltaY = totalDeltaY > 0 ? 2 : (totalDeltaY < 0 ? -2 : 0);
+    e.stepsLeft = numSubSteps;
+    e.moving = true;
+    e.x = finalX;
+    e.y = finalY;
+    e.targetTileX = finalX;
+    e.targetTileY = finalY;
+    e.currentX = startX * S;
+    e.currentY = startY * S;
+}
+dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
             }
             if (
                 (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark') ?
@@ -4840,7 +4757,6 @@ if (p.hp <= 0 && p.immortal) {
 
 updatePlayerState(); // Check HP and armor state after damage
             }
-        }
     });
 if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
     if (placeStairs()) {
@@ -6898,25 +6814,15 @@ function draw() {
     lastDrawTime = now;
     
 // Animation frame update logic here
-if (animController.isAnimating) {
+if (p.moving) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
-        // Update player position during animation
-        animController.updatePlayerPosition();
     }
 }
     
-// Add this to the existing draw function for movement animation with lerp progress
-if (animController.isAnimating && !splashActive && !gameOver) {
-    const lerpProgress = animController.getLerpProgress();
-    const offset = getMovementOffset(animController.currentDirection, lerpProgress);
-    drawX += offset.x;
-    drawY += offset.y;
-}
-
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
         console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
         initMap();
@@ -7120,30 +7026,19 @@ for (let y = 0; y < H; y++) {
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
 const now = performance.now();
 // Animation frame update logic here
-if (animController.isAnimating) {
+if (p.moving) {
     const now = performance.now();
     // Cap animation updates to 20 FPS (50ms)
     if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
-        // Update player position during animation
-        animController.updatePlayerPosition();
     }
 } else {
     // Optional: Handle non-animating state or just let it be
 }
         
-        // Apply movement animation offset with smooth interpolation
-        let drawX = p.x * S;
-        let drawY = p.y * S;
-        
-        if (animController.isAnimating && !splashActive && !gameOver) {
-            const interpolatedPos = animController.getInterpolatedPosition();
-            
-            // Use the interpolated position for rendering but keep actual position updated
-            drawX = interpolatedPos.x * S;
-            drawY = interpolatedPos.y * S;
-        }
+let drawX = p.currentX;
+let drawY = p.currentY;
         
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
@@ -7153,15 +7048,7 @@ if (p.isFalling) {
 }
 	const frame = p.anim.frames[frameKey][p.anim.frameIndex];
         c.save();
-        
-        // Apply wedge effect for smooth movement
-        if (animController.isAnimating && !splashActive && !gameOver) {
-            const lerpProgress = animController.getLerpProgress();
-            const wedgeOffset = getWedgeOffset(animController.currentDirection, lerpProgress);
-            drawX += wedgeOffset.x;
-            drawY += wedgeOffset.y;
-        }
-        
+                
         if (direction === 'left') {
             c.translate(drawX + S, drawY);
             c.scale(-1, 1);
@@ -7426,7 +7313,7 @@ enemies.forEach(e => {
         }
         
         // Draw the processed sprite to the main canvas
-        c.drawImage(tempCanvas, e.x * S, e.y * S, S, S);
+        c.drawImage(tempCanvas, e.currentX, e.currentY, S, S);
         c.restore();
         
 // Show unique monster name when enemy becomes visible (fog of war)
@@ -7600,7 +7487,39 @@ if (gameOver) {
     needsRedraw = true;
 }
     
-    updateProjectiles();
+updateProjectiles();
+// Simple delta updates
+if (p.moving) {
+    p.currentX += p.deltaX;
+    p.currentY += p.deltaY;
+    p.stepsLeft--;
+    if (p.stepsLeft <= 0) {
+        p.moving = false;
+        p.anim.frameIndex = 0;  // Reset to idle frame on stop
+        p.currentX = p.x * S;
+        p.currentY = p.y * S;
+    }
+    needsRedraw = true;
+}
+enemies.forEach(e => {
+    if (e.moving) {
+        e.currentX += e.deltaX;
+        e.currentY += e.deltaY;
+        e.stepsLeft--;
+        if (e.stepsLeft <= 0) {
+            e.moving = false;
+            e.currentX = e.x * S;
+            e.currentY = e.y * S;
+        }
+        needsRedraw = true;
+    }
+});
+// Frame animation (only when moving)
+const now = performance.now();
+if (p.moving && now - p.anim.lastFrameTime >= 50) {
+    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+    p.anim.lastFrameTime = now;
+}
     
     // Check for invisible health warning animation (activated at above 8 HP)
     const showInvisibleHealthWarning = p.hp > 8; // Trigger animation at higher threshold
@@ -8323,32 +8242,6 @@ function submitScoreWithRandomName() {
         // Submit the score
         submitScore();
     }
-}
-
-// Add animation timing to movement
-function getMovementAnimationProgress() {
-    if (animController.isAnimating) {
-        const elapsed = performance.now() - animController.movementStartTime;
-        return Math.min(elapsed / animController.animationDuration, 1);
-    }
-    return 0;
-}
-
-// This function is no longer needed as we use interpolation in getInterpolatedPosition
-// But keep it for reference or compatibility
-function getMovementOffset(direction, lerpProgress = null) {
-    const progress = lerpProgress !== null ? lerpProgress : animController.getProgress();
-    if (progress === 0) return { x: 0, y: 0 };
-    
-    let offsetX = 0, offsetY = 0;
-    const offset = S * progress; // Integer-based calculation
-    
-    if (direction === 'up') offsetY = -offset;
-    if (direction === 'down') offsetY = offset;
-    if (direction === 'left') offsetX = -offset;
-    if (direction === 'right') offsetX = offset;
-    
-    return { x: offsetX, y: offsetY };
 }
 
 function displayUniqueMonsterName() {
