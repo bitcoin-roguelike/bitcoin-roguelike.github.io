@@ -3786,14 +3786,11 @@ p.anim.direction = newDirection;
 // Animation frame update logic here
 if (p.moving) {
     const now = performance.now();
-    // Cap animation updates to 20 FPS (50ms)
-    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
+    // Half speed animation during movement (10 FPS)
+    if (now - p.anim.lastFrameTime >= 100) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
-} else {
-    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-    p.anim.lastFrameTime = performance.now();
 }
 
         // Apply spell damage when moving onto dangerous areas
@@ -7027,14 +7024,13 @@ for (let y = 0; y < H; y++) {
 const now = performance.now();
 // Animation frame update logic here
 if (p.moving) {
-    const now = performance.now();
-    // Cap animation updates to 20 FPS (50ms)
-    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
+    // Half speed animation during movement (10 FPS)
+    if (now - p.anim.lastFrameTime >= 100) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
 } else {
-    // Optional: Handle non-animating state or just let it be
+    p.anim.frameIndex = 0; // Fixed idle frame
 }
         
 let drawX = p.currentX;
@@ -7493,12 +7489,12 @@ if (p.moving) {
     p.currentX += p.deltaX;
     p.currentY += p.deltaY;
     p.stepsLeft--;
-    if (p.stepsLeft <= 0) {
-        p.moving = false;
-        p.anim.frameIndex = 0;  // Reset to idle frame on stop
-        p.currentX = p.x * S;
-        p.currentY = p.y * S;
-    }
+if (p.stepsLeft <= 0) {
+    p.moving = false;
+    p.anim.frameIndex = 0;  // Reset to idle frame on stop
+    p.currentX = p.x * S;
+    p.currentY = p.y * S;
+}
     needsRedraw = true;
 }
 enemies.forEach(e => {
