@@ -969,12 +969,12 @@ const names = [
 ];
 
 const uniqueMonsterNames = {
-    'Shrimp': ['Fire-Shrimp', 'Gray-Shrimp', 'Gut-Shrimp', 'Sharp-Shrimp', 'Sin-Shrimp', 'Spirit-Shrimp', 'Steel-Shrimp', 'Storm-Shrimp', 'Viper-Shrimp'],
-    'Crab': ['Blade-Crab', 'Death-Crab', 'Gloom-Crab', 'Mind-Crab', 'Ooze-Crab', 'Pit-Crab', 'Rust-Crab', 'Vile-Crab', 'Wind-Crab'],
-    'Squid': ['Chaos-Squid', 'Cold-Squid', 'Dire-Squid', 'Dragon-Squid', 'Gore-Squid', 'Mold-Squid', 'Puke-Squid', 'Soul-Squid', 'Warp-Squid'],
-    'Dolphin': ['Black-Dolphin', 'Blight-Dolphin', 'Demon-Dolphin', 'Dread-Dolphin', 'Flesh-Dolphin', 'Night-Dolphin', 'Seethe-Dolphin', 'Snot-Dolphin', 'Wrath-Dolphin'],
-    'Shark': ['Bile-Shark', 'Bone-Shark', 'Doom-Shark', 'Grief-Shark', 'Moon-Shark', 'Plague-Shark', 'Pox-Shark', 'Shadow-Shark', 'Sharp-Shark'],
-    'Whale': ['Ash-Whale', 'Bane-Whale', 'Blood-Whale', 'Fester-Whale', 'Foul-Whale', 'Haze-Whale', 'Rot-Whale', 'Spine-Whale', 'Star-Whale']
+    'Shrimp': ['Fire-Shrimp', 'Gray-Shrimp', 'Gut-Shrimp', 'Sharp-Shrimp', 'Sin-Shrimp', 'Blaze-Shrimp', 'Spirit-Shrimp', 'Steel-Shrimp', 'Storm-Shrimp', 'Viper-Shrimp'],
+    'Crab': ['Blade-Crab', 'Death-Crab', 'Gloom-Crab', 'Mind-Crab', 'Ooze-Crab', 'Pit-Crab', 'Rust-Crab', 'Vile-Crab', 'Wind-Crab', 'Thunder-Crab'],
+    'Squid': ['Chaos-Squid', 'Cold-Squid', 'Dire-Squid', 'Dragon-Squid', 'Gore-Squid', 'Mold-Squid', 'Puke-Squid', 'Soul-Squid', 'Warp-Squid', 'Frost-Squid'],
+    'Dolphin': ['Black-Dolphin', 'Blight-Dolphin', 'Demon-Dolphin', 'Dread-Dolphin', 'Flesh-Dolphin', 'Night-Dolphin', 'Seethe-Dolphin', 'Snot-Dolphin', 'Wrath-Dolphin', 'Venom-Dolphin'],
+    'Shark': ['Bile-Shark', 'Bone-Shark', 'Doom-Shark', 'Grief-Shark', 'Moon-Shark', 'Plague-Shark', 'Pox-Shark', 'Shadow-Shark', 'Sharp-Shark', 'Bolt-Shark'],
+    'Whale': ['Ash-Whale', 'Bane-Whale', 'Blood-Whale', 'Fester-Whale', 'Foul-Whale', 'Haze-Whale', 'Rot-Whale', 'Spine-Whale', 'Star-Whale', 'Inferno-Whale']
 };
 
 // Show info message
@@ -1423,7 +1423,7 @@ x: 2,
         hasArmor: true,
         hasDiamondArmor: false, // Track diamond armor
     	perfectlyCutDiamonds: 0, // Track perfectly cut diamonds
-        runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
+        runes: ['b', 't', 'c'], // Array to store collected rune letters (e.g., ['a','b','c'])
         runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
         immortal: false, // Flag for HODL runeword immortality
         ripBlast: false, // Flag for RIP runeword blast
@@ -5215,17 +5215,28 @@ function assignUniqueMonsterSpell(enemy) {
     if (!enemy.uniqueName || !uniqueMonsterNames[enemy.type.name]) {
         return null;
     }
-    
-    // Choose a random spell from the available list
-    const availableSpells = [
-        SPELL_TYPES.FIRE_WALL,
-        SPELL_TYPES.LIGHTNING_STORM,
-        SPELL_TYPES.FROST_NOVA,
-        SPELL_TYPES.POISON_CLOUD
-    ];
-    
-    // Select one spell for this unique monster
-    const spell = availableSpells[Math.floor(Math.random() * availableSpells.length)];
+
+    // Elemental keyword correlations (case-insensitive)
+    const correlations = {
+        fire: SPELL_TYPES.FIRE_WALL, blaze: SPELL_TYPES.FIRE_WALL, inferno: SPELL_TYPES.FIRE_WALL,
+        storm: SPELL_TYPES.LIGHTNING_STORM, lightning: SPELL_TYPES.LIGHTNING_STORM, bolt: SPELL_TYPES.LIGHTNING_STORM, thunder: SPELL_TYPES.LIGHTNING_STORM,
+        cold: SPELL_TYPES.FROST_NOVA, frost: SPELL_TYPES.FROST_NOVA, ice: SPELL_TYPES.FROST_NOVA, chill: SPELL_TYPES.FROST_NOVA,
+        poison: SPELL_TYPES.POISON_CLOUD, viper: SPELL_TYPES.POISON_CLOUD, snot: SPELL_TYPES.POISON_CLOUD, plague: SPELL_TYPES.POISON_CLOUD,
+        bile: SPELL_TYPES.POISON_CLOUD, pox: SPELL_TYPES.POISON_CLOUD, ooze: SPELL_TYPES.POISON_CLOUD, venom: SPELL_TYPES.POISON_CLOUD
+    };
+
+    // Check for matching keyword in name
+    const nameLower = enemy.uniqueName.toLowerCase();
+    let matchedSpell = null;
+    for (const [keyword, spell] of Object.entries(correlations)) {
+        if (nameLower.includes(keyword)) {
+            matchedSpell = spell;
+            break;
+        }
+    }
+
+    // Assign matched spell or fallback to random
+    const spell = matchedSpell || Object.values(SPELL_TYPES)[Math.floor(Math.random() * Object.keys(SPELL_TYPES).length)];
     enemy.spell = spell;
     return spell;
 }
@@ -6460,6 +6471,12 @@ function cleanupEventListeners() {
     if (document._keyupHandler) {
         document.removeEventListener('keyup', document._keyupHandler);
         document._keyupHandler = null;
+    }
+
+    // Clear keyboard movement interval
+    if (keyboardMovementTimer) {
+        clearInterval(keyboardMovementTimer);
+        keyboardMovementTimer = null;
     }
     if (document._touchstartHandler) {
         document.removeEventListener('touchstart', document._touchstartHandler);
