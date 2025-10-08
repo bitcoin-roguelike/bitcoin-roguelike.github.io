@@ -1200,6 +1200,9 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
         data = { raw: text };
       }
       if (leaderboardResponse.ok && Array.isArray(data)) {
+    // Cache the raw data
+    localStorage.setItem('leaderboardData', JSON.stringify(data));
+    cachedLeaderboard = data;
         let playerInTop10 = submittedUsername ? data.some(entry => entry.username === submittedUsername && entry.score === submittedScore && entry.floor === submittedFloor) : false;
         let playerEntry = null;
         let playerRank = null;
@@ -1311,6 +1314,18 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
       document.getElementById('leaderboard-output').style.display = 'block';
     }
   }
+
+// Get player's estimated rank/score for cached leaderboard
+function getPlayerEstimatedRank(cachedData, playerSats, playerFloor) {
+    const playerScore = getScoreWithMultiplier(playerSats, playerFloor);
+    let rank = 1;
+    for (const entry of cachedData) {
+        const entryScore = getScoreWithMultiplier(entry.score, entry.floor); // Recompute for fairness
+        if (playerScore > entryScore) break;
+        rank++;
+    }
+    return { score: playerScore, rank, floor: playerFloor };
+}
 
 document.getElementById('username-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && gameOver) {
@@ -1501,6 +1516,7 @@ let jewellerPos = null; // Track jeweller position
 let blacksmithPos = null; // Track blacksmith position
 let waypointPos = null; // Track waypoint position
 let scoreSubmitted = false; // Tracks if score has been submitted
+let cachedLeaderboard = null; // Store fetched leaderboard
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
@@ -2202,15 +2218,26 @@ setSoundVolume(0);
 setTimeout(() => {
     setSoundVolume(soundVolume);
 }, 100);
-        fadeSplash();
-        setTimeout(() => {
-            if (!gameOver && !splashActive) {
-                requestWakeLock();  // ← Add this to request wake lock on game start
-                fetchTxs();
-                lastUpdate = Date.now();
-                console.log('Initial fetchTxs triggered after splash, wave=', wave);
-            }
-        }, 2000);
+fadeSplash();
+setTimeout(() => {
+    if (!gameOver && !splashActive) {
+        requestWakeLock();  // ← Add this to request wake lock on game start
+        fetchTxs();
+        lastUpdate = Date.now();
+        console.log('Initial fetchTxs triggered after splash, wave=', wave);
+        
+        // First-time leaderboard cache (only once per browser session)
+        if (!localStorage.getItem('leaderboardCached')) {
+            fetchLeaderboard().then(() => {
+                localStorage.setItem('leaderboardCached', 'true');
+                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+                console.log('Leaderboard cached on first start');
+            }).catch(err => console.error('Cache fetch failed:', err));
+        } else {
+            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+        }
+    }
+}, 2000);
     }
     
     // Set music volume to max when starting
@@ -5212,17 +5239,24 @@ function handleUniqueMonsterReward(hit) {
         logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
     }
     
-    // Add fadeout effect before removing dangerous areas (5 seconds)
-    if (hit.uniqueName && hit.spell) {
-        const startTime = Date.now();
-        uniqueMonsterDeathTimers.set(hit, { startTime, spellType: hit.spell });
-        
-        // Schedule removal after 5 seconds
-        setTimeout(() => {
-            removeDangerousAreas(hit);
-            uniqueMonsterDeathTimers.delete(hit);
-        }, 5000);
-    }
+// Tag all areas with this monster's death timestamp for global fadeout/removal
+if (hit.uniqueName && hit.spell) {
+    const deathTime = Date.now();
+    dangerousAreas.forEach(area => {
+        if (area.spellType === hit.spell) {
+            area.deathTime = deathTime; // Tag for fadeout
+        }
+    });
+    
+    // Schedule global removal of this monster's areas after 5s
+    setTimeout(() => {
+        const now = Date.now();
+        dangerousAreas = dangerousAreas.filter(area => 
+            !area.deathTime || (now - area.deathTime < 5000)
+        );
+        needsRedraw = true;
+    }, 5000);
+}
     
     return true;
 }
@@ -5270,8 +5304,46 @@ function removeDangerousAreas(monster) {
     needsRedraw = true;
 }
 
-// Track unique monster death with fadeout
-let uniqueMonsterDeathTimers = new Map();
+// Enhanced draw for fading dangerous areas based on deathTime
+function drawFadingDangerousAreas() {
+    dangerousAreas.forEach(area => {
+        const dist = Math.sqrt((area.x - p.x) ** 2 + (area.y - p.y) ** 2);
+        const isVisible = fogMap[area.y][area.x] === 1 || dist <= 4;
+        if (!isVisible) return; // Skip fog-hidden areas
+        
+        let spellAlpha = 0.5;
+        let spellColor = 'rgba(255, 255, 255, 0.5)';
+        
+        // Fade if tagged with deathTime
+        if (area.deathTime) {
+            const elapsed = Date.now() - area.deathTime;
+            const fadeDuration = 5000;
+            const progress = Math.min(elapsed / fadeDuration, 1);
+            spellAlpha *= (1 - progress);
+            
+            // Set color based on spell
+            switch (area.spellType) {
+                case SPELL_TYPES.FIRE_WALL: spellColor = `rgba(255, 0, 0, ${spellAlpha})`; break;
+                case SPELL_TYPES.LIGHTNING_STORM: spellColor = `rgba(255, 255, 0, ${spellAlpha})`; break;
+                case SPELL_TYPES.FROST_NOVA: spellColor = `rgba(0, 255, 255, ${spellAlpha})`; break;
+                case SPELL_TYPES.POISON_CLOUD: spellColor = `rgba(0, 255, 0, ${spellAlpha})`; break;
+            }
+        } else {
+            // Non-fading areas
+            switch (area.spellType) {
+                case SPELL_TYPES.FIRE_WALL: spellColor = 'rgba(255, 0, 0, 0.5)'; break;
+                case SPELL_TYPES.LIGHTNING_STORM: spellColor = 'rgba(255, 255, 0, 0.5)'; break;
+                case SPELL_TYPES.FROST_NOVA: spellColor = 'rgba(0, 255, 255, 0.5)'; break;
+                case SPELL_TYPES.POISON_CLOUD: spellColor = 'rgba(0, 255, 0, 0.5)'; break;
+            }
+        }
+        
+        c.save();
+        c.fillStyle = spellColor;
+        c.fillRect(area.x * S, area.y * S, S, S);
+        c.restore();
+    });
+}
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
@@ -6032,11 +6104,12 @@ case 'clear':
             return;
 case 'help':
     addTerminalLineToContent('Available commands:');
-    addTerminalLineToContent('  ls ------ View inventory');
-    addTerminalLineToContent('  convert - Convert soul items');
-    addTerminalLineToContent('  set ----- Settings');
-    addTerminalLineToContent('  clear --- Clear screen');
-    addTerminalLineToContent('  exit ---- Exit terminal');
+    addTerminalLineToContent('  ls ---------- View inventory');
+    addTerminalLineToContent('  convert ----- Convert soul items');
+    addTerminalLineToContent('  set --------- Settings');
+    addTerminalLineToContent('  clear ------- Clear screen');
+    addTerminalLineToContent('  leaderboard - View top 10 scores');
+    addTerminalLineToContent('  exit -------- Exit terminal');
     addTerminalLineToContent('_____________________');
     addTerminalLineToContent('Type "help" for help.');
     break;
@@ -6180,6 +6253,71 @@ case 'set':
                 addTerminalLineToContent('Type "help" for help.');
         }
     }
+        break;
+case 'leaderboard':
+    if (!cachedLeaderboard || cachedLeaderboard.length === 0) {
+        addTerminalLineToContent('No cached leaderboard available. Play more to fetch!');
+    } else {
+        const leaderboardTotalSats = Object.values(satsEarned).reduce((sum, v) => sum + v, 0);
+        const displayedMultText = document.getElementById('sats-calc').textContent.trim();
+        const multMatch = displayedMultText.match(/:\s*([\d.]+)\s*(sats|BTC)/);
+        const leaderboardPlayerScore = multMatch ? (multMatch[2] === 'BTC' ? parseFloat(multMatch[1]) * 1e8 : parseInt(multMatch[1])) : leaderboardTotalSats;
+        const playerEst = getPlayerEstimatedRank(cachedLeaderboard, leaderboardTotalSats, floor);
+        
+        // Format cached list with player inserted
+        const maxUsernameLength = 20;
+        const numberWidth = 10;
+        
+        let rows = cachedLeaderboard.slice(0, 10).map((entry, index) => {
+            const rank = (index + 1).toString().padStart(2, '0');
+            const username = entry.username.length > maxUsernameLength
+                ? entry.username.substring(0, maxUsernameLength - 2) + '..'
+                : entry.username;
+            const scoreValue = entry.score;
+            let numberPart, unitPart;
+            if (scoreValue >= 1e8) {
+                numberPart = (scoreValue / 1e8).toFixed(1);
+                unitPart = 'BTC';
+            } else {
+                numberPart = scoreValue.toString();
+                unitPart = 'sats';
+            }
+            return `Rank: ${rank}, ${username}, ${numberPart} ${unitPart}`;
+        });
+        
+        // Insert player at estimated rank if in top 10
+        const playerUsername = 'You';
+        let playerNumberPart, playerUnitPart;
+        if (leaderboardPlayerScore >= 1e8) {
+            playerNumberPart = (leaderboardPlayerScore / 1e8).toFixed(1);
+            playerUnitPart = 'BTC';
+        } else {
+            playerNumberPart = leaderboardPlayerScore.toString();
+            playerUnitPart = 'sats';
+        }
+        const playerRow = `Rank: ${playerEst.rank.toString().padStart(2, '0')}, ${playerUsername}, ${playerNumberPart} ${playerUnitPart}`;
+        
+        if (playerEst.rank <= 10) {
+            rows.splice(playerEst.rank - 1, 0, playerRow); // Insert at rank (shifts others down)
+            rows = rows.slice(0, 10); // Limit to top 10 including player
+        }
+        
+        // Format for display (no header)
+        let fullText = `Top 10 scores (leaderboard)`;
+        rows.forEach(row => {
+            fullText += `\n${row}`;
+        });
+        
+        if (playerEst.rank > 10) {
+            const estRow = `Rank: ??, ${playerUsername}, ${playerNumberPart} ${playerUnitPart}`;
+            fullText += `\n${estRow}`;
+        }
+        
+        const lines = fullText.split('\n');
+        lines.forEach(line => addTerminalLineToContent(line));
+    }
+    addTerminalLineToContent('_____________________');
+    addTerminalLineToContent('Type "help" for help.');
     break;
         default:
             addTerminalLineToContent(`Command not found: ${cmd}`);
@@ -6721,7 +6859,6 @@ waveActive = false;
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
-    uniqueMonsterDeathTimers.clear(); // Clear timers Map
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     projectiles = []; // Add this line to reset projectiles array on restart
     populateNameList();
@@ -7370,69 +7507,8 @@ if (isUniqueMonster && isVisible && !activeUniqueMonsterName) {
     }
 });
 
-// Draw dangerous spell areas after enemies
-dangerousAreas.forEach(area => {
-    // Only draw if within fog of war or player's view radius
-    const dist = Math.sqrt((area.x - p.x) ** 2 + (area.y - p.y) ** 2);
-    const isVisible = fogMap[area.y][area.x] === 1 || dist <= radius;
-    
-    if (isVisible) {
-        // Check if this area is associated with a recently killed unique monster
-        let spellAlpha = 0.5;
-        let spellColor = 'rgba(255, 255, 255, 0.5)';
-        
-        // Apply fadeout effect for recent unique monster deaths
-        const matchingTimer = Array.from(uniqueMonsterDeathTimers.values()).find(timer => 
-            timer.spellType === area.spellType
-        );
-        
-        if (matchingTimer) {
-            const elapsed = Date.now() - matchingTimer.startTime;
-            const fadeDuration = 5000; // 5 seconds
-            const progress = Math.min(elapsed / fadeDuration, 1);
-            
-            // Fade from full opacity to 0
-            spellAlpha = 0.5 * (1 - progress);
-            
-            switch (area.spellType) {
-                case SPELL_TYPES.FIRE_WALL:
-                    spellColor = 'rgba(255, 0, 0, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Red for fire
-                    break;
-                case SPELL_TYPES.LIGHTNING_STORM:
-                    spellColor = 'rgba(255, 255, 0, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Yellow for lightning
-                    break;
-                case SPELL_TYPES.FROST_NOVA:
-                    spellColor = 'rgba(0, 255, 255, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Cyan for frost
-                    break;
-                case SPELL_TYPES.POISON_CLOUD:
-                    spellColor = 'rgba(0, 255, 0, ' + (spellAlpha * 0.5).toFixed(2) + ')'; // Green for poison
-                    break;
-            }
-        } else {
-            // Standard drawing without fadeout
-            switch (area.spellType) {
-                case SPELL_TYPES.FIRE_WALL:
-                    spellColor = 'rgba(255, 0, 0, 0.5)'; // Red for fire
-                    break;
-                case SPELL_TYPES.LIGHTNING_STORM:
-                    spellColor = 'rgba(255, 255, 0, 0.5)'; // Yellow for lightning
-                    break;
-                case SPELL_TYPES.FROST_NOVA:
-                    spellColor = 'rgba(0, 255, 255, 0.5)'; // Cyan for frost
-                    break;
-                case SPELL_TYPES.POISON_CLOUD:
-                    spellColor = 'rgba(0, 255, 0, 0.5)'; // Green for poison
-                    break;
-            }
-        }
-        
-        c.save();
-        c.fillStyle = spellColor;
-        c.globalAlpha = spellAlpha;
-        c.fillRect(area.x * S, area.y * S, S, S);
-        c.restore();
-    }
-});
+// Draw fading dangerous spell areas after enemies
+drawFadingDangerousAreas();
 
 // Draw low-health warning border with smooth transition
 if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
