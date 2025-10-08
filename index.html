@@ -3539,6 +3539,7 @@ if (floor > 1 && Math.random() < 0.10) {
             ripBlastStartTime = Date.now();
             enemies.forEach(enemy => {
                 enemy.hp = 0; // Instant kill
+                handleUniqueMonsterReward(enemy);
                 kills[enemy.type.name]++;
                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
                 let dropPlaced = false;
@@ -6392,6 +6393,7 @@ function activateSoulStorm() {
                 
                 if (enemy.hp <= 0) {
                     kills[enemy.type.name]++;
+                    handleUniqueMonsterReward(enemy);
                     let dropPlaced = false;
                     
                     // Drop satoshi
