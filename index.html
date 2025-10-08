@@ -6721,7 +6721,6 @@ waveActive = false;
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
-    previousFloorState = null; // Clear saved state
     uniqueMonsterDeathTimers.clear(); // Clear timers Map
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     projectiles = []; // Add this line to reset projectiles array on restart
@@ -6886,8 +6885,8 @@ if (p.moving) {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 1) c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
     }
-// Save floor state only on hideout entry (once per floor)
-if (inHideout && !previousFloorState) {
+// Save floor state before entering hideout (moved here to run once per draw)
+if (!inHideout) {
     previousFloorState = {
         map: map.map(row => [...row]),
         enemies: enemies.map(e => ({ ...e, type: { ...e.type } })),
