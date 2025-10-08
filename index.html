@@ -1416,6 +1416,7 @@ let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
 let activatedRunewords = [];
 let lastDrawTime = null;
+let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
 let shrinePositions = [];
@@ -1480,6 +1481,7 @@ x: 2,
         moveCounter: 0,
         // Add elemental immunity
         elementImmunity: null, // Store the player's elemental immunity
+        armorImmunity: null, // Store armor's elemental immunity
     }, 
     enemies = [], 
     rooms = [];
@@ -3126,10 +3128,12 @@ function updatePlayerState() {
     if (p.hp <= 24 && p.hasDiamondArmor) {
         p.hasDiamondArmor = false;
         p.hasArmor = false;
+        p.armorImmunity = null; // Reset armor immunity
         logBattleEvent(`Floor ${floor} - Diamond Armor lost! Reverted to normal clothing.`);
         document.getElementById('armorStatus').textContent = 'Cloth';
     } else if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
+        p.armorImmunity = null; // Reset armor immunity
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
         document.getElementById('armorStatus').textContent = 'Cloth';
     } else if (p.hasDiamondArmor) {
@@ -3861,7 +3865,7 @@ if (map[ny][nx] === 6 && !inHideout) {
             // Desert – Sludge pit
             if (currentTheme === 'desert') {
                 // Check for poison immunity
-                if (p.elementImmunity === 'Poison') {
+                if (p.elementImmunity === 'Poison' || p.armorImmunity === 'Poison') {
                     logBattleEvent(`Floor ${floor} - Sludge Pit: Immune to Poison damage!`);
                 } else {
                     p.hp = Math.max(0, p.hp - 2);
@@ -3883,7 +3887,7 @@ if (map[ny][nx] === 6 && !inHideout) {
             // Hell – Lava
             if (currentTheme === 'hell') {
                 // Check for fire immunity
-                if (p.elementImmunity === 'Fire') {
+                if (p.elementImmunity === 'Fire' || p.armorImmunity === 'Fire') {
                     logBattleEvent(`Floor ${floor} - Lava: Immune to Fire damage!`);
                 } else {
                     p.hp = Math.max(0, p.hp - 8);
@@ -3995,6 +3999,12 @@ if (map[ny][nx] === 6 && !inHideout) {
                 p.hp = 24 + 12;
             }
             p.hasArmor = true;
+            const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+            let available = elements.filter(el => el !== p.elementImmunity);
+            if (available.length > 0) {
+                p.armorImmunity = available[Math.floor(Math.random() * available.length)];
+                logBattleEvent(`Floor ${floor} - Leather Armor grants 100% ${p.armorImmunity} resistance!`);
+            }
             map[ny][nx] = 0;
             playWebAudioSound(sounds.pickup);
             logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
@@ -4514,6 +4524,13 @@ if (map[ny][nx] === 20) { // Soul stone tile
                 p.perfectlyCutDiamonds--;
                 p.hasDiamondArmor = true;
                 p.hasArmor = false; // Remove regular armor
+                p.armorImmunity = null; // Reset previous armor immunity
+                const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+                let available = elements.filter(el => el !== p.elementImmunity);
+                if (available.length > 0) {
+                    p.armorImmunity = available[Math.floor(Math.random() * available.length)];
+                    logBattleEvent(`Floor ${floor} - Diamond Armor grants 100% ${p.armorImmunity} resistance!`);
+                }
                 p.hp += 1000;
                 logBattleEvent(`Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
                 playWebAudioSound(sounds.pickup);
@@ -4837,12 +4854,9 @@ function applySpellDamage(x, y) {
         }
         
         // Check if player has immunity to this spell type
-        if (p.elementImmunity) {
-            const immunityType = p.elementImmunity.toLowerCase();
-            if (damageType.toLowerCase() === immunityType) {
-                logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
-                return; // Skip damage application
-            }
+        if (p.elementImmunity === damageType || p.armorImmunity === damageType) {
+            logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
+            return; // Skip damage application
         }
         
         p.hp -= damage;
@@ -5257,14 +5271,7 @@ if (hit.uniqueName && hit.spell) {
         }
     });
     
-    // Schedule global removal of this monster's areas after 5s
-    setTimeout(() => {
-        const now = Date.now();
-        dangerousAreas = dangerousAreas.filter(area => 
-            !area.deathTime || (now - area.deathTime < 5000)
-        );
-        needsRedraw = true;
-    }, 5000);
+
 }
     
     return true;
@@ -5352,6 +5359,18 @@ function drawFadingDangerousAreas() {
         c.fillRect(area.x * S, area.y * S, S, S);
         c.restore();
     });
+
+    // Continuous cleanup: remove fully faded areas
+    const now = Date.now();
+    dangerousAreas = dangerousAreas.filter(area => {
+        if (area.deathTime) {
+            const elapsed = now - area.deathTime;
+            return elapsed < 5000;  // Remove after 5s
+        }
+        return true;
+    });
+
+    if (needsRedraw) needsRedraw = true;  // Ensure redraw if cleaned
 }
 
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
@@ -6043,11 +6062,19 @@ checkRunewords();
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
     addTerminalLineToContent('');
     
-    // Display elemental immunity
-    if (p.elementImmunity) {
-        addTerminalLineToContent(`Resistance: ${p.elementImmunity} 100%`);
-        addTerminalLineToContent('');
-    }
+// Display resistances (elemental and armor)
+let resistanceText = '';
+if (p.elementImmunity) {
+    resistanceText += `${p.elementImmunity} 100%`;
+}
+if (p.armorImmunity) {
+    if (resistanceText) resistanceText += ', ';
+    resistanceText += `${p.armorImmunity} 100%`;
+}
+if (resistanceText) {
+    addTerminalLineToContent(`Resistances: ${resistanceText}`);
+    addTerminalLineToContent('');
+}
     
     // Display regular inventory items
     addTerminalLineToContent('--- Regular Inventory ---');
@@ -6827,6 +6854,7 @@ function restart() {
     p.pickaxes = 0;
     diamonds = 0;
     p.hasArmor = true;
+    p.armorImmunity = null; // Reset armor immunity on restart
     
     p.runes = [];
     runeDrops = runeDrops.filter(r => !r.specific);			// maybe
@@ -7364,8 +7392,14 @@ enemies.forEach(e => {
         
         // Check if this enemy is a unique monster
         const isUniqueMonster = e.uniqueName !== undefined;
+if (inHideout || screensaverActive) {  // Add this: skip effects in hideout/screensaver
+    c.drawImage(img, e.currentX, e.currentY, S, S);
+    c.restore();
+    return;
+}
         
-        c.save();
+	c.save();
+	const doPixelEffect = (frameCount % 1 === 0); 
         // Create a temporary canvas for rendering
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = S;
@@ -7393,85 +7427,91 @@ if (e.type.anim && e.anim) {
         
         let spriteCanvas, spriteCtx;
         if (isVisible) {
-            spriteCanvas = document.createElement('canvas');
-            spriteCanvas.width = S;
-            spriteCanvas.height = S;
-            spriteCtx = spriteCanvas.getContext('2d');
-            spriteCtx.imageSmoothingEnabled = false;
-            spriteCtx.drawImage(img, 0, 0, S, S);
-            
-            // Apply theme-based effects to the sprite canvas
-            if (currentTheme === 'desert') {
-                const imageData = spriteCtx.getImageData(0, 0, S, S);
-                const data = imageData.data;
-                punchHoleThroughRed(imageData); // Mark eye pixels
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i + 3] === 1) { // Eye pixel
-                        data[i] = 255;     // Red
-                        data[i + 1] = 0;   // Green
-                        data[i + 2] = 0;   // Blue
-                        data[i + 3] = 255; // Full opacity
-                    } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                        data[i] = 255;     // Red
-                        data[i + 1] = 242; // Green
-                        data[i + 2] = 230; // Blue
-                        data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+if (doPixelEffect && isVisible) {
+                spriteCanvas = document.createElement('canvas');
+                spriteCanvas.width = S;
+                spriteCanvas.height = S;
+                spriteCtx = spriteCanvas.getContext('2d');
+                spriteCtx.imageSmoothingEnabled = false;
+                spriteCtx.drawImage(img, 0, 0, S, S);
+                
+                // Apply theme-based effects to the sprite canvas
+                if (currentTheme === 'desert') {
+                    const imageData = spriteCtx.getImageData(0, 0, S, S);
+                    const data = imageData.data;
+                    punchHoleThroughRed(imageData); // Mark eye pixels
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] === 1) { // Eye pixel
+                            data[i] = 255;     // Red
+                            data[i + 1] = 0;   // Green
+                            data[i + 2] = 0;   // Blue
+                            data[i + 3] = 255; // Full opacity
+                        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                            data[i] = 255;     // Red
+                            data[i + 1] = 242; // Green
+                            data[i + 2] = 230; // Blue
+                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                        }
                     }
-                }
-                spriteCtx.putImageData(imageData, 0, 0);
-            } else if (currentTheme === 'ruins') {
-                const imageData = spriteCtx.getImageData(0, 0, S, S);
-                const data = imageData.data;
-                punchHoleThroughRed(imageData); // Mark eye pixels
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i + 3] === 1) { // Eye pixel
-                        data[i] = 255;     // Red
-                        data[i + 1] = 0;   // Green
-                        data[i + 2] = 0;   // Blue
-                        data[i + 3] = 255; // Full opacity
-                    } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                        data[i] = 144;     // Red
-                        data[i + 1] = 126; // Green
-                        data[i + 2] = 105; // Blue
-                        data[i + 3] = 255; // Full opacity (removed 95% opacity)
+                    spriteCtx.putImageData(imageData, 0, 0);
+                } else if (currentTheme === 'ruins') {
+                    const imageData = spriteCtx.getImageData(0, 0, S, S);
+                    const data = imageData.data;
+                    punchHoleThroughRed(imageData); // Mark eye pixels
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] === 1) { // Eye pixel
+                            data[i] = 255;     // Red
+                            data[i + 1] = 0;   // Green
+                            data[i + 2] = 0;   // Blue
+                            data[i + 3] = 255; // Full opacity
+                        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                            data[i] = 144;     // Red
+                            data[i + 1] = 126; // Green
+                            data[i + 2] = 105; // Blue
+                            data[i + 3] = 255; // Full opacity (removed 95% opacity)
+                        }
                     }
+                    spriteCtx.putImageData(imageData, 0, 0);
+                } else if (currentTheme === 'hell') {
+                    // Apply red tint for hell theme
+                    spriteCtx.globalCompositeOperation = 'source-atop';
+                    spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                    spriteCtx.fillRect(0, 0, S, S);
+                    spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+                } else if (currentTheme === 'paradise') {
+                    // Apply purple tint for paradise theme
+                    spriteCtx.globalCompositeOperation = 'source-atop';
+                    spriteCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
+                    spriteCtx.fillRect(0, 0, S, S);
+                    spriteCtx.globalCompositeOperation = 'source-over'; // Reset
                 }
-                spriteCtx.putImageData(imageData, 0, 0);
-            } else if (currentTheme === 'hell') {
-                // Apply red tint for hell theme
-                spriteCtx.globalCompositeOperation = 'source-atop';
-                spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-                spriteCtx.fillRect(0, 0, S, S);
-                spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-            } else if (currentTheme === 'paradise') {
-                // Apply purple tint for paradise theme
-                spriteCtx.globalCompositeOperation = 'source-atop';
-                spriteCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
-                spriteCtx.fillRect(0, 0, S, S);
-                spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+                
+                // Special handling for unique monsters (poison green with red eyes)
+                if (isUniqueMonster) {
+                    const imageData = spriteCtx.getImageData(0, 0, S, S);
+                    const data = imageData.data;
+                    punchHoleThroughRed(imageData); // Mark eye pixels
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] === 1) { // Eye pixel - make red
+                            data[i] = 255;     // Red
+                            data[i + 1] = 0;   // Green
+                            data[i + 2] = 0;   // Blue
+                            data[i + 3] = 255; // Full opacity
+                        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - make poison green
+                            data[i] = 0;       // Red
+                            data[i + 1] = 255; // Green (poison green)
+                            data[i + 2] = 0;   // Blue
+                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                        }
+                    }
+                    spriteCtx.putImageData(imageData, 0, 0);
+                }
             }
-            
-            // Special handling for unique monsters (poison green with red eyes)
-            if (isUniqueMonster) {
-                const imageData = spriteCtx.getImageData(0, 0, S, S);
-                const data = imageData.data;
-                punchHoleThroughRed(imageData); // Mark eye pixels
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i + 3] === 1) { // Eye pixel - make red
-                        data[i] = 255;     // Red
-                        data[i + 1] = 0;   // Green
-                        data[i + 2] = 0;   // Blue
-                        data[i + 3] = 255; // Full opacity
-                    } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - make poison green
-                        data[i] = 0;       // Red
-                        data[i + 1] = 255; // Green (poison green)
-                        data[i + 2] = 0;   // Blue
-                        data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-                    }
-                }
-                spriteCtx.putImageData(imageData, 0, 0);
+            // Fallback draw if pixel effect skipped
+            if (!doPixelEffect || !isVisible) {
+                tempCtx.drawImage(img, 0, 0, S, S);
             }
-        }
+            }
         
         // Draw the sprite on the temporary canvas
         if (isVisible) {
@@ -7487,7 +7527,12 @@ if (e.type.anim && e.anim) {
         }
         tempCtx.imageSmoothingEnabled = false;
         if (isVisible) {
-            tempCtx.drawImage(spriteCanvas, 0, 0, S, S);
+                        // Draw to tempCtx: processed if effects ran, else raw img
+            if (doPixelEffect && isVisible) {
+                tempCtx.drawImage(spriteCanvas, 0, 0, S, S);
+            } else {
+                tempCtx.drawImage(img, 0, 0, S, S);
+            }
         } else {
             // Outside fog of war, draw original sprite to show red eyes
             tempCtx.drawImage(img, 0, 0, S, S);
@@ -7550,6 +7595,7 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
     needsRedraw = false;
+frameCount++;  // Add this line
     
 if (activeUniqueMonsterName) {
     // Display unique monster name in battle log if not already shown
