@@ -4403,8 +4403,9 @@ const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
                 initialSpawnDoneThisFloor = previousFloorState.initialSpawnDoneThisFloor;
                 initialWaveSpawned = previousFloorState.initialWaveSpawned;
                 waveActive = previousFloorState.waveActive;
-                currentTheme = previousFloorState.currentTheme;
-                const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
+currentTheme = previousFloorState.currentTheme;
+fogMap = previousFloorState.fogMap.map(row => [...row]);  // ← Add this line
+const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
 p.x = portal ? portal.x : 2;
 p.y = portal ? portal.y : 2;
 p.currentX = p.x * S;
@@ -4416,10 +4417,10 @@ p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
 inHideout = false;
-                document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
-                updateFogMap(p.x, p.y);
-                needsRedraw = true;
-                logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
+document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
+updateFogMap(p.x, p.y);
+needsRedraw = true;
+logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
                 document.documentElement.style.setProperty('--text-color', currentTheme === 'hell' ? '#00ff00' : '#ff8c00');
                 document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
                     el.style.color = currentTheme === 'hell' ? '#00ff00' : '#ff8c00';
@@ -5233,6 +5234,13 @@ function handleUniqueMonsterReward(hit) {
         const rewardBtc = reward / 1e8;
         const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
         logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
+
+	// Clear harbinger message if it was active for this monster
+	const floorIndicator = document.getElementById('floor-indicator');
+	if (floorIndicator.textContent === "A harbinger of doom is near.") {
+	    floorIndicator.textContent = `Floor ${floor}`;
+	}
+	activeUniqueMonsterName = null; // Also clear any lingering visible name
         // Also add to satsEarned for proper display
         satsEarned[hit.type.name] += reward;
         updateSatsDisplay();
@@ -7026,24 +7034,25 @@ if (p.moving) {
     }
 // Save floor state before entering hideout (moved here to run once per draw)
 if (!inHideout) {
-    previousFloorState = {
-        map: map.map(row => [...row]),
-        enemies: enemies.map(e => ({ ...e, type: { ...e.type } })),
-        rooms: rooms.map(r => ({ ...r })),
-        exit: exit ? { ...exit } : null,
-        satoshiDrops: [...satoshiDrops],
-        runeDrops: [...runeDrops],
-        scrollDrops: [...scrollDrops],
-        portals: portals.map(p => ({ ...p })),
-        floor: floor,
-        wave: wave,
-        enemiesSpawnedThisFloor: enemiesSpawnedThisFloor,
-        whalesSpawnedThisFloor: whalesSpawnedThisFloor,
-        initialSpawnDoneThisFloor: initialSpawnDoneThisFloor,
-        initialWaveSpawned: initialWaveSpawned,
-        waveActive: waveActive,
-        currentTheme: currentTheme
-    };
+previousFloorState = {
+    map: map.map(row => [...row]),
+    enemies: enemies.map(e => ({ ...e, type: { ...e.type } })),
+    rooms: rooms.map(r => ({ ...r })),
+    exit: exit ? { ...exit } : null,
+    satoshiDrops: [...satoshiDrops],
+    runeDrops: [...runeDrops],
+    scrollDrops: [...scrollDrops],
+    portals: portals.map(p => ({ ...p })),
+    fogMap: fogMap.map(row => [...row]),  // ← Add this line
+    floor: floor,
+    wave: wave,
+    enemiesSpawnedThisFloor: enemiesSpawnedThisFloor,
+    whalesSpawnedThisFloor: whalesSpawnedThisFloor,
+    initialSpawnDoneThisFloor: initialSpawnDoneThisFloor,
+    initialWaveSpawned: initialWaveSpawned,
+    waveActive: waveActive,
+    currentTheme: currentTheme
+};
 }
 
 // Draw floors, items, stairs, and runes
