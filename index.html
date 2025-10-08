@@ -1423,7 +1423,7 @@ x: 2,
         hasArmor: true,
         hasDiamondArmor: false, // Track diamond armor
     	perfectlyCutDiamonds: 0, // Track perfectly cut diamonds
-        runes: ['b', 't', 'c'], // Array to store collected rune letters (e.g., ['a','b','c'])
+        runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
         runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
         immortal: false, // Flag for HODL runeword immortality
         ripBlast: false, // Flag for RIP runeword blast
@@ -1444,7 +1444,7 @@ x: 2,
             direction: 'front',
             frameIndex: 0,
             lastFrameTime: 0,
-            frameDuration: 200
+            frameDuration: 400  // Doubled for half speed
         },
 	// Add shrine charge tracking
 	shrineCharges: 0,
@@ -1545,7 +1545,7 @@ class EnemyType {
             hellFrames: [new Image(), new Image(), new Image()],
             frameIndex: 0,
             lastFrameTime: 0,
-            frameDuration: 200
+            frameDuration: 400  // Doubled for half speed
         };
     }
 }
@@ -3334,7 +3334,11 @@ const newEnemy = {
                  type,
                  hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp,
                  address,
-                 sats: Math.round(btc * 1e8)
+                 sats: Math.round(btc * 1e8),
+                 anim: {
+                     frameIndex: Math.floor(Math.random() * type.anim.frames.length),
+                     lastFrameTime: performance.now()
+                 }
               };
     
 // I am starting to think 10% chance to spawn an unique monster actually means per regular enemy spawned (10%,10%,10%,10%,10%,10%,10%,10%,10%,10% instead of just 10%)
@@ -3478,7 +3482,12 @@ if (floor > 1 && Math.random() < 0.10) {
                   continue;
               }
               
-              const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8) };
+              const newEnemy = { x, y, type, hp: type.hp, address, sats: Math.round(btc * 1e8),
+                   anim: {
+                       frameIndex: Math.floor(Math.random() * type.anim.frames.length),
+                       lastFrameTime: performance.now()
+                   }
+                 };
               enemies.push(newEnemy);
               
               if (type.name === 'Whale') {
@@ -3717,11 +3726,11 @@ if (p.moveCounter >= 2) {
 // Animation frame update logic here
 if (p.moving) {
     const now = performance.now();
-    // Cap animation updates to 20 FPS (50ms)
-    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = now;
-    }
+// Cap animation updates to 10 FPS (100ms - doubled interval)
+if (now - p.anim.lastFrameTime >= 50) { // 10 FPS capped
+    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
+    p.anim.lastFrameTime = now;
+}
 } else {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = performance.now();
@@ -3787,7 +3796,7 @@ p.anim.direction = newDirection;
 if (p.moving) {
     const now = performance.now();
     // Half speed animation during movement (10 FPS)
-    if (now - p.anim.lastFrameTime >= 100) {
+    if (now - p.anim.lastFrameTime >= 50) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -3999,7 +4008,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         y: portalPos.y,
                         frameIndex: 0,
                         lastFrameTime: performance.now(),
-                        frameDuration: 200
+                        frameDuration: 400  // Doubled for half speed
                     });
                 } else {
                     logBattleEvent(`Floor ${floor} - No space for town portal!`);
@@ -4295,6 +4304,8 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     runeDrops = runeDrops.filter(r => !r.specific);
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
+    // Reset attack to base value before new floor (accounts for diamond hand)
+    p.atk = p.hasDiamondHand ? 3 : 2;
     initMap();
     nextApiCallTime = null;
 
@@ -5037,7 +5048,7 @@ for (let i = 0; i < 5; i++) {
     document.getElementById('runes').innerHTML = wrappedDisplayText; // Apply wrapped text to runes element
 }
 
-// Modified checkRunewordsAtFloorStart function to check for BTC, HODL, and RIP runes in any order
+// Modified checkRunewordsAtFloorStart function to check for BTC, HODL, RIP and SAT runes in any order
 function checkRunewordsAtFloorStart() {
     // Only check for runewords at start of floor (no continuous checking)
     const runewords = [
@@ -5056,12 +5067,19 @@ function checkRunewordsAtFloorStart() {
             updatePlayerState();
             needsRedraw = true;
         }},
-        { name: 'rip', runes: ['r', 'i', 'p'], effect: () => {
-            p.ripBlast = true;
-            p.runewords.push('rip');
-            logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
-            needsRedraw = true;
-        }}
+	{ name: 'rip', runes: ['r', 'i', 'p'], effect: () => {
+	    p.ripBlast = true;
+	    p.runewords.push('rip');
+	    logBattleEvent(`Floor ${floor} - Runeword RIP activated! Incoming blast...`);
+	    needsRedraw = true;
+	}},
+	{ name: 'sat', runes: ['s', 'a', 't'], effect: () => {
+	    p.atk *= 2;
+	    p.runewords.push('sat');
+	    logBattleEvent(`Floor ${floor} - Runeword SAT activated! Attack doubled to ${p.atk}! (Satoshi's blessing)`);
+	    updatePlayerState();
+	    needsRedraw = true;
+	}}
     ];
 
     // Compute rune counts and indices in a single pass
@@ -6703,6 +6721,8 @@ waveActive = false;
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
+    previousFloorState = null; // Clear saved state
+    uniqueMonsterDeathTimers.clear(); // Clear timers Map
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     projectiles = []; // Add this line to reset projectiles array on restart
     populateNameList();
@@ -6866,8 +6886,8 @@ if (p.moving) {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 1) c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
     }
-// Save floor state before entering hideout (moved here to run once per draw)
-if (!inHideout) {
+// Save floor state only on hideout entry (once per floor)
+if (inHideout && !previousFloorState) {
     previousFloorState = {
         map: map.map(row => [...row]),
         enemies: enemies.map(e => ({ ...e, type: { ...e.type } })),
@@ -7041,8 +7061,8 @@ for (let y = 0; y < H; y++) {
 const now = performance.now();
 // Animation frame update logic here
 if (p.moving) {
-    // Half speed animation during movement (10 FPS)
-    if (now - p.anim.lastFrameTime >= 100) {
+    // Half speed animation during movement (5 FPS - doubled interval)
+    if (now - p.anim.lastFrameTime >= 50) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -7205,23 +7225,24 @@ enemies.forEach(e => {
         tempCanvas.height = S;
         const tempCtx = tempCanvas.getContext('2d');
         
-        // Handle animation for enemies with anim property (e.g., Shrimp)
-        let img;
-        if (e.type.anim) {
-            const now = performance.now();
-            if (now - e.type.anim.lastFrameTime >= e.type.anim.frameDuration) {
-                e.type.anim.frameIndex = (e.type.anim.frameIndex + 1) % e.type.anim.frames.length;
-                e.type.anim.lastFrameTime = now;
-            }
-            // Use Hell Shrimp frames if theme is hell, enemy is Shrimp, and visible
-            if (e.type.name === 'Shrimp' && currentTheme === 'hell' && isVisible && e.type.anim.hellFrames) {
-                img = e.type.anim.hellFrames[e.type.anim.frameIndex];
-            } else {
-                img = e.type.anim.frames[e.type.anim.frameIndex];
-            }
-        } else {
-            img = e.type.img;
-        }
+// Handle animation for enemies with anim property (e.g., Shrimp) - throttled
+let img;
+if (e.type.anim && e.anim) {
+    const now = performance.now();
+    const numFrames = (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) ? e.type.anim.hellFrames.length : e.type.anim.frames.length;
+    if (now - e.anim.lastFrameTime >= 200) {
+        e.anim.frameIndex = (e.anim.frameIndex + 1) % numFrames;
+        e.anim.lastFrameTime = now;
+    }
+    // Use Hell Shrimp frames if theme is hell, enemy is Shrimp, and visible
+    if (e.type.name === 'Shrimp' && currentTheme === 'hell' && isVisible && e.type.anim.hellFrames) {
+        img = e.type.anim.hellFrames[e.anim.frameIndex];
+    } else {
+        img = e.type.anim.frames[e.anim.frameIndex];
+    }
+} else {
+    img = e.type.img;
+}
         
         let spriteCanvas, spriteCtx;
         if (isVisible) {
@@ -7501,7 +7522,7 @@ if (gameOver) {
 }
     
 updateProjectiles();
-// Simple delta updates
+// Simple delta updates (run every frame for smooth movement)
 if (p.moving) {
     p.currentX += p.deltaX;
     p.currentY += p.deltaY;
@@ -7527,7 +7548,7 @@ enemies.forEach(e => {
         needsRedraw = true;
     }
 });
-// Frame animation (only when moving)
+// Frame animation (only when moving) - throttled
 const now = performance.now();
 if (p.moving && now - p.anim.lastFrameTime >= 50) {
     p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
@@ -7537,6 +7558,7 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
     // Check for invisible health warning animation (activated at above 8 HP)
     const showInvisibleHealthWarning = p.hp > 8; // Trigger animation at higher threshold
     
+    // Throttle draw to 20 FPS, but keep updates smooth
     if ((needsRedraw || p.hp <= 8 || showInvisibleHealthWarning) && !splashActive) {
         draw();
     }
@@ -7555,6 +7577,7 @@ if (p.hp <= 0 && !gameOver) {
     }
 }
 
+    // Revert to unthrottled RAF for smooth interpolation; draw throttling is internal
     requestAnimationFrame(gameLoop);
 }
 
