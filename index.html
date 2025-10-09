@@ -1420,69 +1420,74 @@ let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
 let shrinePositions = [];
+let auraHitStartTime = 0; // New: Track aura hit flash start
+let auraFlashDuration = 300; // New: Flash duration in ms
 let map = [],
-    p = {
+p = {
 x: 2,
-    y: 2,
-    currentX: 32,  // S * x
-    currentY: 32,  // S * y
-    moving: false,
-    stepsLeft: 0,
-    deltaX: 0,
-    deltaY: 0,
-    targetTileX: 0,
-    targetTileY: 0,
-    hp: 36,
-        potions: 0,
-        atk: 2,
-        pickaxes: 0,
-        hasArmor: true,
-        hasDiamondArmor: false, // Track diamond armor
-    	perfectlyCutDiamonds: 0, // Track perfectly cut diamonds
-        runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
-        runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
-        immortal: false, // Flag for HODL runeword immortality
-        ripBlast: false, // Flag for RIP runeword blast
-        isFalling: false, // Flag to track if the player is currently animating
-        anim: {
-            frames: {
-                front: [new Image(), new Image()],
-                back: [new Image(), new Image()],
-                right: [new Image(), new Image()],
-                armor_front: [new Image(), new Image()],
-                armor_back: [new Image(), new Image()],
-                armor_right: [new Image(), new Image()],
-                diamond_armor_front: [new Image(), new Image()],
-                diamond_armor_back: [new Image(), new Image()],
-                diamond_armor_right: [new Image(), new Image()],
-                fall: [new Image(), new Image(), new Image()],
-            },
-            direction: 'front',
-            frameIndex: 0,
-            lastFrameTime: 0,
-            frameDuration: 400  // Doubled for half speed
-        },
-	// Add shrine charge tracking
-	shrineCharges: 0,
-	maxShrineCharges: 24,
-	shrineUsedThisFloor: false, // Track if shrine was used on this floor
-	
-        // Add soul system properties
-        soulStones: 0,
-        soulShards: 0,
-        soulOrbs: 0,
-        soulStormCharges: 0, // Track how many charges we have (max 256)
-        inSoulTerminal: false, // Track if player is in soul terminal
-        soulTerminalCommand: '', // Current command input
-        soulTerminalCursorPos: 0, // Cursor position in command
-        soulTerminalActive: false, // Whether soul terminal is currently open
-        // Add diamond hand properties
-        hasDiamondHand: false, // Track if player has diamond hand
-        moveCounter: 0,
-        // Add elemental immunity
-        elementImmunity: null, // Store the player's elemental immunity
-        armorImmunity: null, // Store armor's elemental immunity
-    }, 
+y: 2,
+currentX: 32,  // S * x
+currentY: 32,  // S * y
+moving: false,
+stepsLeft: 0,
+deltaX: 0,
+deltaY: 0,
+targetTileX: 0,
+targetTileY: 0,
+hp: 36,
+maxHP: 36,  // Initialize maxHP to match starting hp
+potions: 0,
+atk: 2,
+pickaxes: 0,
+hasArmor: true,
+hasDiamondArmor: false, // Track diamond armor
+perfectlyCutDiamonds: 0, // Track perfectly cut diamonds
+runes: [], // Array to store collected rune letters (e.g., ['a','b','c'])
+runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
+immortal: false, // Flag for HODL runeword immortality
+ripBlast: false, // Flag for RIP runeword blast
+isFalling: false, // Flag to track if the player is currently animating
+anim: {
+    frames: {
+        front: [new Image(), new Image()],
+        back: [new Image(), new Image()],
+        right: [new Image(), new Image()],
+        armor_front: [new Image(), new Image()],
+        armor_back: [new Image(), new Image()],
+        armor_right: [new Image(), new Image()],
+        diamond_armor_front: [new Image(), new Image()],
+        diamond_armor_back: [new Image(), new Image()],
+        diamond_armor_right: [new Image(), new Image()],
+        fall: [new Image(), new Image(), new Image()],
+    },
+    direction: 'front',
+    frameIndex: 0,
+    lastFrameTime: 0,
+    frameDuration: 400  // Doubled for half speed
+},
+// Add shrine charge tracking
+shrineCharges: 0,
+maxShrineCharges: 24,
+shrineUsedThisFloor: false, // Track if shrine was used on this floor
+
+// Add soul system properties
+soulStones: 0,
+soulShards: 0,
+soulOrbs: 0,
+soulStormCharges: 256, // Track how many charges we have (max 256)
+inSoulTerminal: false, // Track if player is in soul terminal
+soulTerminalCommand: '', // Current command input
+soulTerminalCursorPos: 0, // Cursor position in command
+soulTerminalActive: false, // Whether soul terminal is currently open
+// Add diamond hand properties
+hasDiamondHand: false, // Track if player has diamond hand
+moveCounter: 0,
+auraMoveCounter: 0,
+lastAuraRefillMove: 0,  // New: Track last refill to throttle
+// Add elemental immunity
+elementImmunity: null, // Store the player's elemental immunity
+armorImmunity: null, // Store armor's elemental immunity
+},
     enemies = [], 
     rooms = [];
     dangerousAreas = []; // Track dangerous spell areas
@@ -1584,6 +1589,13 @@ const types = [
     new EnemyType('Shark', 10, 100, 5, 5, 2),
     new EnemyType('Whale', 100, Infinity, 6, 4, 2)
 ];
+    // Add Cursed Trader as special enemy (not in types for tx spawning)
+    const cursedTraderType = new EnemyType('CursedTrader', 0, 0, 12, 2, 1); // Custom: 12 HP, 2 DMG, 1 move
+    cursedTraderType.anim.frames[0].src = 'cursedtrader_1.png';
+    cursedTraderType.anim.frames[1].src = 'cursedtrader_2.png';
+    cursedTraderType.anim.frames[2].src = 'cursedtrader_3.png';
+    cursedTraderType.anim.frameDuration = 400;
+    cursedTraderType.reward = 0; // No sats reward
 
 const assets = {
     themes: {
@@ -1753,6 +1765,8 @@ types.forEach(t => {
 	assets.soul_stash.src = 'soul_stash.png';
 	assets.soul_stone.src = 'soul_stone.png';
 	assets.hooded_heirloom.src = 'hooded_heirloom.png';
+        assets.cursed_ring = new Image(),
+        assets.cursed_ring.src = 'cursed_ring.png';	
 	p.anim.frames.diamond_armor_front = [new Image(), new Image()];
 	p.anim.frames.diamond_armor_front[0].src = 'player_diamond_armor-front1.png';
 	p.anim.frames.diamond_armor_front[1].src = 'player_diamond_armor-front2.png';
@@ -2879,8 +2893,8 @@ if (!inHideout && floor > 1) { // Don't spawn on floor 1 to avoid conflicts
 }
 
 // In the initMap function where items are placed, add shrine placement:
-// Place shrine (20% chance, except in hideout)
-if (!inHideout && Math.random() < 0.20) {
+// Place shrine (20% chance, except in hideout), we now give out a shrine in the first floor
+if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     let attempts = 0;
     const maxAttempts = 50;
     
@@ -2895,7 +2909,7 @@ if (!inHideout && Math.random() < 0.20) {
             !satoshiDrops.some(d => d.x === x && d.y === y) &&
             !runeDrops.some(r => r.x === x && r.y === y) &&
             !scrollDrops.some(s => s.x === x && s.y === y) &&
-            !portals.some(p => p.x === x && p.y === p.y) &&
+            !portals.some(p => p.x === x && p.y === y) &&
             Math.abs(x - p.x) > 2 && Math.abs(y - p.y) > 2) {
             
             map[y][x] = 22; // Shrine tile
@@ -2913,8 +2927,38 @@ dangerousAreas = [];
         initialWaveSpawned = false;
         needsRedraw = true;
 
-        // Reset shrine usage tracking for new floor
-        p.shrineUsedThisFloor = false;
+        // Spawn Cursed Trader (25% chance from floor 2+)
+        if (floor >= 2 && Math.random() < 0.25 && !inHideout) {
+            let traderX, traderY, attempts = 50;
+            do {
+                const r = rooms[Math.floor(Math.random() * rooms.length)];
+                traderX = r.x + Math.floor(Math.random() * r.w);
+                traderY = r.y + Math.floor(Math.random() * r.h);
+                attempts--;
+            } while (attempts > 0 && 
+                     (map[traderY][traderX] !== 0 || 
+                      (traderX === p.x && traderY === p.y) || 
+                      enemies.some(e => e.x === traderX && e.y === traderY)));
+            
+            if (attempts > 0) {
+                const newTrader = { 
+                    x: traderX, y: traderY,
+                    currentX: traderX * S, currentY: traderY * S,
+                    moving: false, stepsLeft: 0, deltaX: 0, deltaY: 0,
+                    targetTileX: 0, targetTileY: 0,
+                    type: cursedTraderType,
+                    hp: 12,
+                    address: 'Cursed Trader',
+                    sats: 0, // No sats
+                    uniqueName: 'Cursed Trader', // Treat as unique for fog invisibility
+                    swordActive: false, swordDir: 'right', swordStart: 0, // For sword animation
+                    anim: { frameIndex: 0, lastFrameTime: performance.now() }
+                };
+                enemies.push(newTrader);
+                logBattleEvent(`Floor ${floor} - Cursed Trader appears!`);
+                needsRedraw = true;
+            }
+        }
 
         // Check runewords at floor start
         checkRunewordsAtFloorStart();
@@ -3125,21 +3169,29 @@ needsRedraw = true;
 
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
-    if (p.hp <= 24 && p.hasDiamondArmor) {
+    if (p.hp <= p.maxHP / 2 && p.hasDiamondArmor) {  // Tie to half maxHP
         p.hasDiamondArmor = false;
         p.hasArmor = false;
         p.armorImmunity = null; // Reset armor immunity
+        p.maxHP = 36;  // Revert to leather max
         logBattleEvent(`Floor ${floor} - Diamond Armor lost! Reverted to normal clothing.`);
         document.getElementById('armorStatus').textContent = 'Cloth';
     } else if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
         p.armorImmunity = null; // Reset armor immunity
+        p.maxHP = 24;  // Revert to base max
+        // Also remove any cursed ring effects if active (no stacking with resistances)
+        if (p.hasCursedRing) {
+            p.elementImmunity = null;
+        }
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
         document.getElementById('armorStatus').textContent = 'Cloth';
     } else if (p.hasDiamondArmor) {
         document.getElementById('armorStatus').textContent = 'Diamond';
     } else if (p.hasArmor) {
         document.getElementById('armorStatus').textContent = 'Leather';
+    } else if (p.hasCursedRing) {
+        document.getElementById('armorStatus').textContent = 'Cursed Aura';
     } else {
         document.getElementById('armorStatus').textContent = 'Cloth';
     }
@@ -3150,27 +3202,29 @@ function updatePlayerState() {
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
     }
 
-// Check if player is on blacksmith tile and can get diamond armor or diamond hand
-if (map[p.y][p.x] === 15 && p.perfectlyCutDiamonds > 0) {
-    if (!p.hasDiamondArmor) {
-        p.hasDiamondArmor = true;
-        p.perfectlyCutDiamonds--;
-        logBattleEvent(`Floor ${floor} - Diamond Armor acquired from Blacksmith!`);
-        document.getElementById('armorStatus').textContent = 'Diamond';
-    } else if (!p.hasDiamondHand) {
-        p.hasDiamondHand = true;
-        p.perfectlyCutDiamonds--;
-        p.atk = 3; // Increase attack power for diamond hand
-        logBattleEvent(`Floor ${floor} - Diamond Hand acquired from Blacksmith!`);
+    // Check if player is on blacksmith tile and can get diamond armor or diamond hand
+    if (map[p.y][p.x] === 15 && p.perfectlyCutDiamonds > 0) {
+        if (!p.hasDiamondArmor) {
+            p.hasDiamondArmor = true;
+            p.perfectlyCutDiamonds--;
+            p.maxHP = 1000;  // Set diamond max
+            p.hp = Math.min(p.hp, p.maxHP);  // Cap at new max
+            logBattleEvent(`Floor ${floor} - Diamond Armor acquired from Blacksmith!`);
+            document.getElementById('armorStatus').textContent = 'Diamond';
+        } else if (!p.hasDiamondHand) {
+            p.hasDiamondHand = true;
+            p.perfectlyCutDiamonds--;
+            p.atk = 3; // Increase attack power for diamond hand
+            logBattleEvent(`Floor ${floor} - Diamond Hand acquired from Blacksmith!`);
+        }
     }
-}
 
-// Check if player lost diamond armor and should lose diamond hand
-if (!p.hasDiamondArmor && p.hasDiamondHand) {
-    p.hasDiamondHand = false;
-    logBattleEvent(`Floor ${floor} - Diamond Hand lost! Back to normal sword.`);
-    p.atk = 2; // Reset attack power
-}
+    // Check if player lost diamond armor and should lose diamond hand
+    if (!p.hasDiamondArmor && p.hasDiamondHand) {
+        p.hasDiamondHand = false;
+        logBattleEvent(`Floor ${floor} - Diamond Hand lost! Back to normal sword.`);
+        p.atk = 2; // Reset attack power
+    }
 
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
@@ -3182,9 +3236,29 @@ if (!p.hasDiamondArmor && p.hasDiamondHand) {
         // In terminal, update both regular and soul inventory
         document.getElementById('runes').textContent = p.runes.join(' ');
     }
-    
+
+    // Regenerate aura shield (1 per "turn" - every 64 moves) - separate from shrine
+    if (p.hasCursedRing && p.auraMoveCounter >= 64 && p.auraShield < p.auraMax && p.lastAuraRefillMove !== p.auraMoveCounter) {
+        p.auraShield = Math.min(p.auraMax, p.auraShield + 1);
+        p.lastAuraRefillMove = p.auraMoveCounter; // Track last refill move to prevent spam
+        p.auraMoveCounter = 0;  // Reset aura counter after refill
+        logBattleEvent(`Floor ${floor} - Cursed Aura regenerates +1 (now ${p.auraShield}/${p.auraMax})`);
+    }
+
+    // Break ring if aura depleted
+    if (p.hasCursedRing && p.auraShield <= 0) {
+        p.hasCursedRing = false;
+        p.auraMax = 0;
+        p.auraShield = 0;
+        // Keep curseActive true until pond dispel
+        // Restore a random immunity
+        const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+        p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+        logBattleEvent(`Floor ${floor} - Cursed Ring shattered! HP unchanged at ${p.hp}/${p.maxHP}. Gained ${p.elementImmunity} immunity.`);
+    }
+
     needsRedraw = true;
-}
+}  // ← Add this closing brace here (end of function)
 
 function updateFogMap(px, py) {
     const radius = 3; // Visibility radius
@@ -3393,7 +3467,8 @@ if (floor > 1 && Math.random() < 0.10) {
         // Play unique monster sound on first spawn of this type
         playUniqueMonsterSound(randomUniqueName);        
         
-        logBattleEvent(`Floor ${floor} - Unique ${type.name} Spawn: ${btc.toFixed(2)} BTC`);
+        // Harbinger message handled in draw() for fog visibility only
+logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); // Generic spawn log
         uniqueMonstersSpawnedThisFloor++;
     } else {
         const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
@@ -3548,29 +3623,64 @@ if (floor > 1 && Math.random() < 0.10) {
                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
                 let dropPlaced = false;
                 
-                if (map[enemy.y][enemy.x] === 0) {
-                    map[enemy.y][enemy.x] = 3;
-                    satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                    dropPlaced = true;
-                } else {
-                    const adjacent = [
-                        {x: enemy.x, y: enemy.y - 1},
-                        {x: enemy.x, y: enemy.y + 1},
-                        {x: enemy.x - 1, y: enemy.y},
-                        {x: enemy.x + 1, y: enemy.y}
-                    ];
-                    for (const pos of adjacent) {
-                        const nx = pos.x, ny = pos.y;
-                        if (
-                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                            map[ny][nx] === 0 &&
-                            !enemies.some(e => e.x === nx && e.y === ny)
-                        ) {
-                            map[ny][nx] = 3;
-                            satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
-                            dropPlaced = true;
-                            break;
+                // Skip bitcoin drop for uniques/CursedTrader
+                if (!enemy.uniqueName && enemy.type.name !== 'CursedTrader') {
+                    if (map[enemy.y][enemy.x] === 0) {
+                        map[enemy.y][enemy.x] = 3;
+                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                        dropPlaced = true;
+                    } else {
+                        const adjacent = [
+                            {x: enemy.x, y: enemy.y - 1},
+                            {x: enemy.x, y: enemy.y + 1},
+                            {x: enemy.x - 1, y: enemy.y},
+                            {x: enemy.x + 1, y: enemy.y}
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 3;
+                                satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                                dropPlaced = true;
+                                break;
+                            }
                         }
+                    }
+                }
+
+                // Cursed Ring drop (50% for Cursed Trader only, even in blast)
+                if (enemy.type.name === 'CursedTrader' && Math.random() < 0.5 && !p.hasCursedRing) {
+                    let ringPlaced = false;
+                    if (map[enemy.y][enemy.x] === 0) {
+                        map[enemy.y][enemy.x] = 23; // Cursed ring tile
+                        ringPlaced = true;
+                    } else {
+                        const adjacent = [
+                            { x: enemy.x, y: enemy.y - 1 },
+                            { x: enemy.x, y: enemy.y + 1 },
+                            { x: enemy.x - 1, y: enemy.y },
+                            { x: enemy.x + 1, y: enemy.y }
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 23; // Cursed ring tile
+                                ringPlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (ringPlaced) {
+                        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                        playWebAudioSound(sounds.pickup);
                     }
                 }
 
@@ -3716,6 +3826,7 @@ function move(dir) {
 
 // In the move function, after updating position:
 p.moveCounter++;
+p.auraMoveCounter++;
 if (p.moveCounter >= 2) {
     if (p.shrineCharges > 0) {
         p.hp++;
@@ -3724,9 +3835,9 @@ if (p.moveCounter >= 2) {
         if ((p.maxShrineCharges - p.shrineCharges) % 8 === 0) {
             logBattleEvent(`Floor ${floor} - Shrine refills health! (${p.shrineCharges}/${p.maxShrineCharges})`);
         }
-        updatePlayerState();
     }
-    p.moveCounter = 0;
+    p.moveCounter = 0;  // Reset only shrine counter
+    updatePlayerState();  // Call every 2 moves (shrine tick) to check aura too
 }
 
     // Validate move before starting animation
@@ -3844,20 +3955,31 @@ if (p.moving) {
         }
         
 if (map[ny][nx] === 6 && !inHideout) {
-    if (currentTheme === 'paradise') {
-        // Only restore HP if we're below the threshold
+if (currentTheme === 'paradise') {
+    if (p.hasCursedRing) {
+        p.hasCursedRing = false;
+        p.auraMax = 0;
+        p.auraShield = 0;
+        logBattleEvent(`Floor ${floor} - Pond dispels Cursed Aura! Resistances restored.`);
+        p.curseActive = false;  // Lift lingering curse
+        playWebAudioSound(sounds.pond);
+        // Restore a random immunity
+        const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+        p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+    }
+    // Only restore HP if we're below the threshold
         if (p.hp < 24) {  // Or use p.hp < 36 if that's your desired cutoff
             const oldHP = p.hp;
             p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
             logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
-            playWebAudioSound(sounds.pickup);
+            playWebAudioSound(sounds.pond);
         }
         // Additional condition for armor users with less than 36 HP
         else if (p.hasArmor && p.hp < 36) {
             const oldHP = p.hp;
             p.hp = 36; // Fill up to 36 HP for armor-wearing players
             logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
-            playWebAudioSound(sounds.pickup);
+            playWebAudioSound(sounds.pond);
         }
     }       
             // If p.hp > 36, do nothing and continue
@@ -3867,9 +3989,10 @@ if (map[ny][nx] === 6 && !inHideout) {
                 // Check for poison immunity
                 if (p.elementImmunity === 'Poison' || p.armorImmunity === 'Poison') {
                     logBattleEvent(`Floor ${floor} - Sludge Pit: Immune to Poison damage!`);
-                } else {
-                    p.hp = Math.max(0, p.hp - 2);
-                    logBattleEvent(`Floor ${floor} - Sludge Pit: -2 HP (now ${p.hp})`);
+} else {
+    const damage = p.hasCursedRing ? 4 : 2;
+    p.hp = Math.max(0, p.hp - damage);
+    logBattleEvent(`Floor ${floor} - Sludge Pit: -${damage} HP (now ${p.hp})`);
                     playWebAudioSound(sounds.hit);
                     if (p.hp <= 0 && p.immortal) {
                         p.hp = 1;
@@ -3889,9 +4012,10 @@ if (map[ny][nx] === 6 && !inHideout) {
                 // Check for fire immunity
                 if (p.elementImmunity === 'Fire' || p.armorImmunity === 'Fire') {
                     logBattleEvent(`Floor ${floor} - Lava: Immune to Fire damage!`);
-                } else {
-                    p.hp = Math.max(0, p.hp - 8);
-                    logBattleEvent(`Floor ${floor} - Lava: -8 HP (now ${p.hp})`);
+} else {
+    const damage = p.hasCursedRing ? 16 : 8;
+    p.hp = Math.max(0, p.hp - damage);
+    logBattleEvent(`Floor ${floor} - Lava: -${damage} HP (now ${p.hp})`);
                     playWebAudioSound(sounds.hit);
                     if (p.hp <= 0 && p.immortal) {
                         p.hp = 1;
@@ -3934,50 +4058,65 @@ if (map[ny][nx] === 6 && !inHideout) {
             updatePlayerState();
         }
         
-        if (map[ny][nx] === 7) {
-            const coinToss = Math.random() < 0.5; // 50/50 chance
-            if (coinToss) {
-                // Grant max health (original behavior)
-                const healthGain = p.potions * 12;
-                p.maxHP += healthGain;
-                p.hp += healthGain;
-                logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
-                playWebAudioSound(sounds.heads); // Play heads.wav
-            } else {
-                // Remove excess health and adjust armor
-                let currentMaxHP = 24; // Base HP
-                let newArmorStatus = 'Cloth';
-                if (p.hp > 1000) {
-                    currentMaxHP = 1000; // Diamond armor max
-                    newArmorStatus = 'Diamond';
-                } else if (p.hp > 36) {
-                    currentMaxHP = 36; // Leather armor max
-                    newArmorStatus = 'Leather';
-                } else if (p.hp > 24) {
-                    currentMaxHP = 24; // Cloth max
-                    newArmorStatus = 'Cloth';
-                }
-                if (p.hp > currentMaxHP) {
-                    const healthLost = p.hp - currentMaxHP;
-                    p.hp = currentMaxHP;
-                    p.hasDiamondArmor = currentMaxHP >= 1000;
-                    p.hasArmor = currentMaxHP === 36;
-                    document.getElementById('armorStatus').textContent = newArmorStatus;
-                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
-                } else {
-                    logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
-                }
-                playWebAudioSound(sounds.tails); // Play tails.wav
-            }
-            p.potions = 0;
-            map[ny][nx] = 0;
-            updatePlayerState();
+if (map[ny][nx] === 7) {
+    if (p.curseActive) {
+        logBattleEvent(`Floor ${floor} - Gnome refuses: Lingering curse blocks extra life!`);
+        playWebAudioSound(sounds.buzz);
+        p.potions = 0;
+        map[ny][nx] = 0;
+        updatePlayerState();
+        return;  // Skip coin toss
+    }
+    const coinToss = Math.random() < 0.5; // 50/50 chance
+    if (coinToss) {
+        if (p.hasCursedRing) {
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! But Cursed Aura blocks extra life!`);
+            playWebAudioSound(sounds.heads); // Play heads.wav
+        } else {
+            // Grant max health (original behavior)
+            const healthGain = p.potions * 12;
+            p.maxHP += healthGain;
+            p.hp += healthGain;
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
+            playWebAudioSound(sounds.heads); // Play heads.wav
         }
+    } else {
+        // Remove excess health and adjust armor
+        let currentMaxHP = 24; // Base HP
+        let newArmorStatus = 'Cloth';
+        if (p.hp > 1000) {
+            currentMaxHP = 1000; // Diamond armor max
+            newArmorStatus = 'Diamond';
+        } else if (p.hp > 36) {
+            currentMaxHP = 36; // Leather armor max
+            newArmorStatus = 'Leather';
+        } else if (p.hp > 24) {
+            currentMaxHP = 24; // Cloth max
+            newArmorStatus = 'Cloth';
+        }
+        if (p.hp > currentMaxHP) {
+            const healthLost = p.hp - currentMaxHP;
+            p.hp = currentMaxHP;
+            p.hasDiamondArmor = currentMaxHP >= 1000;
+            p.hasArmor = currentMaxHP === 36;
+            document.getElementById('armorStatus').textContent = newArmorStatus;
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
+        } else {
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
+        }
+        playWebAudioSound(sounds.tails); // Play tails.wav
+    }
+    p.potions = 0;
+    map[ny][nx] = 0;
+    updatePlayerState();
+}
         
         if (map[ny][nx] === 3) {
             const drop = satoshiDrops.find(d => d.x === nx && d.y === ny);
             if (drop) {
-                satsEarned[drop.type] += drop.sats;
+                if (satsEarned[drop.type] !== undefined) {
+                    satsEarned[drop.type] += drop.sats;
+                }
                 map[ny][nx] = 0;
                 satoshiDrops = satoshiDrops.filter(d => d !== drop);
                 playWebAudioSound(sounds.pickup);
@@ -3993,6 +4132,12 @@ if (map[ny][nx] === 6 && !inHideout) {
         }
         
         if (map[ny][nx] === 5) {
+            if (p.hasCursedRing) {
+                p.hasCursedRing = false;
+                p.auraShield = 0;
+                p.auraMax = 0;
+                logBattleEvent(`Floor ${floor} - Armor Found: Cursed Aura dispelled!`);
+            }
             if (p.hp >= 24) {
                 p.hp += 12;
             } else {
@@ -4098,14 +4243,14 @@ if (map[ny][nx] === 6 && !inHideout) {
             // Start fall animation - ensure it starts from frame 0
             let frameIndex = 0;
             const fallDuration = 200; // ms per frame
-            const totalFrames = 4; // it is really just 3 frames but the last seems to be clipped off due to this "totalFrames - 1"
+            const totalFrames = 3; // Exactly 3 frames
             const startTime = Date.now();
 
             function animateFall() {
                 const elapsed = Date.now() - startTime;
                 frameIndex = Math.min(Math.floor(elapsed / fallDuration), totalFrames - 1);
 
-                // Update animation - this ensures all frames play, including the last one!
+                // Update animation - cycle through 0,1,2
                 p.anim.frameIndex = frameIndex;
                 needsRedraw = true;
 
@@ -4325,6 +4470,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     initialSpawnDoneThisFloor = false;
     enemies = [];
     floor++;
+    p.shrineUsedThisFloor = false;  // Reset shrine flag for new floor
     initialWaveSpawned = false;
     waveActive = false;
     exit = null;
@@ -4607,6 +4753,29 @@ if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
             }
         }
 
+if (map[ny][nx] === 23) { // Cursed ring
+    if (p.hasCursedRing) {
+        logBattleEvent(`Floor ${floor} - Cannot equip another Cursed Ring!`);
+    } else {
+        const originalHP = p.hp; // Store pre-halving HP for aura calc
+        const oldMax = p.maxHP;
+        p.maxHP = Math.floor(oldMax / 2);
+        p.hp = Math.floor(p.hp / 2); // Halve current HP too
+        p.auraMax = originalHP * 2; // Double original (pre-halving) HP for aura
+        p.auraShield = p.auraMax;
+	p.hasCursedRing = true;
+	p.curseActive = true;  // Lingering curse effects
+	p.elementImmunity = null;
+        p.armorImmunity = null;
+        p.hasArmor = false; // Remove armor
+        p.hasDiamondArmor = false;
+        map[ny][nx] = 0;
+        playWebAudioSound(sounds.pickup);
+        logBattleEvent(`Floor ${floor} - Cursed Ring equipped! Max HP halved to ${p.maxHP}, Aura Shield: ${p.auraShield}`);
+        updatePlayerState();
+    }
+}
+
 // Check for unique monster in fog of war
 function checkUniqueMonsterInFog() {
     if (activeUniqueMonsterName) return;
@@ -4664,16 +4833,6 @@ if (!activeUniqueMonsterName) {
 
 // Check for unique monster in fog of war
 const uniqueMonstersInFog = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 0);
-if (uniqueMonstersInFog.length > 0 && !activeUniqueMonsterName) {
-    const firstInFog = uniqueMonstersInFog[0];
-    // Show the harbinger message
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (!floorIndicator.textContent.includes("A harbinger of doom is near.")) {
-        floorIndicator.textContent = "A harbinger of doom is near.";
-        // Don't auto-clear - keep static until enemy is found or dead
-        // Clear only when enemy is killed or when leaving the area
-    }
-}
 
 // Check if player moved from a rune tile
 if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)) {
@@ -4790,12 +4949,42 @@ if (numTileSteps > 0) {
 dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
             }
             if (
-                (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark') ?
+                (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark' || e.type.name === 'CursedTrader') ?
                 (Math.abs(e.x - p.x) === 1 && e.y === p.y) || (Math.abs(e.y - p.y) === 1 && e.x === p.x) :
                 Math.abs(e.x - p.x) <= 1 && Math.abs(e.y - p.y) <= 1
             ) {
-const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) + 3 : e.type.atk;	// Added + 3 dmg to make the whale still pretty dangerous at early stages
-p.hp -= damage;
+                // Set sword animation for Cursed Trader
+                if (e.type.name === 'CursedTrader') {
+                    e.swordActive = true;
+                    e.swordStart = Date.now();
+                    // Determine sword direction towards player
+                    const dx = p.x - e.x;
+                    const dy = p.y - e.y;
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        e.swordDir = dx > 0 ? 'right' : 'left';
+                    } else {
+                        e.swordDir = dy > 0 ? 'down' : 'up';
+                    }
+                }
+                
+                // Apply damage to aura first if cursed ring active
+                const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) + 3 : e.type.atk;
+                if (p.hasCursedRing && p.auraShield > 0) {
+                    const oldAura = p.auraShield;
+                    p.auraShield -= damage;
+                    if (p.auraShield < 0) {
+                        p.hp += p.auraShield; // Overflow to HP
+                        logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks Aura! ${damage} DMG (overflow ${Math.abs(p.auraShield)} to HP; Aura now 0/${p.auraMax})`);
+                        p.auraShield = 0;
+                    } else {
+                        logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks Aura! ${damage} DMG (now ${p.auraShield}/${p.auraMax})`);
+                    }
+                    // Trigger visual flash
+                    auraHitStartTime = Date.now();
+                } else {
+                    p.hp -= damage;
+                    logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG (Aura depleted; HP now ${p.hp})`);
+                }
 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
 playWebAudioSound(sounds.hit);
 if (p.hp <= 0 && p.immortal) {
@@ -4920,33 +5109,39 @@ handleUniqueMonsterReward(hit);
         
         // Remove enemy immediately to prevent further hits
         enemies = enemies.filter(e => e !== hit);
-                if (map[hit.y][hit.x] === 0) {
-                    map[hit.y][hit.x] = 3;
-                    satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                    dropPlaced = true;
-                } else {
-                    const adjacent = [
-                        {x: hit.x, y: hit.y - 1},
-                        {x: hit.x, y: hit.y + 1},
-                        {x: hit.x - 1, y: hit.y},
-                        {x: hit.x + 1, y: hit.y}
-                    ];
-                    for (const pos of adjacent) {
-                        const nx = pos.x, ny = pos.y;
-                        if (
-                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                            map[ny][nx] === 0 &&
-                            !enemies.some(e => e.x === nx && e.y === ny)
-                        ) {
-                            map[ny][nx] = 3;
-                            satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                            dropPlaced = true;
-                            break;
+        
+        // No sats drop for Cursed Trader
+        if (hit.type.name !== 'CursedTrader') {
+                if (!hit.uniqueName) { // Skip normal drop for unique monsters like Cursed Trader
+                    if (map[hit.y][hit.x] === 0) {
+                        map[hit.y][hit.x] = 3;
+                        satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                        dropPlaced = true;
+                    } else {
+                        const adjacent = [
+                            {x: hit.x, y: hit.y - 1},
+                            {x: hit.x, y: hit.y + 1},
+                            {x: hit.x - 1, y: hit.y},
+                            {x: hit.x + 1, y: hit.y}
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)
+                            ) {
+                                map[ny][nx] = 3;
+                                satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                                dropPlaced = true;
+                                break;
+                            }
                         }
                     }
                 }
                 if (!dropPlaced) {
                     // No space for satoshi drop
+                }
                 }
 
 // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
@@ -4984,7 +5179,39 @@ if (!scrollDroppedThisFloor && Math.random() < 1/25) {
         playWebAudioSound(sounds.pickup);
     }
 }
-                
+              
+                // Cursed Ring drop (50% for Cursed Trader only)
+                if (hit.type.name === 'CursedTrader' && Math.random() < 0.5) {
+                    let ringPlaced = false;
+                    if (map[hit.y][hit.x] === 0 && !p.hasCursedRing) {
+                        map[hit.y][hit.x] = 23; // Cursed ring tile
+                        ringPlaced = true;
+                    } else {
+                        const adjacent = [
+                            { x: hit.x, y: hit.y - 1 },
+                            { x: hit.x, y: hit.y + 1 },
+                            { x: hit.x - 1, y: hit.y },
+                            { x: hit.x + 1, y: hit.y }
+                        ];
+                        for (const pos of adjacent) {
+                            const nx = pos.x, ny = pos.y;
+                            if (
+                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny) &&
+                                !p.hasCursedRing
+                            ) {
+                                map[ny][nx] = 23; // Cursed ring tile
+                                ringPlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (ringPlaced) {
+                        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                        playWebAudioSound(sounds.pickup);
+                    }
+                }                
                 // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
                 if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
                     let runeLetter;
@@ -5216,30 +5443,32 @@ function handleUniqueMonsterReward(hit) {
     const randomMultiplier = 2 + Math.random() * 2; // Random multiplier from 2x to 4x
     const reward = Math.round(baseWithMultiplier * randomMultiplier);
     
-    // Add bitcoin drops around the monster position
+    // Add bitcoin drops around the monster position (skip for CursedTrader)
     let dropPlaced = false;
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 3;
-        satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
-        dropPlaced = true;
-    } else {
-        const adjacent = [
-            {x: hit.x, y: hit.y - 1},
-            {x: hit.x, y: hit.y + 1},
-            {x: hit.x - 1, y: hit.y},
-            {x: hit.x + 1, y: hit.y}
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny)
-            ) {
-                map[ny][nx] = 3;
-                satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
-                dropPlaced = true;
-                break;
+    if (hit.type.name !== 'CursedTrader') {
+        if (map[hit.y][hit.x] === 0) {
+            map[hit.y][hit.x] = 3;
+            satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
+            dropPlaced = true;
+        } else {
+            const adjacent = [
+                {x: hit.x, y: hit.y - 1},
+                {x: hit.x, y: hit.y + 1},
+                {x: hit.x - 1, y: hit.y},
+                {x: hit.x + 1, y: hit.y}
+            ];
+            for (const pos of adjacent) {
+                const nx = pos.x, ny = pos.y;
+                if (
+                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                    map[ny][nx] === 0 &&
+                    !enemies.some(e => e.x === nx && e.y === ny)
+                ) {
+                    map[ny][nx] = 3;
+                    satoshiDrops.push({x: nx, y: ny, sats: reward, type: hit.type.name});
+                    dropPlaced = true;
+                    break;
+                }
             }
         }
     }
@@ -5249,14 +5478,16 @@ function handleUniqueMonsterReward(hit) {
         const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
         logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
 
-	// Clear harbinger message if it was active for this monster
-	const floorIndicator = document.getElementById('floor-indicator');
-	if (floorIndicator.textContent === "A harbinger of doom is near.") {
-	    floorIndicator.textContent = `Floor ${floor}`;
-	}
-	activeUniqueMonsterName = null; // Also clear any lingering visible name
-        // Also add to satsEarned for proper display
-        satsEarned[hit.type.name] += reward;
+        // Clear harbinger message if it was active for this monster
+        const floorIndicator = document.getElementById('floor-indicator');
+        if (floorIndicator.textContent === "A harbinger of doom is near.") {
+            floorIndicator.textContent = `Floor ${floor}`;
+        }
+        activeUniqueMonsterName = null; // Also clear any lingering visible name
+        // Also add to satsEarned for proper display (skip CursedTrader)
+        if (hit.type.name !== 'CursedTrader') {
+            satsEarned[hit.type.name] += reward;
+        }
         updateSatsDisplay();
     } else {
         logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
@@ -5710,33 +5941,68 @@ if (hit.hp <= 0) {
 // Handle unique monster rewards using new function
 handleUniqueMonsterReward(hit);
 
-        // Normal enemy reward
-        if (map[hit.y][hit.x] === 0) {
-            map[hit.y][hit.x] = 3;
-            satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-            dropPlaced = true;
-        } else {
-            const adjacent = [
-                {x: hit.x, y: hit.y - 1},
-                {x: hit.x, y: hit.y + 1},
-                {x: hit.x - 1, y: hit.y},
-                {x: hit.x + 1, y: hit.y}
-            ];
-            for (const pos of adjacent) {
-                const nx = pos.x, ny = pos.y;
-                if (
-                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                    map[ny][nx] === 0 &&
-                    !enemies.some(e => e.x === nx && e.y === ny)
-                ) {
-                    map[ny][nx] = 3;
-                    satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                    dropPlaced = true;
-                    break;
+        // Normal enemy reward (skip for uniques/CursedTrader)
+        if (!hit.uniqueName && hit.type.name !== 'CursedTrader') {
+            if (map[hit.y][hit.x] === 0) {
+                map[hit.y][hit.x] = 3;
+                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                dropPlaced = true;
+            } else {
+                const adjacent = [
+                    {x: hit.x, y: hit.y - 1},
+                    {x: hit.x, y: hit.y + 1},
+                    {x: hit.x - 1, y: hit.y},
+                    {x: hit.x + 1, y: hit.y}
+                ];
+                for (const pos of adjacent) {
+                    const nx = pos.x, ny = pos.y;
+                    if (
+                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                        map[ny][nx] === 0 &&
+                        !enemies.some(e => e.x === nx && e.y === ny)
+                    ) {
+                        map[ny][nx] = 3;
+                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                        dropPlaced = true;
+                        break;
+                    }
                 }
             }
         }
-        if (!dropPlaced) {
+
+        // Cursed Ring drop (50% for Cursed Trader only)
+        if (hit.type.name === 'CursedTrader' && Math.random() < 0.5 && !p.hasCursedRing) {
+            let ringPlaced = false;
+            if (map[hit.y][hit.x] === 0) {
+                map[hit.y][hit.x] = 23; // Cursed ring tile
+                ringPlaced = true;
+            } else {
+                const adjacent = [
+                    { x: hit.x, y: hit.y - 1 },
+                    { x: hit.x, y: hit.y + 1 },
+                    { x: hit.x - 1, y: hit.y },
+                    { x: hit.x + 1, y: hit.y }
+                ];
+                for (const pos of adjacent) {
+                    const nx = pos.x, ny = pos.y;
+                    if (
+                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                        map[ny][nx] === 0 &&
+                        !enemies.some(e => e.x === nx && e.y === ny)
+                    ) {
+                        map[ny][nx] = 23; // Cursed ring tile
+                        ringPlaced = true;
+                        break;
+                    }
+                }
+            }
+            if (ringPlaced) {
+                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                playWebAudioSound(sounds.pickup);
+            }
+        }
+
+        if (!dropPlaced && hit.type.name !== 'CursedTrader') {
             // No space for satoshi drop
         }
 
@@ -5971,6 +6237,11 @@ if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && 
 
 function usePotion() {
     if (gameOver || splashActive || p.potions <= 0) return;
+if (p.curseActive) {
+    logBattleEvent(`Floor ${floor} - Cannot use potion: Lingering curse blocks healing!`);
+        sounds.potion.play().catch(e => console.error('Potion sound error:', e));
+        return; // Block and play sound for feedback
+    }
     if (p.hp >= 24) {
         logBattleEvent(`Floor ${floor} - Potion Returned: HP already at ${p.hp}!`);
         sounds.potion.play().catch(e => console.error('Potion sound error:', e));
@@ -6073,6 +6344,12 @@ if (p.armorImmunity) {
 }
 if (resistanceText) {
     addTerminalLineToContent(`Resistances: ${resistanceText}`);
+    addTerminalLineToContent('');
+}
+// Cursed Ring vulnerability warning
+if (p.hasCursedRing) {
+    addTerminalLineToContent(`WARNING: Cursed Ring active - -100% to ALL resistances!`);
+    addTerminalLineToContent(`Aura Shield: ${p.auraShield}/${p.auraMax}`);
     addTerminalLineToContent('');
 }
     
@@ -6429,34 +6706,68 @@ function activateSoulStorm() {
                 if (enemy.hp <= 0) {
                     kills[enemy.type.name]++;
                     handleUniqueMonsterReward(enemy);
-                    let dropPlaced = false;
-                    
-                    // Drop satoshi
-                    if (map[enemy.y][enemy.x] === 0) {
-                        map[enemy.y][enemy.x] = 3;
-                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                        dropPlaced = true;
-                    } else {
-                        const adjacent = [
-                            {x: enemy.x, y: enemy.y - 1},
-                            {x: enemy.x, y: enemy.y + 1},
-                            {x: enemy.x - 1, y: enemy.y},
-                            {x: enemy.x + 1, y: enemy.y}
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny)
-                            ) {
-                                map[ny][nx] = 3;
-                                satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                        let dropPlaced = false;
+
+                        // Drop satoshi (skip for uniques/CursedTrader)
+                        if (!enemy.uniqueName && enemy.type.name !== 'CursedTrader') {
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 3;
+                                satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
                                 dropPlaced = true;
-                                break;
+                            } else {
+                                const adjacent = [
+                                    {x: enemy.x, y: enemy.y - 1},
+                                    {x: enemy.x, y: enemy.y + 1},
+                                    {x: enemy.x - 1, y: enemy.y},
+                                    {x: enemy.x + 1, y: enemy.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny)
+                                    ) {
+                                        map[ny][nx] = 3;
+                                        satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                                        dropPlaced = true;
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
+
+                        // Cursed Ring drop (50% for Cursed Trader only)
+                        if (enemy.type.name === 'CursedTrader' && Math.random() < 0.5 && !p.hasCursedRing) {
+                            let ringPlaced = false;
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 23; // Cursed ring tile
+                                ringPlaced = true;
+                            } else {
+                                const adjacent = [
+                                    { x: enemy.x, y: enemy.y - 1 },
+                                    { x: enemy.x, y: enemy.y + 1 },
+                                    { x: enemy.x - 1, y: enemy.y },
+                                    { x: enemy.x + 1, y: enemy.y }
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny)
+                                    ) {
+                                        map[ny][nx] = 23; // Cursed ring tile
+                                        ringPlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (ringPlaced) {
+                                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                                playWebAudioSound(sounds.pickup);
+                            }
+                        }
                     
                     enemies = enemies.filter(en => en !== enemy);
                     enemiesHit++;
@@ -6835,12 +7146,15 @@ function restart() {
     waypointPos = null;
     p.hasDiamondArmor = false;
     p.hasDiamondHand = false;
+    p.hasCursedRing = false;
+    p.auraMax = 0;
+    p.auraShield = 0;    
     p.perfectlyCutDiamonds = 0;
     // Reset soul items
     p.soulStones = 0;
     p.soulShards = 0;
     p.soulOrbs = 0;
-    p.soulStormCharges = 0;
+    p.soulStormCharges = 256;
     // Reset shrine tracking
     p.shrineCharges = 0;
     p.shrineUsedThisFloor = false;
@@ -7178,6 +7492,9 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 22) { // Shrine
             c.drawImage(assets.shrine, x * S, y * S, S, S);
         }
+        if (map[y][x] === 23) { // Cursed Ring
+            c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
+        }
         // Draw stairs after portals to ensure proper visibility
         if (exit && exit.x === x && exit.y === y) {
             c.drawImage(assets.stairs, x * S, y * S, S, S);
@@ -7265,6 +7582,28 @@ if (p.isFalling) {
             c.drawImage(frame, drawX, drawY, S, S);
         }
         c.restore();
+
+        // New: Draw bluish aura hit flash circle
+        if (p.hasCursedRing && auraHitStartTime > 0) {
+            const elapsed = Date.now() - auraHitStartTime;
+            if (elapsed < auraFlashDuration) {
+                const flashAlpha = 0.6 * (1 - (elapsed / auraFlashDuration)); // Fade out
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = W * S;
+                tempCanvas.height = H * S;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.fillStyle = `rgba(75, 0, 130, ${flashAlpha})`; // Indigo-purple curse flash
+                tempCtx.beginPath();
+                const centerX = p.currentX + S / 2;
+                const centerY = p.currentY + S / 2;
+                const radius = S * 1 * (elapsed / auraFlashDuration) + (S / 2); // Expand from S/2 to 1.5S
+                tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                tempCtx.fill();
+                c.drawImage(tempCanvas, 0, 0);
+            } else {
+                auraHitStartTime = 0; // End flash
+            }
+        }
     }
 // Draw sword or pickaxe-sword or diamond hand
 if (swordActive && Date.now() - swordStart < 200) {
@@ -7392,11 +7731,28 @@ enemies.forEach(e => {
         
         // Check if this enemy is a unique monster
         const isUniqueMonster = e.uniqueName !== undefined;
-if (inHideout || screensaverActive) {  // Add this: skip effects in hideout/screensaver
-    c.drawImage(img, e.currentX, e.currentY, S, S);
-    c.restore();
-    return;
-}
+        // Invisible in fog for Cursed Trader
+        if (e.type.name === 'CursedTrader' && fogMap[e.y][e.x] === 0) {
+            return; // Skip drawing
+        }
+        
+        // Draw sword for Cursed Trader if attacking
+        if (e.swordActive && Date.now() - e.swordStart < 200 && e.type.name === 'CursedTrader') {
+            let sx = e.x, sy = e.y;
+            if (e.swordDir === 'up') sy--;
+            if (e.swordDir === 'down') sy++;
+            if (e.swordDir === 'left') sx--;
+            if (e.swordDir === 'right') sx++;
+            if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
+                c.save();
+                c.translate(sx * S + S / 2, sy * S + S / 2);
+                if (e.swordDir === 'up') c.rotate(-Math.PI / 2);
+                if (e.swordDir === 'down') c.rotate(Math.PI / 2);
+                if (e.swordDir === 'left') c.rotate(Math.PI);
+                c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
+                c.restore();
+            }
+        }
         
 	c.save();
 	const doPixelEffect = (frameCount % 1 === 0); 
@@ -7426,17 +7782,19 @@ if (e.type.anim && e.anim) {
 }
         
         let spriteCanvas, spriteCtx;
-        if (isVisible) {
+if (isVisible) {
 if (doPixelEffect && isVisible) {
-                spriteCanvas = document.createElement('canvas');
-                spriteCanvas.width = S;
-                spriteCanvas.height = S;
-                spriteCtx = spriteCanvas.getContext('2d');
-                spriteCtx.imageSmoothingEnabled = false;
-                spriteCtx.drawImage(img, 0, 0, S, S);
-                
-                // Apply theme-based effects to the sprite canvas
-                if (currentTheme === 'desert') {
+    spriteCanvas = document.createElement('canvas');
+    spriteCanvas.width = S;
+    spriteCanvas.height = S;
+    spriteCtx = spriteCanvas.getContext('2d');
+    spriteCtx.imageSmoothingEnabled = false;
+    spriteCtx.drawImage(img, 0, 0, S, S);
+    
+    // Skip theme tints for Cursed Trader
+    if (e.type.name !== 'CursedTrader') {
+        // Apply theme-based effects to the sprite canvas
+        if (currentTheme === 'desert') {
                     const imageData = spriteCtx.getImageData(0, 0, S, S);
                     const data = imageData.data;
                     punchHoleThroughRed(imageData); // Mark eye pixels
@@ -7478,16 +7836,29 @@ if (doPixelEffect && isVisible) {
                     spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
                     spriteCtx.fillRect(0, 0, S, S);
                     spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-                } else if (currentTheme === 'paradise') {
-                    // Apply purple tint for paradise theme
-                    spriteCtx.globalCompositeOperation = 'source-atop';
-                    spriteCtx.fillStyle = 'rgba(153, 102, 255, 0.4)';
-                    spriteCtx.fillRect(0, 0, S, S);
-                    spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-                }
+} else if (currentTheme === 'paradise') {
+    // Apply purple tint for paradise theme + red eyes
+    const imageData = spriteCtx.getImageData(0, 0, S, S);
+    punchHoleThroughRed(imageData); // Mark eye pixels
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 1) { // Eye pixel - make red
+            data[i] = 255;     // Red
+            data[i + 1] = 0;   // Green
+            data[i + 2] = 0;   // Blue
+            data[i + 3] = 255; // Full opacity
+        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - purple tint
+            data[i] = Math.min(255, data[i] + 102); // Add purple hue
+            data[i + 1] = Math.min(255, data[i + 1] + 51); // Subtle green
+            data[i + 2] = Math.min(255, data[i + 2] + 153); // Blue for purple
+            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+        }
+    }
+    spriteCtx.putImageData(imageData, 0, 0);
+}
                 
-                // Special handling for unique monsters (poison green with red eyes)
-                if (isUniqueMonster) {
+                // Special handling for unique monsters (poison green with red eyes) - skip CursedTrader
+                if (isUniqueMonster && e.type.name !== 'CursedTrader') {
                     const imageData = spriteCtx.getImageData(0, 0, S, S);
                     const data = imageData.data;
                     punchHoleThroughRed(imageData); // Mark eye pixels
@@ -7506,6 +7877,7 @@ if (doPixelEffect && isVisible) {
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
                 }
+            }
             }
             // Fallback draw if pixel effect skipped
             if (!doPixelEffect || !isVisible) {
@@ -7541,25 +7913,6 @@ if (doPixelEffect && isVisible) {
         // Draw the processed sprite to the main canvas
         c.drawImage(tempCanvas, e.currentX, e.currentY, S, S);
         c.restore();
-        
-// Show unique monster name when enemy becomes visible (fog of war)
-if (isUniqueMonster && isVisible && !activeUniqueMonsterName) {
-    activeUniqueMonsterName = e.uniqueName;
-    const floorIndicator = document.getElementById('floor-indicator');
-    floorIndicator.textContent = activeUniqueMonsterName;
-    
-    // Auto-clear after 5 seconds like Harbringer message
-    setTimeout(() => {
-        if (activeUniqueMonsterName === e.uniqueName) {
-            activeUniqueMonsterName = null;
-            const currentText = floorIndicator.textContent;
-            if (currentText === activeUniqueMonsterName || 
-                currentText.includes(e.uniqueName)) {
-                floorIndicator.textContent = `Floor ${floor}`;
-            }
-        }
-    }, 5000);
-}
     }
 });
 
@@ -7594,25 +7947,46 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
     document.getElementById('pickaxes').textContent = p.pickaxes;
-    needsRedraw = false;
-frameCount++;  // Add this line
     
-if (activeUniqueMonsterName) {
-    // Display unique monster name in battle log if not already shown
-    const floorIndicator = document.getElementById('floor-indicator');
-    if (!floorIndicator.textContent.includes(activeUniqueMonsterName)) {
-        floorIndicator.textContent = activeUniqueMonsterName;
-        
-        // Auto-clear after 5 seconds like Harbringer message
-        setTimeout(() => {
-            if (activeUniqueMonsterName && 
-                floorIndicator.textContent === activeUniqueMonsterName) {
-                activeUniqueMonsterName = null;
-                floorIndicator.textContent = `Floor ${floor}`;
-            }
-        }, 5000);
+// Consolidated unique monster name display (prevents flicker)
+let uniqueNameToShow = null;
+let isHarbinger = false;
+const visibleUniques = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 1);
+if (visibleUniques.length > 0) {
+    uniqueNameToShow = visibleUniques[0].uniqueName; // First visible
+} else {
+    const fogUniques = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 0);
+    if (fogUniques.length > 0) {
+        uniqueNameToShow = "A harbinger of doom is near.";
+        isHarbinger = true;
     }
 }
+
+const floorIndicator = document.getElementById('floor-indicator');
+const cachedText = window.currentFloorText || `Floor ${floor}`;
+const debounceMs = isHarbinger ? 2000 : 1000; // Longer for harbinger
+if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs)) {
+    floorIndicator.textContent = uniqueNameToShow;
+    window.currentFloorText = uniqueNameToShow;
+    window.lastUniqueSetTime = now;
+    activeUniqueMonsterName = uniqueNameToShow;
+    
+    // Auto-clear after 5s
+    setTimeout(() => {
+        if (activeUniqueMonsterName === uniqueNameToShow) {
+            activeUniqueMonsterName = null;
+            floorIndicator.textContent = `Floor ${floor}`;
+            window.currentFloorText = `Floor ${floor}`;
+        }
+    }, 5000);
+} else if (!uniqueNameToShow && cachedText !== `Floor ${floor}`) {
+    floorIndicator.textContent = `Floor ${floor}`;
+    window.currentFloorText = `Floor ${floor}`;
+    activeUniqueMonsterName = null;
+}
+    
+    needsRedraw = false;
+frameCount++;  // Add this line
 }
 
 function gameLoop(timestamp) {
