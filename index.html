@@ -7169,6 +7169,7 @@ function restart() {
     diamonds = 0;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity on restart
+    p.curseActive = false;  // Lift lingering curse
     
     p.runes = [];
     runeDrops = runeDrops.filter(r => !r.specific);			// maybe
