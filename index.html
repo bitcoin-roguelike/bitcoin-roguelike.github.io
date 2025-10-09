@@ -4771,7 +4771,7 @@ if (map[ny][nx] === 23) { // Cursed ring
         p.hasDiamondArmor = false;
         map[ny][nx] = 0;
         playWebAudioSound(sounds.pickup);
-        logBattleEvent(`Floor ${floor} - Cursed Ring equipped! Max HP halved to ${p.maxHP}, Aura Shield: ${p.auraShield}`);
+        logBattleEvent(`Floor ${floor} - Cursed Ring equipped! HP ${p.hp}, Aura Shield: ${p.auraShield}`);
         updatePlayerState();
     }
 }
@@ -6348,7 +6348,7 @@ if (resistanceText) {
 }
 // Cursed Ring vulnerability warning
 if (p.hasCursedRing) {
-    addTerminalLineToContent(`WARNING: Cursed Ring active - -100% to ALL resistances!`);
+    addTerminalLineToContent(`WARNING: Cursed Ring active, -100% to ALL resistances!`);
     addTerminalLineToContent(`Aura Shield: ${p.auraShield}/${p.auraMax}`);
     addTerminalLineToContent('');
 }
