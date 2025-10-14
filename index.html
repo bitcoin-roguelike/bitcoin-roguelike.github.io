@@ -1402,7 +1402,8 @@ document.querySelectorAll('#actions button').forEach(button => {
 const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
 let currentTheme = 'dungeon'; // Default theme
-const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
+//const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
+const themes = ['dungeon', 'paradise'];
 let initialWaveSpawned = false; // Track if initial wave has spawned
 
 function selectNewTheme(current) {
@@ -1419,6 +1420,7 @@ let lastDrawTime = null;
 let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
+let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
 let auraFlashDuration = 300; // New: Flash duration in ms
@@ -1765,8 +1767,14 @@ types.forEach(t => {
 	assets.soul_stash.src = 'soul_stash.png';
 	assets.soul_stone.src = 'soul_stone.png';
 	assets.hooded_heirloom.src = 'hooded_heirloom.png';
-        assets.cursed_ring = new Image(),
-        assets.cursed_ring.src = 'cursed_ring.png';	
+assets.cursed_ring = new Image(),
+assets.cursed_ring.src = 'cursed_ring.png';	
+
+// Enemy background circles (16x16px animated)
+assets.enemyBg = [new Image(), new Image(), new Image()];
+assets.enemyBg[0].src = 'red-bg1.png';
+assets.enemyBg[1].src = 'red-bg2.png';
+assets.enemyBg[2].src = 'red-bg3.png';
 	p.anim.frames.diamond_armor_front = [new Image(), new Image()];
 	p.anim.frames.diamond_armor_front[0].src = 'player_diamond_armor-front1.png';
 	p.anim.frames.diamond_armor_front[1].src = 'player_diamond_armor-front2.png';
@@ -3188,10 +3196,10 @@ function updatePlayerState() {
         document.getElementById('armorStatus').textContent = 'Cloth';
     } else if (p.hasDiamondArmor) {
         document.getElementById('armorStatus').textContent = 'Diamond';
-    } else if (p.hasArmor) {
-        document.getElementById('armorStatus').textContent = 'Leather';
     } else if (p.hasCursedRing) {
         document.getElementById('armorStatus').textContent = 'Cursed Aura';
+    } else if (p.hasArmor) {
+        document.getElementById('armorStatus').textContent = 'Leather';
     } else {
         document.getElementById('armorStatus').textContent = 'Cloth';
     }
@@ -3766,7 +3774,9 @@ if (enemy.type.name === 'Cursed Trader') {
                 }
             });
             
-            enemies = enemies.filter(e => e.hp > 0); // Remove dead enemies
+const deadEnemies = enemies.filter(e => e.hp <= 0);
+enemies = enemies.filter(e => e.hp > 0);
+deadEnemies.forEach(dead => enemyBgFrameTimes.delete(dead)); // Clear bg tracking for dead
             // Delay stairs placement until fire wave animation completes
             if (enemies.length === 0 && !exit && waveActive) {
                 // Stairs will be placed in draw() after animation completes
@@ -4135,12 +4145,7 @@ if (map[ny][nx] === 7) {
         }
         
         if (map[ny][nx] === 5) {
-            if (p.hasCursedRing) {
-                p.hasCursedRing = false;
-                p.auraShield = 0;
-                p.auraMax = 0;
-                logBattleEvent(`Floor ${floor} - Armor Found: Cursed Aura dispelled!`);
-            }
+            // Cursed Aura now stacks with armor (no dispel)
             if (p.hp >= 24) {
                 p.hp += 12;
             } else {
@@ -5604,7 +5609,7 @@ function drawFadingDangerousAreas() {
     dangerousAreas = dangerousAreas.filter(area => {
         if (area.deathTime) {
             const elapsed = now - area.deathTime;
-            return elapsed < 5000;  // Remove after 5s
+            return elapsed < 3000;  // Remove after 3s
         }
         return true;
     });
@@ -7164,7 +7169,11 @@ function restart() {
     p.hasDiamondHand = false;
     p.hasCursedRing = false;
     p.auraMax = 0;
-    p.auraShield = 0;    
+    p.auraShield = 0;
+    p.curseActive = false;  // Lift any lingering curse
+    // Restore a random immunity on restart
+    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
     p.perfectlyCutDiamonds = 0;
     // Reset soul items
     p.soulStones = 0;
@@ -7185,7 +7194,6 @@ function restart() {
     diamonds = 0;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity on restart
-    p.curseActive = false;  // Lift lingering curse
     
     p.runes = [];
     runeDrops = runeDrops.filter(r => !r.specific);			// maybe
@@ -7200,7 +7208,8 @@ function restart() {
     p.x = 2;
     p.y = 2;
     p.atk = 2;
-    enemies = [];
+enemies = [];
+enemyBgFrameTimes.clear(); // Clear bg animation tracking
     map = [];
     rooms = [];
     exit = null;
@@ -7754,13 +7763,7 @@ function punchHoleThroughRed(imageData) {
     }
 }
 
-// Pulsating animation timing
-const pulsePeriod = 200; // 200 ms cycle
-const pulseAlphaMin = 0.5;
-const pulseAlphaMax = 1;
-const pulseAlpha = pulseAlphaMin + (pulseAlphaMax - pulseAlphaMin) * (Math.sin(Date.now() / pulsePeriod * Math.PI) + 1) / 2;
-
-
+// (removed old pulseAlpha calc - now using PNG frames)
 
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
@@ -7793,10 +7796,23 @@ enemies.forEach(e => {
             }
         }
         
-	c.save();
-	const doPixelEffect = (frameCount % 1 === 0); 
-        // Create a temporary canvas for rendering
-        const tempCanvas = document.createElement('canvas');
+c.save();
+const doPixelEffect = (frameCount % 1 === 0); 
+
+// Draw animated red bg circle before enemy (only if visible)
+if (isVisible) {
+    const bgStartTime = enemyBgFrameTimes.get(e) || performance.now();
+    enemyBgFrameTimes.set(e, bgStartTime);
+    const now = performance.now();
+    const frameIndex = Math.floor((now - bgStartTime) / 200) % 3; // Cycle every 200ms
+    const bgImg = assets.enemyBg[frameIndex];
+    if (bgImg.complete) {
+        c.drawImage(bgImg, e.currentX, e.currentY, S, S);
+    }
+}
+
+// Create a temporary canvas for rendering
+const tempCanvas = document.createElement('canvas');
         tempCanvas.width = S;
         tempCanvas.height = S;
         const tempCtx = tempCanvas.getContext('2d');
@@ -7847,7 +7863,7 @@ if (doPixelEffect && isVisible) {
                             data[i] = 255;     // Red
                             data[i + 1] = 242; // Green
                             data[i + 2] = 230; // Blue
-                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                                        data[i + 3] = Math.round(0.85 * 255); // 85% opacity (subtler greenish-purple)
                         }
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
@@ -7884,6 +7900,55 @@ if (doPixelEffect && isVisible) {
     const imageData = spriteCtx.getImageData(0, 0, S, S);
     punchHoleThroughRed(imageData); // Mark eye pixels
     const data = imageData.data;
+    const width = S;  // 16
+    const height = S; // 16
+    const threshold = 100; // Tune: higher = fewer transparencies
+
+    // CPU-friendly neighbor diff check: zero alpha for color outliers (non-eyes)
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0 && data[i + 3] !== 1) {  // Opaque non-eye only
+            const row = Math.floor(i / (4 * width));
+            const col = (i / 4) % width;
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+
+            const neighbors = [];
+            const dirs = [
+                { dx: 0, dy: -1 },  // up
+                { dx: 0, dy: 1 },   // down
+                { dx: -1, dy: 0 },  // left
+                { dx: 1, dy: 0 }    // right
+            ];
+
+            for (const d of dirs) {
+                const nr = row + d.dy;
+                const nc = col + d.dx;
+                if (nr >= 0 && nr < height && nc >= 0 && nc < width) {
+                    const ni = (nr * width + nc) * 4;
+                    if (data[ni + 3] > 0) {  // Only opaque neighbors
+                        const nrgb = data[ni], ngb = data[ni + 1], nbgb = data[ni + 2];
+                        neighbors.push([nrgb, ngb, nbgb]);
+                    }
+                }
+            }
+
+            if (neighbors.length === 0) {
+                data[i + 3] = 0;  // Isolated: transparent
+                continue;
+            }
+
+            let totalDiff = 0;
+            for (const [nrgb, ngb, nbgb] of neighbors) {
+                totalDiff += Math.sqrt(
+                    (r - nrgb) ** 2 + (g - ngb) ** 2 + (b - nbgb) ** 2
+                );
+            }
+            const avgDiff = totalDiff / neighbors.length;
+
+            if (avgDiff > threshold) {
+                data[i + 3] = 0;  // Outlier: transparent
+            }
+        }
+    }
     for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] === 1) { // Eye pixel - make red
             data[i] = 255;     // Red
@@ -7915,7 +7980,7 @@ if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
                             data[i] = 0;       // Red
                             data[i + 1] = 255; // Green (poison green)
                             data[i + 2] = 0;   // Blue
-                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                            data[i + 3] = Math.round(0.85 * 255); // 85% opacity (subtler greenish-purple)
                         }
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
@@ -7929,17 +7994,8 @@ if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
             }
         
         // Draw the sprite on the temporary canvas
-        if (isVisible) {
-            tempCtx.globalAlpha = pulseAlpha;
-            tempCtx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red
-            const centerX = S / 2;
-            const centerY = S / 2;
-            const radius = S / 2;
-            tempCtx.beginPath();
-            tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            tempCtx.fill();
-            tempCtx.globalAlpha = 1.0;
-        }
+        // (removed old red circle draw - now using PNG frames)
+        
         tempCtx.imageSmoothingEnabled = false;
         if (isVisible) {
                         // Draw to tempCtx: processed if effects ran, else raw img
@@ -8706,8 +8762,20 @@ function updateGamepad(timestamp) {
     const buttons = gamepad.buttons;
     const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
     
+    // Exception: Allow Start button to exit soul terminal even if inputBlocked
+    if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3]) {
+        const nowTime = Date.now();
+        if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
+            if (p.inSoulTerminal && p.soulTerminalActive) {
+                closeSoulTerminal();
+            }
+            lastStartPressTime = nowTime;
+        }
+        lastButtonsState[3] = gamepad.buttons[3].pressed;
+    }
+    
     if (!splashActive && !gameOver && inputBlocked) {
-        // Just return, don't process movement
+        // Just return, don't process other inputs
         requestAnimationFrame(updateGamepad);
         return;
     }
@@ -8739,15 +8807,17 @@ function updateGamepad(timestamp) {
         lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
     }
 
-// Start Button (3) - startGame, restart
-    if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
-        if (splashActive) {
-            startGame();
-        } else if (gameOver) {
-            restart();
-        } else 
-        lastStartPressTime = nowTime;
+// Start Button (3) - startGame, restart (terminal exit handled above)
+if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
+    if (splashActive) {
+        startGame();
+    } else if (gameOver) {
+        restart();
+    } else {
+        // Default behavior (e.g., pause if implemented later)
     }
+    lastStartPressTime = nowTime;
+}
 
     // Update button states
     lastButtonsState = buttons.map(b => b.pressed);
