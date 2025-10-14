@@ -4993,7 +4993,8 @@ dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
                     auraHitStartTime = Date.now();
                 } else {
                     p.hp -= damage;
-                    logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG (Aura depleted; HP now ${p.hp})`);
+                    const auraMsg = p.hasCursedRing ? ' (Aura depleted; ' : ' ';
+                    logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG${auraMsg}HP now ${p.hp}${p.hasCursedRing ? ')' : ''}`);
                 }
 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
 playWebAudioSound(sounds.hit);
@@ -7168,12 +7169,14 @@ function restart() {
     p.hasDiamondArmor = false;
     p.hasDiamondHand = false;
     p.hasCursedRing = false;
-    p.auraMax = 0;
-    p.auraShield = 0;
-    p.curseActive = false;  // Lift any lingering curse
-    // Restore a random immunity on restart
-    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+p.curseActive = false;  // Lift lingering curse
+// Restore a random immunity on restart
+const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+p.auraMax = 0; // Explicitly reset aura max
+p.auraShield = 0; // Explicitly reset aura shield
+p.lastAuraRefillMove = 0; // Reset aura refill tracking
+p.auraMoveCounter = 0; // Reset aura move counter
     p.perfectlyCutDiamonds = 0;
     // Reset soul items
     p.soulStones = 0;
@@ -8645,6 +8648,15 @@ function startGame() {
         }
     }, 2000); // Match original start-button delay
 }
+
+// Add touchstart for mobile responsiveness
+document.getElementById('start-button').addEventListener('touchstart', (e) => {
+    e.preventDefault(); // Prevent scroll/zoom
+    // Trigger the same logic as click
+    // (copy the entire click handler body here if needed, but since it's the same, just call startGame() if defined)
+    startGame();
+}, { passive: false });
+
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
     if (gamepadIndex === null) {
@@ -8764,11 +8776,22 @@ function updateGamepad(timestamp) {
     const buttons = gamepad.buttons;
     const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
     
-    if (!splashActive && !gameOver && inputBlocked) {
-        // Just return, don't process other inputs
-        requestAnimationFrame(updateGamepad);
-        return;
+if (!splashActive && !gameOver && inputBlocked) {
+    // Allow Start button (index 3) to exit terminal even when blocked
+    const buttons = gamepad.buttons;
+    const nowTime = Date.now();
+    if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
+        if (p.inSoulTerminal && p.soulTerminalActive) {
+            console.log('Gamepad Start: Exiting soul terminal'); // Debug log
+            closeSoulTerminal();
+        }
+        lastStartPressTime = nowTime;
     }
+    // Update button states for Start
+    lastButtonsState[3] = buttons[3].pressed;
+    requestAnimationFrame(updateGamepad);
+    return;
+}
 
     // Handle buttons (A=0, B=1, Select=2, Start=3)
     const nowTime = Date.now();
