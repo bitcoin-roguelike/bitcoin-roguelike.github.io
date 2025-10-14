@@ -1590,7 +1590,7 @@ const types = [
     new EnemyType('Whale', 100, Infinity, 6, 4, 2)
 ];
     // Add Cursed Trader as special enemy (not in types for tx spawning)
-    const cursedTraderType = new EnemyType('CursedTrader', 0, 0, 12, 2, 1); // Custom: 12 HP, 2 DMG, 1 move
+    const cursedTraderType = new EnemyType('Cursed Trader', 0, 0, 12, 2, 1); // Custom: 12 HP, 2 DMG, 1 move
     cursedTraderType.anim.frames[0].src = 'cursedtrader_1.png';
     cursedTraderType.anim.frames[1].src = 'cursedtrader_2.png';
     cursedTraderType.anim.frames[2].src = 'cursedtrader_3.png';
@@ -3620,11 +3620,14 @@ logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); //
                 enemy.hp = 0; // Instant kill
                 handleUniqueMonsterReward(enemy);
                 kills[enemy.type.name]++;
+if (enemy.type.name === 'Cursed Trader') {
+        dropSoulStone(enemy.x, enemy.y);
+    }
                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
                 let dropPlaced = false;
                 
-                // Skip bitcoin drop for uniques/CursedTrader
-                if (!enemy.uniqueName && enemy.type.name !== 'CursedTrader') {
+                // Skip bitcoin drop for uniques/Cursed Trader
+                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
                     if (map[enemy.y][enemy.x] === 0) {
                         map[enemy.y][enemy.x] = 3;
                         satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -3653,7 +3656,7 @@ logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); //
                 }
 
                 // Cursed Ring drop (50% for Cursed Trader only, even in blast)
-                if (enemy.type.name === 'CursedTrader' && Math.random() < 0.5 && !p.hasCursedRing) {
+                if (enemy.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
                     let ringPlaced = false;
                     if (map[enemy.y][enemy.x] === 0) {
                         map[enemy.y][enemy.x] = 23; // Cursed ring tile
@@ -4493,7 +4496,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     initMap();
     nextApiCallTime = null;
 
-    // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
+    // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
     const floorIndicator = document.getElementById('floor-indicator');
     if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
 
@@ -4501,17 +4504,19 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     const hasActiveRunewords = p.runewords.length > 0;
     
     if (hasActiveRunewords) {
-// Show runeword message with the whole rune part in uppercase
-const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
-
-//floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
-//        if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
+        // Show runeword message with the whole rune part in uppercase
+        const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
+        floorIndicator.textContent = `Runeword${uppercasedRunewords.length > 1 ? 's' : ''} ${uppercasedRunewords.join(', ')} found!`;
+        themeTimeoutId = setTimeout(() => {
+            floorIndicator.textContent = `Floor ${floor}`;
+            themeTimeoutId = null;
+        }, 5000);
     } else {
-        // Show theme name for 3 s, then revert to floor number
+        // Show theme name for 3 s, then revert to floor number
         const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
         floorIndicator.textContent = themeName;               // 1️⃣ show theme
 
-        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
+        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
             floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
             themeTimeoutId = null;
         }, 3000);
@@ -4949,12 +4954,12 @@ if (numTileSteps > 0) {
 dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
             }
             if (
-                (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark' || e.type.name === 'CursedTrader') ?
+                (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark' || e.type.name === 'Cursed Trader') ?
                 (Math.abs(e.x - p.x) === 1 && e.y === p.y) || (Math.abs(e.y - p.y) === 1 && e.x === p.x) :
                 Math.abs(e.x - p.x) <= 1 && Math.abs(e.y - p.y) <= 1
             ) {
                 // Set sword animation for Cursed Trader
-                if (e.type.name === 'CursedTrader') {
+                if (e.type.name === 'Cursed Trader') {
                     e.swordActive = true;
                     e.swordStart = Date.now();
                     // Determine sword direction towards player
@@ -5106,12 +5111,15 @@ if (hit) {
         
 // Handle unique monster rewards using new function
 handleUniqueMonsterReward(hit);
-        
+
+if (hit.type.name === 'Cursed Trader') {
+        dropSoulStone(hit.x, hit.y);
+    }        
         // Remove enemy immediately to prevent further hits
         enemies = enemies.filter(e => e !== hit);
         
         // No sats drop for Cursed Trader
-        if (hit.type.name !== 'CursedTrader') {
+        if (hit.type.name !== 'Cursed Trader') {
                 if (!hit.uniqueName) { // Skip normal drop for unique monsters like Cursed Trader
                     if (map[hit.y][hit.x] === 0) {
                         map[hit.y][hit.x] = 3;
@@ -5181,7 +5189,7 @@ if (!scrollDroppedThisFloor && Math.random() < 1/25) {
 }
               
                 // Cursed Ring drop (50% for Cursed Trader only)
-                if (hit.type.name === 'CursedTrader' && Math.random() < 0.5) {
+                if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5) {
                     let ringPlaced = false;
                     if (map[hit.y][hit.x] === 0 && !p.hasCursedRing) {
                         map[hit.y][hit.x] = 23; // Cursed ring tile
@@ -5443,9 +5451,9 @@ function handleUniqueMonsterReward(hit) {
     const randomMultiplier = 2 + Math.random() * 2; // Random multiplier from 2x to 4x
     const reward = Math.round(baseWithMultiplier * randomMultiplier);
     
-    // Add bitcoin drops around the monster position (skip for CursedTrader)
+    // Add bitcoin drops around the monster position (skip for Cursed Trader)
     let dropPlaced = false;
-    if (hit.type.name !== 'CursedTrader') {
+    if (hit.type.name !== 'Cursed Trader') {
         if (map[hit.y][hit.x] === 0) {
             map[hit.y][hit.x] = 3;
             satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
@@ -5484,8 +5492,8 @@ function handleUniqueMonsterReward(hit) {
             floorIndicator.textContent = `Floor ${floor}`;
         }
         activeUniqueMonsterName = null; // Also clear any lingering visible name
-        // Also add to satsEarned for proper display (skip CursedTrader)
-        if (hit.type.name !== 'CursedTrader') {
+        // Also add to satsEarned for proper display (skip Cursed Trader)
+        if (hit.type.name !== 'Cursed Trader') {
             satsEarned[hit.type.name] += reward;
         }
         updateSatsDisplay();
@@ -5920,7 +5928,9 @@ handleUniqueMonsterReward(hit);
                                 playWebAudioSound(sounds.rune_drop);
                             }
                         }
-
+if (enemy.type.name === 'Cursed Trader') {
+        dropSoulStone(enemy.x, enemy.y);
+    }
                         enemies = enemies.filter(en => en !== enemy);
                         enemiesHit++;
                     }
@@ -5941,8 +5951,8 @@ if (hit.hp <= 0) {
 // Handle unique monster rewards using new function
 handleUniqueMonsterReward(hit);
 
-        // Normal enemy reward (skip for uniques/CursedTrader)
-        if (!hit.uniqueName && hit.type.name !== 'CursedTrader') {
+        // Normal enemy reward (skip for uniques/Cursed Trader)
+        if (!hit.uniqueName && hit.type.name !== 'Cursed Trader') {
             if (map[hit.y][hit.x] === 0) {
                 map[hit.y][hit.x] = 3;
                 satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
@@ -5971,7 +5981,7 @@ handleUniqueMonsterReward(hit);
         }
 
         // Cursed Ring drop (50% for Cursed Trader only)
-        if (hit.type.name === 'CursedTrader' && Math.random() < 0.5 && !p.hasCursedRing) {
+        if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
             let ringPlaced = false;
             if (map[hit.y][hit.x] === 0) {
                 map[hit.y][hit.x] = 23; // Cursed ring tile
@@ -6002,7 +6012,7 @@ handleUniqueMonsterReward(hit);
             }
         }
 
-        if (!dropPlaced && hit.type.name !== 'CursedTrader') {
+        if (!dropPlaced && hit.type.name !== 'Cursed Trader') {
             // No space for satoshi drop
         }
 
@@ -6119,6 +6129,9 @@ handleUniqueMonsterReward(hit);
                 }
             }
 
+if (hit.type.name === 'Cursed Trader') {
+        dropSoulStone(hit.x, hit.y);
+    }
             enemies = enemies.filter(en => en !== hit);
         }
     }
@@ -6708,8 +6721,8 @@ function activateSoulStorm() {
                     handleUniqueMonsterReward(enemy);
                         let dropPlaced = false;
 
-                        // Drop satoshi (skip for uniques/CursedTrader)
-                        if (!enemy.uniqueName && enemy.type.name !== 'CursedTrader') {
+                        // Drop satoshi (skip for uniques/Cursed Trader)
+                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
                             if (map[enemy.y][enemy.x] === 0) {
                                 map[enemy.y][enemy.x] = 3;
                                 satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -6738,7 +6751,7 @@ function activateSoulStorm() {
                         }
 
                         // Cursed Ring drop (50% for Cursed Trader only)
-                        if (enemy.type.name === 'CursedTrader' && Math.random() < 0.5 && !p.hasCursedRing) {
+                        if (enemy.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
                             let ringPlaced = false;
                             if (map[enemy.y][enemy.x] === 0) {
                                 map[enemy.y][enemy.x] = 23; // Cursed ring tile
@@ -6768,7 +6781,10 @@ function activateSoulStorm() {
                                 playWebAudioSound(sounds.pickup);
                             }
                         }
-                    
+
+if (enemy.type.name === 'Cursed Trader') {
+        dropSoulStone(enemy.x, enemy.y);
+    }                    
                     enemies = enemies.filter(en => en !== enemy);
                     enemiesHit++;
                 }
@@ -7327,6 +7343,28 @@ waveActive = false;
     needsRedraw = true;
 }
 
+function dropSoulStone(x, y) {
+    let placed = false;
+    if (map[y][x] === 0) {
+        map[y][x] = 20; // Soul stone tile
+        placed = true;
+    } else {
+        const dirs = [{dx: 0, dy: -1}, {dx: 0, dy: 1}, {dx: -1, dy: 0}, {dx: 1, dy: 0}];
+        for (let d of dirs) {
+            let nx = x + d.dx, ny = y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                map[ny][nx] = 20; // Soul stone tile
+                placed = true;
+                break;
+            }
+        }
+    }
+    if (placed) {
+        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Soul Stone!`);
+        playWebAudioSound(sounds.pickup);
+    }
+}
+
 function draw() {
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
@@ -7716,6 +7754,16 @@ function punchHoleThroughRed(imageData) {
     }
 }
 
+function punchHoleThroughWhite(imageData) {
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+        // Detect near-white pixels (high R,G,B values, common in anti-aliased fringes)
+        if (d[i] > 231 && d[i+1] > 231 && d[i+2] > 231 && d[i+3] > 0) {
+            d[i+3] = 0; // Set transparent
+        }
+    }
+}
+
 // Pulsating animation timing
 const pulsePeriod = 200; // 200 ms cycle
 const pulseAlphaMin = 0.5;
@@ -7733,12 +7781,12 @@ enemies.forEach(e => {
         // Check if this enemy is a unique monster
         const isUniqueMonster = e.uniqueName !== undefined;
         // Invisible in fog for Cursed Trader
-        if (e.type.name === 'CursedTrader' && fogMap[e.y][e.x] === 0) {
+        if (e.type.name === 'Cursed Trader' && fogMap[e.y][e.x] === 0) {
             return; // Skip drawing
         }
         
         // Draw sword for Cursed Trader if attacking
-        if (e.swordActive && Date.now() - e.swordStart < 200 && e.type.name === 'CursedTrader') {
+        if (e.swordActive && Date.now() - e.swordStart < 200 && e.type.name === 'Cursed Trader') {
             let sx = e.x, sy = e.y;
             if (e.swordDir === 'up') sy--;
             if (e.swordDir === 'down') sy++;
@@ -7793,12 +7841,13 @@ if (doPixelEffect && isVisible) {
     spriteCtx.drawImage(img, 0, 0, S, S);
     
     // Skip theme tints for Cursed Trader
-    if (e.type.name !== 'CursedTrader') {
+    if (e.type.name !== 'Cursed Trader') {
         // Apply theme-based effects to the sprite canvas
         if (currentTheme === 'desert') {
-                    const imageData = spriteCtx.getImageData(0, 0, S, S);
-                    const data = imageData.data;
-                    punchHoleThroughRed(imageData); // Mark eye pixels
+    const imageData = spriteCtx.getImageData(0, 0, S, S);
+    punchHoleThroughWhite(imageData); // Remove white fringes first
+    const data = imageData.data;
+    punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
                         if (data[i + 3] === 1) { // Eye pixel
                             data[i] = 255;     // Red
@@ -7813,10 +7862,11 @@ if (doPixelEffect && isVisible) {
                         }
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
-                } else if (currentTheme === 'ruins') {
-                    const imageData = spriteCtx.getImageData(0, 0, S, S);
-                    const data = imageData.data;
-                    punchHoleThroughRed(imageData); // Mark eye pixels
+} else if (currentTheme === 'ruins') {
+    const imageData = spriteCtx.getImageData(0, 0, S, S);
+    punchHoleThroughWhite(imageData); // Remove white fringes first
+    const data = imageData.data;
+    punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
                         if (data[i + 3] === 1) { // Eye pixel
                             data[i] = 255;     // Red
@@ -7831,15 +7881,21 @@ if (doPixelEffect && isVisible) {
                         }
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
-                } else if (currentTheme === 'hell') {
-                    // Apply red tint for hell theme
-                    spriteCtx.globalCompositeOperation = 'source-atop';
-                    spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-                    spriteCtx.fillRect(0, 0, S, S);
-                    spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+} else if (currentTheme === 'hell') {
+    // Apply red tint for hell theme
+    spriteCtx.globalCompositeOperation = 'source-atop';
+    spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+    spriteCtx.fillRect(0, 0, S, S);
+    spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+    
+    // Punch white fringes after tint
+    const imageData = spriteCtx.getImageData(0, 0, S, S);
+    punchHoleThroughWhite(imageData);
+    spriteCtx.putImageData(imageData, 0, 0);
 } else if (currentTheme === 'paradise') {
     // Apply purple tint for paradise theme + red eyes
     const imageData = spriteCtx.getImageData(0, 0, S, S);
+    punchHoleThroughWhite(imageData); // Remove white fringes first
     punchHoleThroughRed(imageData); // Mark eye pixels
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
@@ -7858,11 +7914,12 @@ if (doPixelEffect && isVisible) {
     spriteCtx.putImageData(imageData, 0, 0);
 }
                 
-                // Special handling for unique monsters (poison green with red eyes) - skip CursedTrader
-                if (isUniqueMonster && e.type.name !== 'CursedTrader') {
-                    const imageData = spriteCtx.getImageData(0, 0, S, S);
-                    const data = imageData.data;
-                    punchHoleThroughRed(imageData); // Mark eye pixels
+// Special handling for unique monsters (poison green with red eyes) - skip Cursed Trader
+if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
+    const imageData = spriteCtx.getImageData(0, 0, S, S);
+    punchHoleThroughWhite(imageData); // Remove white fringes first
+    const data = imageData.data;
+    punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
                         if (data[i + 3] === 1) { // Eye pixel - make red
                             data[i] = 255;     // Red
@@ -7906,10 +7963,15 @@ if (doPixelEffect && isVisible) {
             } else {
                 tempCtx.drawImage(img, 0, 0, S, S);
             }
-        } else {
-            // Outside fog of war, draw original sprite to show red eyes
-            tempCtx.drawImage(img, 0, 0, S, S);
-        }
+} else {
+    // Outside fog of war, draw original sprite to show red eyes
+    tempCtx.drawImage(img, 0, 0, S, S);
+    
+    // Punch white fringes on fog sprites too
+    const imageData = tempCtx.getImageData(0, 0, S, S);
+    punchHoleThroughWhite(imageData);
+    tempCtx.putImageData(imageData, 0, 0);
+}
         
         // Draw the processed sprite to the main canvas
         c.drawImage(tempCanvas, e.currentX, e.currentY, S, S);
@@ -7966,7 +8028,7 @@ if (visibleUniques.length > 0) {
 const floorIndicator = document.getElementById('floor-indicator');
 const cachedText = window.currentFloorText || `Floor ${floor}`;
 const debounceMs = isHarbinger ? 2000 : 1000; // Longer for harbinger
-if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs)) {
+if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs) && !floorIndicator.textContent.startsWith("Runeword")) {
     floorIndicator.textContent = uniqueNameToShow;
     window.currentFloorText = uniqueNameToShow;
     window.lastUniqueSetTime = now;
@@ -7980,7 +8042,7 @@ if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUn
             window.currentFloorText = `Floor ${floor}`;
         }
     }, 5000);
-} else if (!uniqueNameToShow && cachedText !== `Floor ${floor}`) {
+} else if (!uniqueNameToShow && cachedText !== `Floor ${floor}` && !floorIndicator.textContent.startsWith("Runeword")) {
     floorIndicator.textContent = `Floor ${floor}`;
     window.currentFloorText = `Floor ${floor}`;
     activeUniqueMonsterName = null;
