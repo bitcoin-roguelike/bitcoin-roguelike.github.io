@@ -7754,16 +7754,6 @@ function punchHoleThroughRed(imageData) {
     }
 }
 
-function punchHoleThroughWhite(imageData) {
-    const d = imageData.data;
-    for (let i = 0; i < d.length; i += 4) {
-        // Detect near-white pixels (high R,G,B values, common in anti-aliased fringes)
-        if (d[i] > 231 && d[i+1] > 231 && d[i+2] > 231 && d[i+3] > 0) {
-            d[i+3] = 0; // Set transparent
-        }
-    }
-}
-
 // Pulsating animation timing
 const pulsePeriod = 200; // 200 ms cycle
 const pulseAlphaMin = 0.5;
@@ -7845,7 +7835,6 @@ if (doPixelEffect && isVisible) {
         // Apply theme-based effects to the sprite canvas
         if (currentTheme === 'desert') {
     const imageData = spriteCtx.getImageData(0, 0, S, S);
-    punchHoleThroughWhite(imageData); // Remove white fringes first
     const data = imageData.data;
     punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
@@ -7864,7 +7853,6 @@ if (doPixelEffect && isVisible) {
                     spriteCtx.putImageData(imageData, 0, 0);
 } else if (currentTheme === 'ruins') {
     const imageData = spriteCtx.getImageData(0, 0, S, S);
-    punchHoleThroughWhite(imageData); // Remove white fringes first
     const data = imageData.data;
     punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
@@ -7890,12 +7878,10 @@ if (doPixelEffect && isVisible) {
     
     // Punch white fringes after tint
     const imageData = spriteCtx.getImageData(0, 0, S, S);
-    punchHoleThroughWhite(imageData);
     spriteCtx.putImageData(imageData, 0, 0);
 } else if (currentTheme === 'paradise') {
     // Apply purple tint for paradise theme + red eyes
     const imageData = spriteCtx.getImageData(0, 0, S, S);
-    punchHoleThroughWhite(imageData); // Remove white fringes first
     punchHoleThroughRed(imageData); // Mark eye pixels
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
@@ -7917,7 +7903,6 @@ if (doPixelEffect && isVisible) {
 // Special handling for unique monsters (poison green with red eyes) - skip Cursed Trader
 if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
     const imageData = spriteCtx.getImageData(0, 0, S, S);
-    punchHoleThroughWhite(imageData); // Remove white fringes first
     const data = imageData.data;
     punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
@@ -7969,7 +7954,6 @@ if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
     
     // Punch white fringes on fog sprites too
     const imageData = tempCtx.getImageData(0, 0, S, S);
-    punchHoleThroughWhite(imageData);
     tempCtx.putImageData(imageData, 0, 0);
 }
         
