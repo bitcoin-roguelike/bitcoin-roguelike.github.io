@@ -1403,7 +1403,6 @@ const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
 let currentTheme = 'dungeon'; // Default theme
 const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
-//const themes = ['dungeon', 'paradise'];
 let initialWaveSpawned = false; // Track if initial wave has spawned
 
 function selectNewTheme(current) {
@@ -1525,6 +1524,7 @@ let jewellerPos = null; // Track jeweller position
 let blacksmithPos = null; // Track blacksmith position
 let waypointPos = null; // Track waypoint position
 let scoreSubmitted = false; // Tracks if score has been submitted
+let gameOverBPressed = false;
 let cachedLeaderboard = null; // Store fetched leaderboard
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
@@ -5609,7 +5609,7 @@ function drawFadingDangerousAreas() {
     dangerousAreas = dangerousAreas.filter(area => {
         if (area.deathTime) {
             const elapsed = now - area.deathTime;
-            return elapsed < 3000;  // Remove after 3s
+            return elapsed < 2000;  // Remove after 2s
         }
         return true;
     });
@@ -7237,6 +7237,7 @@ waveActive = false;
     swordStart = 0;
     fogMap = [];
     scoreSubmitted = false;
+    gameOverBPressed = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     projectiles = []; // Add this line to reset projectiles array on restart
     populateNameList();
@@ -7350,6 +7351,7 @@ waveActive = false;
     updatePlayerState();
     updateSatsDisplay();
     needsRedraw = true;
+    inputBlocked = false;
 }
 
 function dropSoulStone(x, y) {
@@ -7863,7 +7865,7 @@ if (doPixelEffect && isVisible) {
                             data[i] = 255;     // Red
                             data[i + 1] = 242; // Green
                             data[i + 2] = 230; // Blue
-                                        data[i + 3] = Math.round(0.85 * 255); // 85% opacity (subtler greenish-purple)
+                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
                         }
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
@@ -7956,7 +7958,7 @@ if (doPixelEffect && isVisible) {
             data[i + 2] = 0;   // Blue
             data[i + 3] = 255; // Full opacity
         } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - purple tint
-            data[i] = Math.min(255, data[i] + 102); // Add purple hue
+	    data[i] = Math.min(255, data[i] + 50); // Subtle red for violet base
             data[i + 1] = Math.min(255, data[i + 1] + 51); // Subtle green
             data[i + 2] = Math.min(255, data[i + 2] + 153); // Blue for purple
             data[i + 3] = Math.round(0.95 * 255); // 95% opacity
@@ -7980,7 +7982,7 @@ if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
                             data[i] = 0;       // Red
                             data[i + 1] = 255; // Green (poison green)
                             data[i + 2] = 0;   // Blue
-                            data[i + 3] = Math.round(0.85 * 255); // 85% opacity (subtler greenish-purple)
+                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
                         }
                     }
                     spriteCtx.putImageData(imageData, 0, 0);
@@ -8762,18 +8764,6 @@ function updateGamepad(timestamp) {
     const buttons = gamepad.buttons;
     const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
     
-    // Exception: Allow Start button to exit soul terminal even if inputBlocked
-    if (gamepad && gamepad.buttons[3].pressed && !lastButtonsState[3]) {
-        const nowTime = Date.now();
-        if (nowTime - lastStartPressTime > DEBOUNCE_MS) {
-            if (p.inSoulTerminal && p.soulTerminalActive) {
-                closeSoulTerminal();
-            }
-            lastStartPressTime = nowTime;
-        }
-        lastButtonsState[3] = gamepad.buttons[3].pressed;
-    }
-    
     if (!splashActive && !gameOver && inputBlocked) {
         // Just return, don't process other inputs
         requestAnimationFrame(updateGamepad);
@@ -8790,16 +8780,28 @@ function updateGamepad(timestamp) {
     }
 
 // B Button (1) - attack or submit score during game over
-    if (buttons[1].pressed && !lastButtonsState[1]) {
-        if (!splashActive && !gameOver) {
-            // Normal gameplay B button action
-            attack();
-            lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
-        } else if (gameOver && gamepadIndex !== null && !scoreSubmitted) {
-            // During game over, B button submits score with random name
-            submitScoreWithRandomName();
+if (buttons[1].pressed && !lastButtonsState[1]) {
+    if (!splashActive && !gameOver) {
+        // Normal gameplay B button action
+        attack();
+        lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
+    } else if (gameOver && gamepadIndex !== null) {
+        if (!gameOverBPressed) {
+            if (!scoreSubmitted && floor >= 3) {
+                // Submit score if eligible
+                submitScoreWithRandomName();
+            } else if (floor < 3) {
+                // Show message for low floors
+                document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
+                document.getElementById('leaderboard-output').style.display = 'block';
+            } // If already submitted, do nothing on first press
+            gameOverBPressed = true;
+        } else {
+            // Second press always restarts to splash
+            restart();
         }
     }
+}
 
     // Select Button (2) - toggleMute
     if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
@@ -8807,14 +8809,17 @@ function updateGamepad(timestamp) {
         lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
     }
 
-// Start Button (3) - startGame, restart (terminal exit handled above)
+// Start Button (3) - startGame, restart, or exit soul terminal
 if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
-    if (splashActive) {
+    if (p.inSoulTerminal && p.soulTerminalActive) {
+        // Exit soul terminal
+        closeSoulTerminal();
+    } else if (splashActive) {
         startGame();
     } else if (gameOver) {
         restart();
     } else {
-        // Default behavior (e.g., pause if implemented later)
+        // Existing else logic (if any)
     }
     lastStartPressTime = nowTime;
 }
