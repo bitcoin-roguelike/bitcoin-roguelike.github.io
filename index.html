@@ -5291,6 +5291,16 @@ let ripBlastActive = false; // Flag for RIP blast gradient overlay effect
 let ripBlastStartTime = 0; // Timestamp for RIP blast start
 let columnProgress = 0; // Progress of gradient columns (0 to 1)
 
+let enemyTempCanvas = document.createElement('canvas');
+enemyTempCanvas.width = S;
+enemyTempCanvas.height = S;
+let enemyTempCtx = enemyTempCanvas.getContext('2d');
+
+let auraTempCanvas = document.createElement('canvas');
+auraTempCanvas.width = W * S;
+auraTempCanvas.height = H * S;
+let auraTempCtx = auraTempCanvas.getContext('2d');
+
 // Initialize gradient column overlay for RIP blast effect
 function initGradientOverlay() {
     columnProgress = 0; // Start at beginning of animation
@@ -7297,6 +7307,7 @@ waveActive = false;
     document.getElementById('submit-score').disabled = false;
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
+    //window.location.reload(); // Nuke: Full page reload to clear all events/sprites/memory (nah ..)
 
     /* ------------------------------------------------------------------
        4. Re-initialize button variables and touch listeners
@@ -7637,27 +7648,25 @@ if (p.isFalling) {
         }
         c.restore();
 
-        // New: Draw bluish aura hit flash circle
-        if (p.hasCursedRing && auraHitStartTime > 0) {
-            const elapsed = Date.now() - auraHitStartTime;
-            if (elapsed < auraFlashDuration) {
-                const flashAlpha = 0.6 * (1 - (elapsed / auraFlashDuration)); // Fade out
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = W * S;
-                tempCanvas.height = H * S;
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.fillStyle = `rgba(75, 0, 130, ${flashAlpha})`; // Indigo-purple curse flash
-                tempCtx.beginPath();
-                const centerX = p.currentX + S / 2;
-                const centerY = p.currentY + S / 2;
-                const radius = S * 1 * (elapsed / auraFlashDuration) + (S / 2); // Expand from S/2 to 1.5S
-                tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                tempCtx.fill();
-                c.drawImage(tempCanvas, 0, 0);
-            } else {
-                auraHitStartTime = 0; // End flash
-            }
-        }
+// New: Draw bluish aura hit flash circle
+if (p.hasCursedRing && auraHitStartTime > 0) {
+    const elapsed = Date.now() - auraHitStartTime;
+    if (elapsed < auraFlashDuration) {
+        const flashAlpha = 0.6 * (1 - (elapsed / auraFlashDuration)); // Fade out
+        // Clear reusable aura canvas
+        auraTempCtx.clearRect(0, 0, W * S, H * S);
+        auraTempCtx.fillStyle = `rgba(75, 0, 130, ${flashAlpha})`; // Indigo-purple curse flash
+        auraTempCtx.beginPath();
+        const centerX = p.currentX + S / 2;
+        const centerY = p.currentY + S / 2;
+        const radius = S * 1 * (elapsed / auraFlashDuration) + (S / 2); // Expand from S/2 to 1.5S
+        auraTempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        auraTempCtx.fill();
+        c.drawImage(auraTempCanvas, 0, 0);
+    } else {
+        auraHitStartTime = 0; // End flash
+    }
+}
     }
 // Draw sword or pickaxe-sword or diamond hand
 if (swordActive && Date.now() - swordStart < 200) {
@@ -7771,6 +7780,11 @@ function punchHoleThroughRed(imageData) {
 
 // (removed old pulseAlpha calc - now using PNG frames)
 
+const tempCanvas = document.createElement('canvas');
+tempCanvas.width = S;
+tempCanvas.height = S;
+const tempCtx = tempCanvas.getContext('2d');
+
 // Draw enemies with theme-based color overlays, preserving transparent backgrounds
 enemies.forEach(e => {
     if (e.x >= 0 && e.x < W && e.y >= 0 && e.y < H) {
@@ -7802,180 +7816,176 @@ enemies.forEach(e => {
             }
         }
         
-c.save();
-const doPixelEffect = (frameCount % 1 === 0); 
+        c.save();
+        const doPixelEffect = (frameCount % 1 === 0); 
 
-// Draw animated red bg circle before enemy (only if visible)
-if (isVisible) {
-    const bgStartTime = enemyBgFrameTimes.get(e) || performance.now();
-    enemyBgFrameTimes.set(e, bgStartTime);
-    const now = performance.now();
-    const frameIndex = Math.floor((now - bgStartTime) / 200) % 3; // Cycle every 200ms
-    const bgImg = assets.enemyBg[frameIndex];
-    if (bgImg.complete) {
-        c.drawImage(bgImg, e.currentX, e.currentY, S, S);
-    }
-}
+        // Draw animated red bg circle before enemy (only if visible)
+        if (isVisible) {
+            const bgStartTime = enemyBgFrameTimes.get(e) || performance.now();
+            enemyBgFrameTimes.set(e, bgStartTime);
+            const now = performance.now();
+            const frameIndex = Math.floor((now - bgStartTime) / 200) % 3; // Cycle every 200ms
+            const bgImg = assets.enemyBg[frameIndex];
+            if (bgImg.complete) {
+                c.drawImage(bgImg, e.currentX, e.currentY, S, S);
+            }
+        }
 
-// Create a temporary canvas for rendering
-const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = S;
-        tempCanvas.height = S;
-        const tempCtx = tempCanvas.getContext('2d');
+        // Clear reusable canvas for this enemy
+        enemyTempCtx.clearRect(0, 0, S, S);
         
-// Handle animation for enemies with anim property (e.g., Shrimp) - throttled
-let img;
-if (e.type.anim && e.anim) {
-    const now = performance.now();
-    const numFrames = (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) ? e.type.anim.hellFrames.length : e.type.anim.frames.length;
-    if (now - e.anim.lastFrameTime >= 200) {
-        e.anim.frameIndex = (e.anim.frameIndex + 1) % numFrames;
-        e.anim.lastFrameTime = now;
-    }
-    // Use Hell Shrimp frames if theme is hell, enemy is Shrimp, and visible
-    if (e.type.name === 'Shrimp' && currentTheme === 'hell' && isVisible && e.type.anim.hellFrames) {
-        img = e.type.anim.hellFrames[e.anim.frameIndex];
-    } else {
-        img = e.type.anim.frames[e.anim.frameIndex];
-    }
-} else {
-    img = e.type.img;
-}
+        // Handle animation for enemies with anim property (e.g., Shrimp) - throttled
+        let img;
+        if (e.type.anim && e.anim) {
+            const now = performance.now();
+            const numFrames = (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) ? e.type.anim.hellFrames.length : e.type.anim.frames.length;
+            if (now - e.anim.lastFrameTime >= 200) {
+                e.anim.frameIndex = (e.anim.frameIndex + 1) % numFrames;
+                e.anim.lastFrameTime = now;
+            }
+            // Use Hell Shrimp frames if theme is hell, enemy is Shrimp, and visible
+            if (e.type.name === 'Shrimp' && currentTheme === 'hell' && isVisible && e.type.anim.hellFrames) {
+                img = e.type.anim.hellFrames[e.anim.frameIndex];
+            } else {
+                img = e.type.anim.frames[e.anim.frameIndex];
+            }
+        } else {
+            img = e.type.img;
+        }
         
         let spriteCanvas, spriteCtx;
-if (isVisible) {
-if (doPixelEffect && isVisible) {
-    spriteCanvas = document.createElement('canvas');
-    spriteCanvas.width = S;
-    spriteCanvas.height = S;
-    spriteCtx = spriteCanvas.getContext('2d');
-    spriteCtx.imageSmoothingEnabled = false;
-    spriteCtx.drawImage(img, 0, 0, S, S);
-    
-    // Skip theme tints for Cursed Trader
-    if (e.type.name !== 'Cursed Trader') {
-        // Apply theme-based effects to the sprite canvas
-        if (currentTheme === 'desert') {
-    const imageData = spriteCtx.getImageData(0, 0, S, S);
-    const data = imageData.data;
-    punchHoleThroughRed(imageData); // Mark eye pixels
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i + 3] === 1) { // Eye pixel
-                            data[i] = 255;     // Red
-                            data[i + 1] = 0;   // Green
-                            data[i + 2] = 0;   // Blue
-                            data[i + 3] = 255; // Full opacity
-                        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                            data[i] = 255;     // Red
-                            data[i + 1] = 242; // Green
-                            data[i + 2] = 230; // Blue
-                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+        if (isVisible) {
+            if (doPixelEffect && isVisible) {
+                // Reuse enemyTempCanvas for sprite processing (clear first if needed, but already cleared)
+                spriteCtx = enemyTempCtx;
+                spriteCtx.imageSmoothingEnabled = false;
+                spriteCtx.drawImage(img, 0, 0, S, S);
+                
+                // Skip theme tints for Cursed Trader
+                if (e.type.name !== 'Cursed Trader') {
+                    // Apply theme-based effects to the sprite canvas
+                    if (currentTheme === 'desert') {
+                        const imageData = spriteCtx.getImageData(0, 0, S, S);
+                        const data = imageData.data;
+                        punchHoleThroughRed(imageData); // Mark eye pixels
+                        for (let i = 0; i < data.length; i += 4) {
+                            if (data[i + 3] === 1) { // Eye pixel
+                                data[i] = 255;     // Red
+                                data[i + 1] = 0;   // Green
+                                data[i + 2] = 0;   // Blue
+                                data[i + 3] = 255; // Full opacity
+                            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                                data[i] = 255;     // Red
+                                data[i + 1] = 242; // Green
+                                data[i + 2] = 230; // Blue
+                                data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                            }
                         }
-                    }
-                    spriteCtx.putImageData(imageData, 0, 0);
-} else if (currentTheme === 'ruins') {
-    const imageData = spriteCtx.getImageData(0, 0, S, S);
-    const data = imageData.data;
-    punchHoleThroughRed(imageData); // Mark eye pixels
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i + 3] === 1) { // Eye pixel
-                            data[i] = 255;     // Red
-                            data[i + 1] = 0;   // Green
-                            data[i + 2] = 0;   // Blue
-                            data[i + 3] = 255; // Full opacity
-                        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                            data[i] = 144;     // Red
-                            data[i + 1] = 126; // Green
-                            data[i + 2] = 105; // Blue
-                            data[i + 3] = 255; // Full opacity (removed 95% opacity)
+                        spriteCtx.putImageData(imageData, 0, 0);
+                    } else if (currentTheme === 'ruins') {
+                        const imageData = spriteCtx.getImageData(0, 0, S, S);
+                        const data = imageData.data;
+                        punchHoleThroughRed(imageData); // Mark eye pixels
+                        for (let i = 0; i < data.length; i += 4) {
+                            if (data[i + 3] === 1) { // Eye pixel
+                                data[i] = 255;     // Red
+                                data[i + 1] = 0;   // Green
+                                data[i + 2] = 0;   // Blue
+                                data[i + 3] = 255; // Full opacity
+                            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
+                                data[i] = 144;     // Red
+                                data[i + 1] = 126; // Green
+                                data[i + 2] = 105; // Blue
+                                data[i + 3] = 255; // Full opacity (removed 95% opacity)
+                            }
                         }
-                    }
-                    spriteCtx.putImageData(imageData, 0, 0);
-} else if (currentTheme === 'hell') {
-    // Apply red tint for hell theme
-    spriteCtx.globalCompositeOperation = 'source-atop';
-    spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-    spriteCtx.fillRect(0, 0, S, S);
-    spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-    
-    // Punch white fringes after tint
-    const imageData = spriteCtx.getImageData(0, 0, S, S);
-    spriteCtx.putImageData(imageData, 0, 0);
-} else if (currentTheme === 'paradise') {
-    // Apply purple tint for paradise theme + red eyes
-    const imageData = spriteCtx.getImageData(0, 0, S, S);
-    punchHoleThroughRed(imageData); // Mark eye pixels
-    const data = imageData.data;
-    const width = S;  // 16
-    const height = S; // 16
-    const threshold = 100; // Tune: higher = fewer transparencies
+                        spriteCtx.putImageData(imageData, 0, 0);
+                    } else if (currentTheme === 'hell') {
+                        // Apply red tint for hell theme
+                        spriteCtx.globalCompositeOperation = 'source-atop';
+                        spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                        spriteCtx.fillRect(0, 0, S, S);
+                        spriteCtx.globalCompositeOperation = 'source-over'; // Reset
+                        
+                        // Punch white fringes after tint
+                        const imageData = spriteCtx.getImageData(0, 0, S, S);
+                        spriteCtx.putImageData(imageData, 0, 0);
+                    } else if (currentTheme === 'paradise') {
+                        // Apply purple tint for paradise theme + red eyes
+                        const imageData = spriteCtx.getImageData(0, 0, S, S);
+                        punchHoleThroughRed(imageData); // Mark eye pixels
+                        const data = imageData.data;
+                        const width = S;  // 16
+                        const height = S; // 16
+                        const threshold = 100; // Tune: higher = fewer transparencies
 
-    // CPU-friendly neighbor diff check: zero alpha for color outliers (non-eyes)
-    for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] > 0 && data[i + 3] !== 1) {  // Opaque non-eye only
-            const row = Math.floor(i / (4 * width));
-            const col = (i / 4) % width;
-            const r = data[i], g = data[i + 1], b = data[i + 2];
+                        // CPU-friendly neighbor diff check: zero alpha for color outliers (non-eyes)
+                        for (let i = 0; i < data.length; i += 4) {
+                            if (data[i + 3] > 0 && data[i + 3] !== 1) {  // Opaque non-eye only
+                                const row = Math.floor(i / (4 * width));
+                                const col = (i / 4) % width;
+                                const r = data[i], g = data[i + 1], b = data[i + 2];
 
-            const neighbors = [];
-            const dirs = [
-                { dx: 0, dy: -1 },  // up
-                { dx: 0, dy: 1 },   // down
-                { dx: -1, dy: 0 },  // left
-                { dx: 1, dy: 0 }    // right
-            ];
+                                const neighbors = [];
+                                const dirs = [
+                                    { dx: 0, dy: -1 },  // up
+                                    { dx: 0, dy: 1 },   // down
+                                    { dx: -1, dy: 0 },  // left
+                                    { dx: 1, dy: 0 }    // right
+                                ];
 
-            for (const d of dirs) {
-                const nr = row + d.dy;
-                const nc = col + d.dx;
-                if (nr >= 0 && nr < height && nc >= 0 && nc < width) {
-                    const ni = (nr * width + nc) * 4;
-                    if (data[ni + 3] > 0) {  // Only opaque neighbors
-                        const nrgb = data[ni], ngb = data[ni + 1], nbgb = data[ni + 2];
-                        neighbors.push([nrgb, ngb, nbgb]);
+                                for (const d of dirs) {
+                                    const nr = row + d.dy;
+                                    const nc = col + d.dx;
+                                    if (nr >= 0 && nr < height && nc >= 0 && nc < width) {
+                                        const ni = (nr * width + nc) * 4;
+                                        if (data[ni + 3] > 0) {  // Only opaque neighbors
+                                            const nrgb = data[ni], ngb = data[ni + 1], nbgb = data[ni + 2];
+                                            neighbors.push([nrgb, ngb, nbgb]);
+                                        }
+                                    }
+                                }
+
+                                if (neighbors.length === 0) {
+                                    data[i + 3] = 0;  // Isolated: transparent
+                                    continue;
+                                }
+
+                                let totalDiff = 0;
+                                for (const [nrgb, ngb, nbgb] of neighbors) {
+                                    totalDiff += Math.sqrt(
+                                        (r - nrgb) ** 2 + (g - ngb) ** 2 + (b - nbgb) ** 2
+                                    );
+                                }
+                                const avgDiff = totalDiff / neighbors.length;
+
+                                if (avgDiff > threshold) {
+                                    data[i + 3] = 0;  // Outlier: transparent
+                                }
+                            }
+                        }
+                        for (let i = 0; i < data.length; i += 4) {
+                            if (data[i + 3] === 1) { // Eye pixel - make red
+                                data[i] = 255;     // Red
+                                data[i + 1] = 0;   // Green
+                                data[i + 2] = 0;   // Blue
+                                data[i + 3] = 255; // Full opacity
+                            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - purple tint
+                                data[i] = Math.min(255, data[i] + 50); // Subtle red for violet base
+                                data[i + 1] = Math.min(255, data[i + 1] + 51); // Subtle green
+                                data[i + 2] = Math.min(255, data[i + 2] + 153); // Blue for purple
+                                data[i + 3] = Math.round(0.95 * 255); // 95% opacity
+                            }
+                        }
+                        spriteCtx.putImageData(imageData, 0, 0);
                     }
                 }
-            }
-
-            if (neighbors.length === 0) {
-                data[i + 3] = 0;  // Isolated: transparent
-                continue;
-            }
-
-            let totalDiff = 0;
-            for (const [nrgb, ngb, nbgb] of neighbors) {
-                totalDiff += Math.sqrt(
-                    (r - nrgb) ** 2 + (g - ngb) ** 2 + (b - nbgb) ** 2
-                );
-            }
-            const avgDiff = totalDiff / neighbors.length;
-
-            if (avgDiff > threshold) {
-                data[i + 3] = 0;  // Outlier: transparent
-            }
-        }
-    }
-    for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] === 1) { // Eye pixel - make red
-            data[i] = 255;     // Red
-            data[i + 1] = 0;   // Green
-            data[i + 2] = 0;   // Blue
-            data[i + 3] = 255; // Full opacity
-        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - purple tint
-	    data[i] = Math.min(255, data[i] + 50); // Subtle red for violet base
-            data[i + 1] = Math.min(255, data[i + 1] + 51); // Subtle green
-            data[i + 2] = Math.min(255, data[i + 2] + 153); // Blue for purple
-            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-        }
-    }
-    spriteCtx.putImageData(imageData, 0, 0);
-}
                 
-// Special handling for unique monsters (poison green with red eyes) - skip Cursed Trader
-if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
-    const imageData = spriteCtx.getImageData(0, 0, S, S);
-    const data = imageData.data;
-    punchHoleThroughRed(imageData); // Mark eye pixels
+                // Special handling for unique monsters (poison green with red eyes) - skip Cursed Trader
+                if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
+                    const imageData = spriteCtx.getImageData(0, 0, S, S);
+                    const data = imageData.data;
+                    punchHoleThroughRed(imageData); // Mark eye pixels
                     for (let i = 0; i < data.length; i += 4) {
                         if (data[i + 3] === 1) { // Eye pixel - make red
                             data[i] = 255;     // Red
@@ -7992,35 +8002,21 @@ if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
                     spriteCtx.putImageData(imageData, 0, 0);
                 }
             }
-            }
             // Fallback draw if pixel effect skipped
             if (!doPixelEffect || !isVisible) {
-                tempCtx.drawImage(img, 0, 0, S, S);
+                enemyTempCtx.drawImage(img, 0, 0, S, S);
             }
-            }
-        
-        // Draw the sprite on the temporary canvas
-        // (removed old red circle draw - now using PNG frames)
-        
-        tempCtx.imageSmoothingEnabled = false;
-        if (isVisible) {
-                        // Draw to tempCtx: processed if effects ran, else raw img
-            if (doPixelEffect && isVisible) {
-                tempCtx.drawImage(spriteCanvas, 0, 0, S, S);
-            } else {
-                tempCtx.drawImage(img, 0, 0, S, S);
-            }
-} else {
-    // Outside fog of war, draw original sprite to show red eyes
-    tempCtx.drawImage(img, 0, 0, S, S);
-    
-    // Punch white fringes on fog sprites too
-    const imageData = tempCtx.getImageData(0, 0, S, S);
-    tempCtx.putImageData(imageData, 0, 0);
-}
+        } else {
+            // Outside fog of war, draw original sprite to show red eyes
+            enemyTempCtx.drawImage(img, 0, 0, S, S);
+            
+            // Punch white fringes on fog sprites too
+            const imageData = enemyTempCtx.getImageData(0, 0, S, S);
+            enemyTempCtx.putImageData(imageData, 0, 0);
+        }
         
         // Draw the processed sprite to the main canvas
-        c.drawImage(tempCanvas, e.currentX, e.currentY, S, S);
+        c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
         c.restore();
     }
 });
