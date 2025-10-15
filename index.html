@@ -3968,13 +3968,14 @@ if (p.moving) {
         }
         
 if (map[ny][nx] === 6 && !inHideout) {
-if (currentTheme === 'paradise') {
-    if (p.hasCursedRing) {
+            if (currentTheme === 'paradise') {
+    if (p.hasCursedRing || p.curseActive) {
         p.hasCursedRing = false;
+        p.curseActive = false;
         p.auraMax = 0;
         p.auraShield = 0;
+        p.armorImmunity = null;
         logBattleEvent(`Floor ${floor} - Pond dispels Cursed Aura! Resistances restored.`);
-        p.curseActive = false;  // Lift lingering curse
         playWebAudioSound(sounds.pond);
         // Restore a random immunity
         const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
@@ -3994,7 +3995,7 @@ if (currentTheme === 'paradise') {
             logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
             playWebAudioSound(sounds.pond);
         }
-    }       
+    }            
             // If p.hp > 36, do nothing and continue
             
             // Desert – Sludge pit
@@ -4151,13 +4152,13 @@ if (map[ny][nx] === 7) {
             } else {
                 p.hp = 24 + 12;
             }
-            p.hasArmor = true;
-            const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-            let available = elements.filter(el => el !== p.elementImmunity);
-            if (available.length > 0) {
-                p.armorImmunity = available[Math.floor(Math.random() * available.length)];
-                logBattleEvent(`Floor ${floor} - Leather Armor grants 100% ${p.armorImmunity} resistance!`);
-            }
+p.hasArmor = true;
+const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+let available = elements.filter(el => el !== p.elementImmunity);
+if (available.length > 0 && !p.curseActive) {
+    p.armorImmunity = available[Math.floor(Math.random() * available.length)];
+    logBattleEvent(`Floor ${floor} - Leather Armor grants 100% ${p.armorImmunity} resistance!`);
+}
             map[ny][nx] = 0;
             playWebAudioSound(sounds.pickup);
             logBattleEvent(`Floor ${floor} - Armor Found: HP set to ${p.hp}`);
@@ -4678,15 +4679,15 @@ if (map[ny][nx] === 20) { // Soul stone tile
         if (map[ny][nx] === 15 && inHideout) { // Blacksmith
             if (p.perfectlyCutDiamonds >= 1 && !p.hasDiamondArmor) {
                 p.perfectlyCutDiamonds--;
-                p.hasDiamondArmor = true;
-                p.hasArmor = false; // Remove regular armor
-                p.armorImmunity = null; // Reset previous armor immunity
-                const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-                let available = elements.filter(el => el !== p.elementImmunity);
-                if (available.length > 0) {
-                    p.armorImmunity = available[Math.floor(Math.random() * available.length)];
-                    logBattleEvent(`Floor ${floor} - Diamond Armor grants 100% ${p.armorImmunity} resistance!`);
-                }
+p.hasDiamondArmor = true;
+p.hasArmor = false; // Remove regular armor
+p.armorImmunity = null; // Reset previous armor immunity
+const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+let available = elements.filter(el => el !== p.elementImmunity);
+if (available.length > 0 && !p.curseActive) {
+    p.armorImmunity = available[Math.floor(Math.random() * available.length)];
+    logBattleEvent(`Floor ${floor} - Diamond Armor grants 100% ${p.armorImmunity} resistance!`);
+}
                 p.hp += 1000;
                 logBattleEvent(`Blacksmith forged Diamond Armor! HP increased to ${p.hp}`);
                 playWebAudioSound(sounds.pickup);
