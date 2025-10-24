@@ -3177,14 +3177,14 @@ needsRedraw = true;
 
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
-    if (p.hp <= p.maxHP / 2 && p.hasDiamondArmor) {  // Tie to half maxHP
-        p.hasDiamondArmor = false;
-        p.hasArmor = false;
-        p.armorImmunity = null; // Reset armor immunity
-        p.maxHP = 36;  // Revert to leather max
-        logBattleEvent(`Floor ${floor} - Diamond Armor lost! Reverted to normal clothing.`);
-        document.getElementById('armorStatus').textContent = 'Cloth';
-    } else if (p.hp <= 24 && p.hasArmor) {
+if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
+    p.hasDiamondArmor = false;
+    p.hasArmor = true;
+    p.armorImmunity = null; // Reset armor immunity
+    p.maxHP = 36;  // Revert to leather max
+    logBattleEvent(`Floor ${floor} - Diamond Armor lost! Found Leather Armor beneath.`);
+    document.getElementById('armorStatus').textContent = 'Leather';
+} else if (p.hp <= 24 && p.hasArmor) {
         p.hasArmor = false;
         p.armorImmunity = null; // Reset armor immunity
         p.maxHP = 24;  // Revert to base max
@@ -3632,36 +3632,39 @@ if (enemy.type.name === 'Cursed Trader') {
         dropSoulStone(enemy.x, enemy.y);
     }
                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
-                let dropPlaced = false;
-                
-                // Skip bitcoin drop for uniques/Cursed Trader
-                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
-                    if (map[enemy.y][enemy.x] === 0) {
-                        map[enemy.y][enemy.x] = 3;
-                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                        dropPlaced = true;
-                    } else {
-                        const adjacent = [
-                            {x: enemy.x, y: enemy.y - 1},
-                            {x: enemy.x, y: enemy.y + 1},
-                            {x: enemy.x - 1, y: enemy.y},
-                            {x: enemy.x + 1, y: enemy.y}
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny)
-                            ) {
-                                map[ny][nx] = 3;
-                                satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
-                                dropPlaced = true;
-                                break;
-                            }
-                        }
-                    }
-                }
+let dropPlaced = false;
+
+// Skip bitcoin drop for uniques/Cursed Trader
+if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
+    if (map[enemy.y][enemy.x] === 0) {
+        map[enemy.y][enemy.x] = 3;
+        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+        dropPlaced = true;
+    } else {
+        const adjacent = [
+            {x: enemy.x, y: enemy.y - 1},
+            {x: enemy.x, y: enemy.y + 1},
+            {x: enemy.x - 1, y: enemy.y},
+            {x: enemy.x + 1, y: enemy.y}
+        ];
+        for (const pos of adjacent) {
+            const nx = pos.x, ny = pos.y;
+            if (
+                nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(e => e.x === nx && e.y === ny)
+            ) {
+                map[ny][nx] = 3;
+                satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                dropPlaced = true;
+                break;
+            }
+        }
+    }
+} else if (enemy.type.name === 'Cursed Trader') {
+    // Explicit no-drop for Cursed Trader (prevents visual bitcoin.png glitch)
+    dropPlaced = false;
+}
 
                 // Cursed Ring drop (50% for Cursed Trader only, even in blast)
                 if (enemy.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
@@ -3952,7 +3955,7 @@ p.anim.direction = newDirection;
 if (p.moving) {
     const now = performance.now();
     // Half speed animation during movement (10 FPS)
-    if (now - p.anim.lastFrameTime >= 50) {
+    if (now - p.anim.lastFrameTime >= 100) {  // Doubled from 50ms for half speed
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -7618,13 +7621,14 @@ for (let y = 0; y < H; y++) {
 const now = performance.now();
 // Animation frame update logic here
 if (p.moving) {
-    // Half speed animation during movement (5 FPS - doubled interval)
-    if (now - p.anim.lastFrameTime >= 50) {
+    // Half speed animation during movement (10 FPS - doubled interval)
+    if (now - p.anim.lastFrameTime >= 100) {  // Doubled from 50ms for half speed
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
 } else {
-    p.anim.frameIndex = 0; // Fixed idle frame
+    // Idle: No animation (fixed frame)
+    p.anim.frameIndex = 0;
 }
         
 let drawX = p.currentX;
@@ -8161,7 +8165,7 @@ enemies.forEach(e => {
 });
 // Frame animation (only when moving) - throttled
 const now = performance.now();
-if (p.moving && now - p.anim.lastFrameTime >= 50) {
+if (p.moving && now - p.anim.lastFrameTime >= 100) {  // Doubled from 50ms for half speed
     p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
     p.anim.lastFrameTime = now;
 }
