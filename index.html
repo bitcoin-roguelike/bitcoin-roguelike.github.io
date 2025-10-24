@@ -3955,7 +3955,7 @@ p.anim.direction = newDirection;
 if (p.moving) {
     const now = performance.now();
     // Half speed animation during movement (10 FPS)
-    if (now - p.anim.lastFrameTime >= 100) {  // Doubled from 50ms for half speed
+    if (now - p.anim.lastFrameTime >= 50) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -7621,8 +7621,8 @@ for (let y = 0; y < H; y++) {
 const now = performance.now();
 // Animation frame update logic here
 if (p.moving) {
-    // Half speed animation during movement (10 FPS - doubled interval)
-    if (now - p.anim.lastFrameTime >= 100) {  // Doubled from 50ms for half speed
+    // Half speed animation during movement (5 FPS - doubled interval)
+    if (now - p.anim.lastFrameTime >= 50) {
         p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
         p.anim.lastFrameTime = now;
     }
@@ -8165,7 +8165,7 @@ enemies.forEach(e => {
 });
 // Frame animation (only when moving) - throttled
 const now = performance.now();
-if (p.moving && now - p.anim.lastFrameTime >= 100) {  // Doubled from 50ms for half speed
+if (p.moving && now - p.anim.lastFrameTime >= 50) {
     p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
     p.anim.lastFrameTime = now;
 }
