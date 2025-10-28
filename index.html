@@ -1419,6 +1419,9 @@ let lastDrawTime = null;
 let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
+let uniqueMonsterRevealActive = false;
+let uniqueMonsterRevealStartTime = 0;
+let uniqueMonsterRevealedThisFloor = false; // New: Per-floor limit
 let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
@@ -1768,7 +1771,11 @@ types.forEach(t => {
 	assets.soul_stone.src = 'soul_stone.png';
 	assets.hooded_heirloom.src = 'hooded_heirloom.png';
 assets.cursed_ring = new Image(),
-assets.cursed_ring.src = 'cursed_ring.png';	
+assets.cursed_ring.src = 'cursed_ring.png';
+// Unique monster reveal image
+assets.unique_monster_img = new Image();
+assets.unique_monster_img.src = 'unique_monster.png';
+assets.unique_monster_img.onerror = () => console.error('Failed to load unique_monster.png');	
 
 // Enemy background circles (16x16px animated)
 assets.enemyBg = [new Image(), new Image(), new Image()];
@@ -2493,6 +2500,7 @@ function initMap() {
             whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
             initialSpawnDoneThisFloor = false;
             initialWaveSpawned = false;
+	    uniqueMonsterRevealedThisFloor = false; // Reset animation limit for new floor
             map = Array(H).fill().map(() => Array(W).fill(1));
             fogMap = Array(H).fill().map(() => Array(W).fill(0));
             rooms = [];
@@ -4487,6 +4495,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     waveActive = false;
     exit = null;
     killsLog = [];
+    uniqueMonsterRevealedThisFloor = false; // Explicit reset before new floor
     battleLog = []; // Clear battleLog to prevent memory buildup
     // Reset special sound tracking for the new floor
     specialSoundsPlayedThisFloor.lava = false;
@@ -7300,6 +7309,11 @@ waveActive = false;
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('sats').textContent = '0';
+    // Reset unique monster animation
+    uniqueMonsterRevealActive = false;
+    uniqueMonsterRevealedThisFloor = false;
+    window.currentFloorText = `Floor ${floor}`;
+    window.lastUniqueSetTime = 0;
     document.getElementById('game-over').style.display = 'none';
     document.getElementById('submit-score').style.display = 'none';
     document.getElementById('view-leaderboard').style.display = 'none';
@@ -7762,6 +7776,29 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
             c.fillRect(x * S, y * S, S, S);
         }
     }
+   
+    // Draw unique monster reveal animation (centered 64x64 overlay)
+    if (uniqueMonsterRevealActive) {
+        const elapsed = now - uniqueMonsterRevealStartTime;
+        if (elapsed > 750) {
+            uniqueMonsterRevealActive = false;
+        } else {
+            // Smooth linear ramp: scale 1x (64px) → 5x (320px), alpha 1.0 → 0.0 over 0.5s
+            const normalized = elapsed / 750; // 0 to 1 over full 0.75s
+            let scale = 1 + normalized * 4; // Linear: 1x → 5x
+            let alpha = 1 - normalized; // Linear fade to 0
+            c.save();
+            c.imageSmoothingEnabled = false; // Pixel-perfect, no anti-aliasing
+            c.globalAlpha = alpha;
+            const scaledW = 64 * scale;
+            const scaledH = 64 * scale;
+            const offsetX = (320 - scaledW) / 2;
+            const offsetY = (320 - scaledH) / 2;
+            c.drawImage(assets.unique_monster_img, offsetX, offsetY, scaledW, scaledH);
+            c.restore();
+            c.imageSmoothingEnabled = true; // Re-enable for rest of draw()
+        }
+    }
     
 /**
  * Makes pure‑red pixels transparent (α = 0).  
@@ -8060,7 +8097,7 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
 // Consolidated unique monster name display (prevents flicker)
 let uniqueNameToShow = null;
 let isHarbinger = false;
-const visibleUniques = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 1);
+const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && fogMap[e.y][e.x] === 1);
 if (visibleUniques.length > 0) {
     uniqueNameToShow = visibleUniques[0].uniqueName; // First visible
 } else {
@@ -8070,16 +8107,16 @@ if (visibleUniques.length > 0) {
         isHarbinger = true;
     }
 }
-
 const floorIndicator = document.getElementById('floor-indicator');
 const cachedText = window.currentFloorText || `Floor ${floor}`;
 const debounceMs = isHarbinger ? 2000 : 1000; // Longer for harbinger
+// Always set text for harbinger/visible (separate from animation trigger)
 if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs) && !floorIndicator.textContent.startsWith("Runeword")) {
     floorIndicator.textContent = uniqueNameToShow;
     window.currentFloorText = uniqueNameToShow;
     window.lastUniqueSetTime = now;
     activeUniqueMonsterName = uniqueNameToShow;
-    
+   
     // Auto-clear after 5s
     setTimeout(() => {
         if (activeUniqueMonsterName === uniqueNameToShow) {
@@ -8092,6 +8129,12 @@ if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUn
     floorIndicator.textContent = `Floor ${floor}`;
     window.currentFloorText = `Floor ${floor}`;
     activeUniqueMonsterName = null;
+}
+// Trigger animation ONLY on visible (non-harbinger) uniques
+if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMonsterRevealedThisFloor) {
+    uniqueMonsterRevealActive = true;
+    uniqueMonsterRevealStartTime = now;
+    uniqueMonsterRevealedThisFloor = true; // Mark as revealed this floor
 }
     
     needsRedraw = false;
