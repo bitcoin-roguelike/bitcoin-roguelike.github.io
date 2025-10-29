@@ -7780,11 +7780,11 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
     // Draw unique monster reveal animation (centered 64x64 overlay)
     if (uniqueMonsterRevealActive) {
         const elapsed = now - uniqueMonsterRevealStartTime;
-        if (elapsed > 750) {
+        if (elapsed > 1000) {
             uniqueMonsterRevealActive = false;
         } else {
             // Smooth linear ramp: scale 1x (64px) → 5x (320px), alpha 1.0 → 0.0 over 0.5s
-            const normalized = elapsed / 750; // 0 to 1 over full 0.75s
+            const normalized = elapsed / 1000; // 0 to 1 over full 1s
             let scale = 1 + normalized * 4; // Linear: 1x → 5x
             let alpha = 1 - normalized; // Linear fade to 0
             c.save();
