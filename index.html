@@ -4100,7 +4100,6 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;                // ← reset diamonds
                         updatePlayerState();          // ← update display
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        updatePlayerState(); // Run death/resonance check
                     }
                 }
             }
@@ -4123,7 +4122,6 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        updatePlayerState(); // Run death/resonance check
                     }
                 }
             }
@@ -4148,7 +4146,6 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        updatePlayerState(); // Run centralized death/surge check
                     }
                 }
             }
@@ -5096,7 +5093,6 @@ if (p.hp <= 0 && p.immortal) {
     diamonds = 0;                // reset diamonds
     updatePlayerState();          // update inventory
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-    updatePlayerState(); // Run centralized death/surge check
 }
 
 updatePlayerState(); // Check HP and armor state after damage
