@@ -204,6 +204,9 @@
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
 }
+#battle-log textarea:focus {
+    outline: none !important;
+}
 #inventory { 
     position: absolute;
     top: 10px;
@@ -803,10 +806,11 @@ button:hover {
     <span id="diamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
     <span id="perfectlyCutDiamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
     <span id="runes" style="display: none;">None</span><br> <!-- moved to soul terminal -->
+    <span id="resonance" style="display: none;">0%</span><br>
 </div>
         </div>
 <div id="battle-log">
-    <textarea id="battle-events" readonly>Battle Log:</textarea>
+    <textarea id="battle-events" readonly tabindex="-1">Battle Log:</textarea>
 </div>
 
 <!-- Soul Terminal Overlay -->
@@ -1532,6 +1536,10 @@ let cachedLeaderboard = null; // Store fetched leaderboard
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
+let soulResonance = 0; // 0-100%, +1 per floor, maxed triggers resurrection
+let resonanceTriggeredThisRun = false; // One-time per run
+let wardenFlashStart = 0; // Timestamp for 500ms invert flash
+let echoWardenPos = null; // Track warden position for draw
 let satoshiDrops = [];
 let runeDrops = []; // Array to store rune drops with positions and letters
 let scrollDrops = []; // Array to store scroll drops with positions
@@ -1772,6 +1780,9 @@ types.forEach(t => {
 	assets.hooded_heirloom.src = 'hooded_heirloom.png';
 assets.cursed_ring = new Image(),
 assets.cursed_ring.src = 'cursed_ring.png';
+assets.echo_warden = new Image();
+assets.echo_warden.src = 'ἀρχάγγελος.png';
+assets.echo_warden.onerror = () => console.error('Failed to load echo_warden.png');
 // Unique monster reveal image
 assets.unique_monster_img = new Image();
 assets.unique_monster_img.src = 'unique_monster.png';
@@ -2514,6 +2525,13 @@ function initMap() {
             blacksmithPos = null;
             waypointPos = null;
             exit = null; // Prevent stairs and related enemy spawning
+            echoWardenPos = null; // Clear warden on new floor
+            wardenFlashStart = 0; // Clear flash on new floor
+                for (let yy = 0; yy < H; yy++) {
+                    for (let xx = 0; xx < W; xx++) {
+                        if (map[yy][xx] === 24) map[yy][xx] = 0; // Clear warden tile
+                    }
+                }
 
             dpadButtons = document.querySelectorAll('#dpad button');
             actionsButtons = document.querySelectorAll('#actions button');
@@ -3185,6 +3203,7 @@ needsRedraw = true;
 
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
+if (gameOver) return; // Prevent spam calls post-death
 if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
     p.hasDiamondArmor = false;
     p.hasArmor = true;
@@ -3246,6 +3265,7 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('diamonds').textContent = diamonds;
     document.getElementById('perfectlyCutDiamonds').textContent = p.perfectlyCutDiamonds;
+    document.getElementById('resonance').textContent = `${soulResonance}%`;
     
     // Add soul items to display
     if (p.inSoulTerminal) {
@@ -3271,6 +3291,59 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
         const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
         p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
         logBattleEvent(`Floor ${floor} - Cursed Ring shattered! HP unchanged at ${p.hp}/${p.maxHP}. Gained ${p.elementImmunity} immunity.`);
+    }
+
+    // Centralized death check (immortal + resonance + normal)
+    if (p.hp <= 0 && !gameOver) {
+        if (p.immortal) {
+            p.hp = 1;
+            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        } else if (soulResonance >= 100 && !resonanceTriggeredThisRun) {
+            // Resonance Surge: One-time resurrection
+            resonanceTriggeredThisRun = true;
+            soulResonance = 0; // Consume meter
+            p.hp = 100;
+            p.hasArmor = true; // Leather armor
+            p.maxHP = 36; // Leather max
+            p.soulStormCharges = 256;
+            // Clear all enemies (with drops, like RIP)
+            enemies.forEach(enemy => {
+                kills[enemy.type.name]++;
+                if (enemy.type.name !== 'Cursed Trader' && !enemy.uniqueName) {
+                    // Drop sats (simplified)
+                    if (map[enemy.y][enemy.x] === 0) {
+                        map[enemy.y][enemy.x] = 3;
+                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                    }
+                }
+                handleUniqueMonsterReward(enemy); // Handle uniques
+            });
+            enemies = []; // Wipe enemies
+        // Place Echo Warden directly on player's death spot
+        const wx = p.x;
+        const wy = p.y;
+        echoWardenPos = {x: wx, y: wy};
+        map[wy][wx] = 24; // New tile type for warden
+            // Effects
+            playWebAudioSound(sounds.rune); // Rune sound
+            logBattleEvent(`Floor ${floor} - Resonance Surge! Echo Warden descends—enemies vanquished, HP restored to 100, leather armor granted, soul charges maxed.`);
+            updateSatsDisplay();
+            needsRedraw = true;
+            // Trigger 500ms invert flash on warden entry
+            wardenFlashStart = Date.now();
+                    gameOver = false; // Force reset if spell/attack overrode
+        console.log('DEBUG: Post-surge force - HP:', p.hp, 'gameOver:', gameOver); // Remove after test
+        } else {
+            // Normal death
+            p.hp = 0;
+            diamonds = 0;
+            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+            gameOver = true; // Centralized set
+            updatePlayerState(); // Run death/resonance check
+            // 2s input lock
+            inputBlocked = true;
+            setTimeout(() => { inputBlocked = false; }, 1000);
+        }
     }
 
     needsRedraw = true;
@@ -4027,7 +4100,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;                // ← reset diamonds
                         updatePlayerState();          // ← update display
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
+                        updatePlayerState(); // Run death/resonance check
                     }
                 }
             }
@@ -4050,7 +4123,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
+                        updatePlayerState(); // Run death/resonance check
                     }
                 }
             }
@@ -4061,7 +4134,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                     p.hp = 0;
                     logBattleEvent(`Floor ${floor} - Fell into Hole: Hero Fell! Reached Floor ${floor}`);
                     playWebAudioSound(sounds.hole);
-                    gameOver = true;
+                    updatePlayerState(); // Run death/resonance check
                 } else {
                     const oldHP = p.hp;
                     p.hp = Math.ceil(p.hp / 2);
@@ -4075,7 +4148,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
+                        updatePlayerState(); // Run centralized death/surge check
                     }
                 }
             }
@@ -4490,6 +4563,10 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     initialSpawnDoneThisFloor = false;
     enemies = [];
     floor++;
+// Build soul resonance +2% per floor (every 50 floors, max 100%)
+soulResonance = Math.min(100, soulResonance + 2);
+resonanceTriggeredThisRun = false; // Reset for new run
+logBattleEvent(`Floor ${floor} - Soul Resonance: ${soulResonance}%`); // Optional subtle log
     p.shrineUsedThisFloor = false;  // Reset shrine flag for new floor
     initialWaveSpawned = false;
     waveActive = false;
@@ -5019,12 +5096,16 @@ if (p.hp <= 0 && p.immortal) {
     diamonds = 0;                // reset diamonds
     updatePlayerState();          // update inventory
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-    gameOver = true;
+    updatePlayerState(); // Run centralized death/surge check
 }
 
 updatePlayerState(); // Check HP and armor state after damage
             }
     });
+    
+    // Single death/surge check after all enemy actions
+    updatePlayerState();
+    
 if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
     if (placeStairs()) {
         wave++;
@@ -5035,18 +5116,14 @@ if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActiv
         logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
     }
 }
-
 }
 
 // Function to apply spell damage to player
 function applySpellDamage(x, y) {
-    // Check if player is standing on a dangerous area
     const dangerousArea = dangerousAreas.find(area => area.x === x && area.y === y);
-    
     if (dangerousArea) {
         let damage = 0;
         let damageType = "";
-        
         switch (dangerousArea.spellType) {
             case SPELL_TYPES.FIRE_WALL:
                 damage = 2;
@@ -5065,29 +5142,14 @@ function applySpellDamage(x, y) {
                 damageType = "Poison";
                 break;
         }
-        
-        // Check if player has immunity to this spell type
         if (p.elementImmunity === damageType || p.armorImmunity === damageType) {
             logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
-            return; // Skip damage application
+        } else {
+            p.hp -= damage;
+            logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
+            playWebAudioSound(sounds.hit);
         }
-        
-        p.hp -= damage;
-        logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
-        playWebAudioSound(sounds.hit);
-        
-        if (p.hp <= 0 && p.immortal) {
-            p.hp = 1;
-            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        } else if (p.hp <= 0) {
-            p.hp = 0;
-            diamonds = 0;                // reset diamonds
-            updatePlayerState();          // update inventory
-            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-            gameOver = true;
-        }
-        
-        updatePlayerState();
+        updatePlayerState(); // Centralized: surge if eligible, no early gameOver
     }
 }
 
@@ -6414,6 +6476,7 @@ if (p.hasCursedRing) {
         }
     }
     addTerminalLineToContent(`Runes: ${displayRunes}`);
+    addTerminalLineToContent(`Soul Resonance: ${soulResonance}%`);
     addTerminalLineToContent('');
 //    addTerminalLineToContent('--- Audio Settings ---');
 //    addTerminalLineToContent(`Sound Volume: ${(soundVolume * 100).toFixed(0)}%`);
@@ -7220,6 +7283,8 @@ p.auraMoveCounter = 0; // Reset aura move counter
     diamonds = 0;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity on restart
+    soulResonance = 0;
+    wardenFlashStart = 0; // Clear flash on restart
     
     p.runes = [];
     runeDrops = runeDrops.filter(r => !r.specific);			// maybe
@@ -7434,6 +7499,16 @@ if (p.moving) {
     }
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
+    // Warden entry flash: Invert colors for 500ms
+if (wardenFlashStart > 0) {
+    const elapsed = Date.now() - wardenFlashStart;
+    if (elapsed < 500) {
+        c.filter = 'invert(1)'; // Quick dramatic invert
+    } else {
+        c.filter = 'none'; // Reset
+        wardenFlashStart = 0;
+    }
+}
     if (gameOver) {
         const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
         gameOverCanvas.clearRect(0, 0, 320, 320);
@@ -7576,6 +7651,9 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         }
         if (map[y][x] === 23) { // Cursed Ring
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
+            c.drawImage(assets.echo_warden, x * S, y * S, S, S);
         }
         // Draw stairs after portals to ensure proper visibility
         if (exit && exit.x === x && exit.y === y) {
@@ -8221,20 +8299,6 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
         draw();
     }
     
-// Final death check (after all updates)
-if (p.hp <= 0 && !gameOver) {
-    if (p.immortal) {
-        p.hp = 1;
-        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-    } else {
-        p.hp = 0;
-        diamonds = 0;                // reset diamonds
-        updatePlayerState();          // update inventory
-        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-        gameOver = true;
-    }
-}
-
     // Revert to unthrottled RAF for smooth interpolation; draw throttling is internal
     requestAnimationFrame(gameLoop);
 }
@@ -8826,7 +8890,7 @@ if (!splashActive && !gameOver && inputBlocked) {
     const nowTime = Date.now();
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (p.inSoulTerminal && p.soulTerminalActive) {
-            console.log('Gamepad Start: Exiting soul terminal'); // Debug log
+            //console.log('Gamepad Start: Exiting soul terminal'); // Debug log
             closeSoulTerminal();
         }
         lastStartPressTime = nowTime;
@@ -8852,7 +8916,7 @@ if (buttons[1].pressed && !lastButtonsState[1]) {
         // Normal gameplay B button action
         attack();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
-    } else if (gameOver && gamepadIndex !== null) {
+    } else if (gameOver && gamepadIndex !== null && !inputBlocked) {  // ← Add !inputBlocked check here
         if (!gameOverBPressed) {
             if (!scoreSubmitted && floor >= 3) {
                 // Submit score if eligible
@@ -9225,6 +9289,10 @@ document.addEventListener('keydown', function (e) {
   if (['a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
     handleMovement();
   }
+});
+// Prevent battle-log focus from gamepad/shoulder buttons
+document.getElementById('battle-events').addEventListener('focus', function() {
+    this.blur();
 });
     </script>
 </body>
