@@ -4578,12 +4578,6 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     scrollDroppedThisFloor = false;
 
     sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
-// Delay wisp chime post-stairs (500ms stagger)
-setTimeout(() => {
-    playWebAudioSound(sounds.pickup);
-    setTimeout(() => playWebAudioSound(sounds.pickup), 100);
-    setTimeout(() => playWebAudioSound(sounds.pickup), 200);
-}, 500);
     if (p.immortal) {
         p.immortal = false;
         logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
