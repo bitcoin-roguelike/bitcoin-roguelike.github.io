@@ -3260,6 +3260,24 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
     }
 
+    // Sync wisp HP to half player HP and check for death (all damage types)
+    if (wisps.length > 0) {
+        const wisp = wisps[0];
+        wisp.hp = Math.floor(p.hp / 2);
+        wisp.maxHP = Math.floor(p.maxHP / 2);
+        if (wisp.hp <= 0) {
+            wisps = [];
+            logBattleEvent(`Floor ${floor} - Wisp perishes!`);
+            sounds.gameover.currentTime = 0;
+            sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
+            deadWispCorpse = {
+                x: wisp.x, y: wisp.y,
+                frameIndex: wisp.anim.frameIndex,
+                fadeStart: Date.now()
+            };
+        }
+    }
+
     // Check if player is on blacksmith tile and can get diamond armor or diamond hand
     if (map[p.y][p.x] === 15 && p.perfectlyCutDiamonds > 0) {
         if (!p.hasDiamondArmor) {
@@ -5155,7 +5173,7 @@ if (wisps.length > 0) {
         logBattleEvent(`Floor ${floor} - ${e.type.name} attacks wisp for ${wDmg} dmg! (Wisp HP: ${wisp.hp})`);
         if (wisp.hp <= 0) {
             wisps = []; // Remove from active array
-            logBattleEvent(`Floor ${floor} - Wisp slain by ${e.type.name}!`);
+            logBattleEvent(`Floor ${floor} - Wisp perishes!`);
             sounds.gameover.currentTime = 0;
             sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
             // Place dead wisp on ground
@@ -8494,17 +8512,7 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
 
-// Sync wisp HP to half player HP
-if (wisps.length > 0) {
-    const wisp = wisps[0];
-    const newHp = Math.floor(p.hp / 2);
-    const newMax = Math.floor(p.maxHP / 2);
-    if (wisp.hp !== newHp || wisp.maxHP !== newMax) {
-        wisp.hp = newHp;
-        wisp.maxHP = newMax;
-        //logBattleEvent(`Floor ${floor} - Wisp HP synced: ${wisp.hp}/${wisp.maxHP}`);
-    }
-}
+// (deleted: moved to updatePlayerState() for centralized death check)
     document.getElementById('pickaxes').textContent = p.pickaxes;
     
 // Consolidated unique monster name display (prevents flicker)
