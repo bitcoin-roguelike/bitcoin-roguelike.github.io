@@ -5253,7 +5253,7 @@ function updateWisps() {
     if (wisp.attackCounter % 2 === 0) {
         const inRangeEnemies = enemies.filter(e => {
             let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-            return edist <= wisp.type.range;
+            return edist <= wisp.type.range && e.hp > 1;  // ← ignore 1-HP enemies
         });
         if (inRangeEnemies.length > 0) {
             const target = inRangeEnemies[0]; // Nearest/simple
@@ -5280,14 +5280,23 @@ function applyWispAttack(wisp, target) {
         actualDmg = Math.min(dmg, target.hp); // Clamp to prevent over-log
         target.hp -= actualDmg;
         target.hp = Math.max(actualDmg > 0 ? 1 : 0, target.hp); // Mercy: 1 HP min if dmg>0 (freeze skips)
-        effectMsg = `Wisp ${wisp.type.name} hits for ${actualDmg} dmg!`;
-        visibleEffect = `[${wisp.type.name.toUpperCase()} DMG]`;
+        let verb = '';
+        switch (wisp.type.name) {
+            case 'fire':   verb = 'scorches'; visibleEffect = '[FIRE BOLT]'; break;
+            case 'cold':   verb = 'freezes';  visibleEffect = '[FROST NOVA]'; break;
+            case 'chain':  verb = 'zaps';     visibleEffect = '[CHAIN LIGHTNING]'; break;
+            case 'earth':  verb = 'smashes';  visibleEffect = '[EARTHQUAKE]'; break;
+            default:       verb = 'hits';     visibleEffect = `[${wisp.type.name.toUpperCase()}]`;
+        }
+        effectMsg = actualDmg > 0 
+            ? `Wisp ${verb} ${target.type.name} for ${actualDmg} damage!`
+            : `Wisp ${verb} ${target.type.name}!`;
     } else if (wisp.type.effect === 'freeze') {
         // Simple freeze: skip enemy turn (set flag)
         target.frozen = true;
         target.frozenTurns = 1;
-        effectMsg = `Wisp ${wisp.type.name} freezes!`;
-        visibleEffect = `[FREEZE]`;
+        effectMsg = `Wisp freezes ${target.type.name}!`;
+        visibleEffect = '[FROST LOCK]';
         actualDmg = 0; // No dmg
     }
    
@@ -5327,6 +5336,7 @@ function applyWispAttack(wisp, target) {
     } else if (actualDmg > 0 && target.hp === 1) {
         logBattleEvent(`Floor ${floor} - Wisp spares ${target.type.name}!`);
     }
+    // No message when skipping 1-HP enemies – keeps log clean
    
     // Stub for wisp death (called separately in enemy attacks, not here)
     if (wisp.hp <= 0) {
@@ -6759,7 +6769,7 @@ case 'clear':
 case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
-    addTerminalLineToContent('  convert ----- Convert soul items');
+    addTerminalLineToContent('  convert ----- Convert soul stones, shards, wisp');
     addTerminalLineToContent('  set --------- Settings');
     addTerminalLineToContent('  clear ------- Clear screen');
     addTerminalLineToContent('  leaderboard - View top 10 scores');
@@ -6769,8 +6779,9 @@ case 'help':
     break;
 case 'convert':
             if (args.length === 0) {
-                addTerminalLineToContent('Usage: convert stones');
-                addTerminalLineToContent('Usage: convert shards');
+                addTerminalLineToContent('Usage: convert stones [count]');
+                addTerminalLineToContent('Usage: convert shards [count]');
+                addTerminalLineToContent('Usage: convert wisp [count]');
                 addTerminalLineToContent('_____________________');
                 addTerminalLineToContent('Type "help" for help.');
             } else {
@@ -6838,6 +6849,36 @@ case 'convert':
                             addTerminalLineToContent('_____________________');
     	                    addTerminalLineToContent('Type "help" for help.');
                         }
+                        break;
+                    case 'wisp':
+                        if (floor < 3) {
+                            addTerminalLineToContent('You must reach Floor 3 to resurrect a wisp.');
+                        } else if (wisps.length > 0) {
+                            addTerminalLineToContent('You already have a loyal wisp companion.');
+                        } else if (p.soulOrbs >= 10) {
+                            p.soulOrbs -= 10;
+                            const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
+                            wisps.push({
+                                x: p.x, y: p.y,
+                                currentX: p.x * S, currentY: p.y * S,
+                                hp: Math.floor(p.hp / 2), maxHP: Math.floor(p.maxHP / 2),
+                                type: wispType,
+                                attackCounter: 0,
+                                targetTileX: p.x, targetTileY: p.y,
+                                deltaX: 0, deltaY: 0, stepsLeft: 0, moving: false,
+                                anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 },
+                                lastPos: null
+                            });
+                            addTerminalLineToContent('10 Soul Orbs consumed – a loyal wisp has been resurrected!');
+                            logBattleEvent(`Floor ${floor} - Wisp resurrected from the Soul Terminal!`);
+                            playWebAudioSound(sounds.pickup);
+                            setTimeout(() => playWebAudioSound(sounds.pickup), 100);
+                            setTimeout(() => playWebAudioSound(sounds.pickup), 200);
+                        } else {
+                            addTerminalLineToContent(`Need 10 Soul Orbs (you have ${p.soulOrbs}).`);
+                        }
+                        addTerminalLineToContent('_____________________');
+                        addTerminalLineToContent('Type "help" for help.');
                         break;
                     default:
                         addTerminalLineToContent('ERROR!');
@@ -8469,7 +8510,7 @@ c.restore();
                     break;
                 case 'chain': flashColor = 'rgba(255, 255, 0, 0.5)'; // Yellow lightning
                     break;
-                case 'fire': flashColor = 'rgba(103, 0, 0, 0.55)'; // Red fireball
+                case 'fire': flashColor = 'rgba(103, 0, 0, 0.55)'; // Red fire bolt
                     break;
                 // cold/freeze stays cyan
             }
