@@ -2280,17 +2280,12 @@ function resetSplashScreen() {
 }
 
 document.getElementById('start-button').addEventListener('click', () => {
-    // --- ONE-TIME USER GESTURE: unlock audio + start music immediately ---
-    if (audioContext.state === 'suspended') {
-        audioContext.resume();               // unlocks Web Audio API
-    }
+    // 1. Unlock audio + start music IMMEDIATELY in the real user gesture
+    if (audioContext.state === 'suspended') audioContext.resume();
+    musicManager.current = null;                // reset state
+    if (!musicMuted) musicManager.play('dungeon');
 
-    // Start music right now in the user gesture (critical for mobile!)
-    if (!musicMuted) {
-        musicManager.play('dungeon');        // force-start dungeon theme
-    }
-
-    // Visual feedback
+    // 2. Visual stuff
     currentTheme = 'dungeon';
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
@@ -2299,25 +2294,23 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
-    preloadSounds();                         // safe now – user interacted
+    // 3. Everything else can be delayed – no audio here
+    preloadSounds();          // safe now
     fadeSplash();
 
-    // Everything else after a short delay (non-audio)
     setTimeout(() => {
-        if (!gameOver && !splashActive) {
-            requestWakeLock();
-            fetchTxs();
-            lastUpdate = Date.now();
+        requestWakeLock();
+        fetchTxs();
+        lastUpdate = Date.now();
 
-            // First-time leaderboard cache
-            if (!localStorage.getItem('leaderboardCached')) {
-                fetchLeaderboard().then(() => {
-                    localStorage.setItem('leaderboardCached', 'true');
-                    cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-                });
-            } else {
+        // leaderboard cache (no audio involved)
+        if (!localStorage.getItem('leaderboardCached')) {
+            fetchLeaderboard().then(() => {
+                localStorage.setItem('leaderboardCached', 'true');
                 cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-            }
+            });
+        } else {
+            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
         }
     }, 2000);
 });
