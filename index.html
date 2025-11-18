@@ -2284,7 +2284,7 @@ document.getElementById('start-button').addEventListener('click', () => {
     if (audioContext.state === 'suspended') audioContext.resume();
 
     // Start music IMMEDIATELY inside the real user tap (this is the only play() that counts)
-    musicManager.current = null;
+    localStorage.setItem('musicMuted', 'false');
     if (!musicMuted) {
         musicManager.play('dungeon');
     }
