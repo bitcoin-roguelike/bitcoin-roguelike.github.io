@@ -1542,6 +1542,8 @@ let wardenFlashStart = 0; // Timestamp for 500ms invert flash
 let wisps = []; // Array for active wisps (max 1)
 let wispPromptTimeout = null; // Timer for floor text prompt
 let deadWispCorpse = null; // {x, y, frameIndex, fadeStart: timestamp}
+let staticWispDangerSpoken = false;
+let wispIsSpeaking = false;
 let echoWardenPos = null; // Track warden position for draw
 let satoshiDrops = [];
 let runeDrops = []; // Array to store rune drops with positions and letters
@@ -2163,6 +2165,74 @@ function playWebAudioSound(soundObj) {
             soundObj.isPlaying = false;
                     }
     }, soundObj.duration);
+}
+
+// Ultra low-fi 8-bit / C64 style wisp voice + music ducking
+function wispSpeak(type) {
+    if (musicMuted || !audioContext || wispIsSpeaking) return;
+
+    wispIsSpeaking = true;
+    const originalVolume = musicManager.volume;
+
+    // Gently duck the music (feels like Navi!)
+    if (musicManager.current) {
+        musicManager.audios[musicManager.current].volume = originalVolume * 0.25;
+    }
+
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = 'square';
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    gain.gain.setValueAtTime(0.180, audioContext.currentTime); // 50% louder (0.09 × 2)
+
+    let duration = 0.38;
+    if (type === 'danger') {
+        const notes = [220, 277.18, 329.63, 440];
+        let t = audioContext.currentTime;
+        notes.forEach((f, i) => {
+            osc.frequency.setValueAtTime(f * (1 + i*0.05), t);
+            t += 0.09;
+        });
+    } else if (type === 'victory') {
+        duration = 0.85; // longer to fit the laugh
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.18, audioContext.currentTime);
+
+        // Laughing pattern: "plooiiihhhiihiihhiung" in pure 8-bit fairy voice
+        let t = audioContext.currentTime;
+
+        // ploooooiii (long rising glide)
+        osc.frequency.setValueAtTime(880, t);           // A5 start
+        osc.frequency.exponentialRampToValueAtTime(1760, t + 0.28); // fast rise to A6
+
+        // hhhiihiihhi (quick giggling ups and downs)
+        t += 0.30;
+        const giggle = [1760, 1396.96, 1760, 1396.96, 1760, 1567.98];
+        giggle.forEach((f, i) => {
+            osc.frequency.setValueAtTime(f, t + i*0.07);
+        });
+
+        // final "ung" (soft drop)
+        osc.frequency.exponentialRampToValueAtTime(880, t + 0.50);
+    }
+
+    // start/stop once – works for both danger and victory
+    osc.start();
+    osc.stop(audioContext.currentTime + duration);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+    // Restore music after the voice finishes
+    osc.onended = () => {
+        // Only restore music immediately for victory jingle
+        if (type === 'victory') {
+            if (musicManager.current && !musicMuted) {
+                musicManager.audios[musicManager.current].volume = originalVolume;
+            }
+        }
+        // For danger: music stays ducked until player heals above 8 HP
+        wispIsSpeaking = false;
+    };
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -3276,6 +3346,23 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
                 fadeStart: Date.now()
             };
         }
+    }
+
+    // Wisp low-fi danger voice (8 HP or less)
+    if (p.hp <= 8 && wisps.length > 0) {
+        staticWispDangerSpoken = false; // reset flag
+    }
+    if (p.hp <= 8 && wisps.length > 0 && !staticWispDangerSpoken) {
+        wispSpeak('danger');
+        staticWispDangerSpoken = true; // speak only once per low-HP event
+    }
+
+    // Restore music when healing above 8 HP (after danger voice ducked it)
+    if (p.hp > 8 && wisps.length > 0) {
+        if (musicManager.current && !musicMuted) {
+            musicManager.audios[musicManager.current].volume = musicManager.volume;
+        }
+        staticWispDangerSpoken = false; // reset so it can speak again next time
     }
 
     // Check if player is on blacksmith tile and can get diamond armor or diamond hand
@@ -5209,6 +5296,7 @@ updatePlayerState(); // Check HP and armor state after damage
 if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
     if (placeStairs()) {
         wave++;
+        if (wisps.length > 0) wispSpeak('victory'); // happy jingle
         waveActive = false;
         document.getElementById('wave').textContent = wave;
         logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
@@ -8132,6 +8220,7 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
     if (enemies.length === 0 && !exit) {
         if (placeStairs()) {
             wave++;
+            if (wisps.length > 0) wispSpeak('victory'); // happy jingle
             waveActive = false;
             document.getElementById('wave').textContent = wave;
             logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
