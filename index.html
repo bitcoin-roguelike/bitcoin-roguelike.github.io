@@ -2280,12 +2280,16 @@ function resetSplashScreen() {
 }
 
 document.getElementById('start-button').addEventListener('click', () => {
-    // 1. Unlock audio + start music IMMEDIATELY in the real user gesture
+    // ==== ONE AND ONLY PLACE WHERE AUDIO IS ALLOWED ON MOBILE ====
     if (audioContext.state === 'suspended') audioContext.resume();
-    musicManager.current = null;                // reset state
-    if (!musicMuted) musicManager.play('dungeon');
 
-    // 2. Visual stuff
+    // Start music IMMEDIATELY inside the real user tap (this is the only play() that counts)
+    musicManager.current = null;
+    if (!musicMuted) {
+        musicManager.play('dungeon');
+    }
+
+    // Visual reset
     currentTheme = 'dungeon';
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
@@ -2294,16 +2298,16 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
-    // 3. Everything else can be delayed – no audio here
-    preloadSounds();          // safe now
+    // Safe to do everything else now (no more audio calls!)
+    preloadSounds();
     fadeSplash();
 
+    // Everything that does NOT touch audio can be delayed
     setTimeout(() => {
         requestWakeLock();
         fetchTxs();
         lastUpdate = Date.now();
 
-        // leaderboard cache (no audio involved)
         if (!localStorage.getItem('leaderboardCached')) {
             fetchLeaderboard().then(() => {
                 localStorage.setItem('leaderboardCached', 'true');
