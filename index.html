@@ -1544,6 +1544,9 @@ let wispPromptTimeout = null; // Timer for floor text prompt
 let deadWispCorpse = null; // {x, y, frameIndex, fadeStart: timestamp}
 let staticWispDangerSpoken = false;
 let wispIsSpeaking = false;
+let spellPulseTimer = 0;        // ← add this line
+let spellHarassTimer = 0;   // ← add this line
+let spellPulseInterval = 0;     // ← and this one
 let echoWardenPos = null; // Track warden position for draw
 let satoshiDrops = [];
 let runeDrops = []; // Array to store rune drops with positions and letters
@@ -4177,6 +4180,11 @@ if (p.moving) {
 
         // Apply spell damage when moving onto dangerous areas
         applySpellDamage(p.x, p.y);
+
+        // Standing still on a dangerous tile still hurts!
+        if (dangerousAreas.some(area => area.x === p.x && area.y === p.y)) {
+            applySpellDamage(p.x, p.y);
+        }
         
         if (map[ny][nx] === 2) { 
             p.potions++; 
@@ -4407,7 +4415,13 @@ if (available.length > 0 && !p.curseActive) {
                     !portals.some(p => p.x === pos.x && p.y === pos.y)
                 );
                 if (adjacent.length > 0) {
-                    const portalPos = adjacent[Math.floor(Math.random() * adjacent.length)];
+                    // Filter out stairs tile
+                    const validAdjacent = adjacent.filter(pos => 
+                        !(exit && pos.x === exit.x && pos.y === exit.y)
+                    );
+                    const portalPos = validAdjacent.length > 0 
+                        ? validAdjacent[Math.floor(Math.random() * validAdjacent.length)]
+                        : adjacent[0]; // fallback if all blocked (extremely rare)
                     map[portalPos.y][portalPos.x] = 12; // Portal tile
                     portals.push({
                         x: portalPos.x,
@@ -5157,6 +5171,14 @@ updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
 
 function moveEnemies() {
     if (gameOver || splashActive) return;
+
+    // Unique monster spells damage player even when standing still
+    dangerousAreas.forEach(area => {
+        if (area.x === p.x && area.y === p.y) {
+            applySpellDamage(p.x, p.y);
+        }
+    });    
+
 enemies.forEach(e => {
     if (e.frozen && e.frozenTurns > 0) {
         e.frozenTurns--;
@@ -5325,7 +5347,11 @@ function updateWisps() {
             const randDir = dirs[Math.floor(Math.random() * dirs.length)];
             nx += randDir.dx; ny += randDir.dy;
         }
-        if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !(nx === p.x && ny === p.y)) {
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H && 
+            map[ny][nx] === 0 && 
+            !(nx === p.x && ny === p.y) &&
+            // Avoid all item/special tiles so player always sees drops
+            ![7,23].includes(map[ny][nx])) {  // only avoid Gnome (7) and Cursed Ring (23)
             const oldX = wisp.x, oldY = wisp.y;
             wisp.x = nx; wisp.y = ny;
             wisp.targetTileX = nx; wisp.targetTileY = ny;
@@ -8731,6 +8757,29 @@ if (gameOver) {
 }
     
 updateProjectiles();
+
+    // Unique monster harasses player who stands still inside its spell
+    const playerOnSpell = dangerousAreas.some(area => area.x === p.x && area.y === p.y);
+    if (playerOnSpell) {
+        if (spellHarassTimer === 0) {
+            spellHarassTimer = performance.now() + 2000 + Math.random() * 2000; // first harass in 2–4s
+        }
+        if (performance.now() >= spellHarassTimer) {
+            const caster = enemies.find(e => 
+                e.uniqueName && e.spell && dangerousAreas.some(a => a.spellType === e.spell && a.x === p.x && a.y === p.y)
+            );
+            if (caster) {
+                applySpellDamage(p.x, p.y); // harass = damage
+                logBattleEvent(`Floor ${floor} - ${caster.uniqueName} surges through the ${caster.spell}!`);
+                moveEnemies(); // normal AI moves everyone naturally
+                needsRedraw = true;
+            }
+            spellHarassTimer = performance.now() + 2000 + Math.random() * 2000; // next pulse every 2–4s
+        }
+    } else {
+        spellHarassTimer = 0; // reset when player leaves spell
+    }
+
 // Simple delta updates (run every frame for smooth movement)
 if (p.moving) {
     const elapsed = performance.now() - p.moveStartTime;
@@ -9623,6 +9672,9 @@ function exitScreensaver() {
     cancelAnimationFrame(screensaverLoopId);
     screensaverLoopId = null;
   }
+  if (screensaverCanvas) {
+    screensaverCtx.clearRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
+  }
   startTime = 0;
 }
 
@@ -9675,7 +9727,20 @@ function drawScreensaver(timestamp) {
 
   const alpha = alphaForTime(tSec);
   if (alpha <= 0) {
-    screensaverLoopId = requestAnimationFrame(drawScreensaver);
+    // Fully clean up during long invisible periods – prevents memory leak
+    screensaverCtx.fillStyle = 'black';
+    screensaverCtx.fillRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
+    if (screensaverLoopId) {
+      cancelAnimationFrame(screensaverLoopId);
+      screensaverLoopId = null;
+    }
+    // Restart the loop only after the hide duration ends
+    setTimeout(() => {
+      if (screensaverActive) {
+        startTime = performance.now(); // reset cycle timer
+        screensaverLoopId = requestAnimationFrame(drawScreensaver);
+      }
+    }, HIDE_DURATION * 1000);
     return;
   }
 
