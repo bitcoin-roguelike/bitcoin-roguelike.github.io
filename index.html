@@ -2284,7 +2284,6 @@ document.getElementById('start-button').addEventListener('click', () => {
     if (audioContext.state === 'suspended') audioContext.resume();
 
     // Start music IMMEDIATELY inside the real user tap (this is the only play() that counts)
-    localStorage.setItem('musicMuted', 'false');
     if (!musicMuted) {
         musicManager.play('dungeon');
     }
@@ -8801,15 +8800,17 @@ currentTheme = 'dungeon'; // Force default theme on game start
     
 if (splashActive) {
         preloadSounds();
-        // Ensure AudioContext is resumed for iOS
-        // ==== MOBILE AUDIO FIX – start music IMMEDIATELY in the real user gesture ====
-        if (audioContext.state === 'suspended') audioContext.resume();
-        musicManager.current = null;
-        if (!musicMuted) musicManager.play('dungeon');   // <-- THIS line unlocks iOS/Android
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
+
+        // === EXACT COPY OF WHAT MAKES THE MUTE BUTTON WORK ON MOBILE ===
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        if (!musicMuted) {
+            musicManager.current = null;   // this line + play below = mobile unlock
+            musicManager.play('dungeon');
+        }
+        // ==============================================================
+
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
