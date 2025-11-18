@@ -6790,12 +6790,16 @@ checkRunewords();
             addTerminalLineToContent('Soul Terminal ver 1.0');
             addTerminalLineToContent('');  
     // Display soul-related items
-    addTerminalLineToContent('--- Soul Inventory ---');
+    addTerminalLineToContent('---- Soul Inventory ----');
+    addTerminalLineToContent(`Soul Resonance: ${soulResonance}%`);
     addTerminalLineToContent(`Soul Stones: ${p.soulStones}`);
     addTerminalLineToContent(`Soul Shards: ${p.soulShards}`);
     addTerminalLineToContent(`Soul Orbs: ${p.soulOrbs}`);
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
     addTerminalLineToContent('');
+
+    // Display regular inventory items
+    addTerminalLineToContent('---- Regular Inventory ----');
     
 // Display resistances (elemental and armor)
 let resistanceText = '';
@@ -6817,8 +6821,6 @@ if (p.hasCursedRing) {
     addTerminalLineToContent('');
 }
     
-    // Display regular inventory items
-    addTerminalLineToContent('--- Regular Inventory ---');
     addTerminalLineToContent(`Health: ${p.hp}`);
     addTerminalLineToContent(`Potions: ${p.potions}`);
     addTerminalLineToContent(`Pickaxes: ${p.pickaxes}`);
@@ -6836,7 +6838,6 @@ if (p.hasCursedRing) {
         }
     }
     addTerminalLineToContent(`Runes: ${displayRunes}`);
-    addTerminalLineToContent(`Soul Resonance: ${soulResonance}%`);
     addTerminalLineToContent('');
 //    addTerminalLineToContent('--- Audio Settings ---');
 //    addTerminalLineToContent(`Sound Volume: ${(soundVolume * 100).toFixed(0)}%`);
