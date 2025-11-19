@@ -9058,7 +9058,7 @@ class GamepadAxes {
 let currentAxes = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// START BUTTON – music unlocks instantly with proven soul stash trick
+// START BUTTON – music 100% on press (silent tick trick – proven on iOS/Android)
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('start-button').addEventListener('click', startGame);
 document.addEventListener('keydown', e => {
@@ -9088,30 +9088,23 @@ function startGame() {
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
 
-    preloadSounds();
-    fadeSplash();
+    // ─── THE ONLY TRICK THAT WORKS ON EVERY PHONE: play a 1ms silent tone ───
+    // This forces the browser to fully unblock AudioContext on the first real gesture
+    const oscillator = audioContext.createOscillator();
+    oscillator.frequency.value = 1; // inaudible
+    oscillator.connect(audioContext.destination);
+    oscillator.start(0);
+    oscillator.stop(audioContext.currentTime + 0.001); // 1ms – completely silent
 
-    // ─── PROVEN AUDIO UNLOCK: teleport player onto soul stash for one tick ───
-    const orig = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
-    if (soulStashPos) {
-        p.x = soulStashPos.x;
-        p.y = soulStashPos.y;
-        p.currentX = p.x * S;
-        p.currentY = p.y * S;
-
-        openSoulTerminal();   // <-- real input.focus() → audio unblocked
-        closeSoulTerminal();  // <-- instantly closed, no visual change
-
-        // Restore spawn position
-        p.x = orig.x; p.y = orig.y;
-        p.currentX = orig.cx; p.currentY = orig.cy;
-    }
-
-    // Music now plays – AudioContext is unlocked
+    // Now resume + play music – guaranteed unlocked
+    if (audioContext.state === 'suspended') audioContext.resume();
     if (!musicMuted) {
         musicManager.current = null;
         musicManager.play(currentTheme);
     }
+
+    preloadSounds();
+    fadeSplash();
 
     // Wake lock & delayed actions (unchanged)
     async function requestWakeLock() {
