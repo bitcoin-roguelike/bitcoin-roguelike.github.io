@@ -9057,13 +9057,12 @@ class GamepadAxes {
 // Global instance for current gamepad axes
 let currentAxes = null;
 
-// Start game function for splash screen
 // ─────────────────────────────────────────────────────────────────────────────
-//  NEW START BUTTON HANDLER – fixes music on mobile (iOS/Android)
+// START BUTTON – works on desktop + mobile (music unlocks instantly)
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('start-button').addEventListener('click', startGame);
 
-// Also allow Enter key on the splash screen
+// Enter key on splash screen
 document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && splashActive) {
         e.preventDefault();
@@ -9071,20 +9070,7 @@ document.addEventListener('keydown', e => {
     }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  START BUTTON + ENTER KEY + TOUCH → fixes music on mobile
-// ─────────────────────────────────────────────────────────────────────────────
-document.getElementById('start-button').addEventListener('click', startGame);
-
-// Allow Enter key on splash screen
-document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && splashActive) {
-        e.preventDefault();
-        startGame();
-    }
-});
-
-// Also allow direct touch on the button (mobile)
+// Touch on mobile
 document.getElementById('start-button').addEventListener('touchstart', e => {
     e.preventDefault();
     startGame();
@@ -9093,7 +9079,7 @@ document.getElementById('start-button').addEventListener('touchstart', e => {
 function startGame() {
     if (!splashActive) return;
 
-    // 1. Force splash image & theme
+    // 1. Splash image + theme
     currentTheme = 'dungeon';
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
@@ -9106,75 +9092,70 @@ function startGame() {
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
 
-    // 3. AUDIO FIX – unblock Web Audio on iOS/Android exactly like soul terminal does
+    // 3. AUDIO UNLOCK – two methods (both fire inside the real click/touch)
+    //    a) Resume AudioContext + play music
     (async () => {
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
+        if (audioContext.state === 'suspended') await audioContext.resume();
         if (!musicMuted) {
             musicManager.current = null;
-            musicManager.play(currentTheme); // starts immediately inside the real user gesture
+            musicManager.play(currentTheme);
         }
     })();
 
-    // ─── Fake focus to unlock audio on mobile (completely invisible, no flash) ───
-    const fakeInput = document.createElement('input');
-    fakeInput.style = 'position:fixed; left:-100px; top:-100px; width:1px; height:1px; opacity:0; pointer-events:none; caret-color:transparent;';
-    fakeInput.tabIndex = -1;                   // prevent it from ever being tabbed to
-    fakeInput.autocomplete = 'off';            // no autocomplete dropdown
-    document.body.appendChild(fakeInput);
-    fakeInput.focus({ preventScroll: true });  // focus without any visual side-effect
-    // Remove immediately – no frame flash even on the slowest devices
-    requestAnimationFrame(() => fakeInput.remove());
+    //    b) Fake invisible input focus (exactly what soul terminal does)
+    const fake = document.createElement('input');
+    fake.style = 'position:fixed;left:-100px;top:-100px;width:1px;height:1px;opacity:0;pointer-events:none;caret-color:transparent;';
+    fake.tabIndex = -1;
+    document.body.appendChild(fake);
+    fake.focus({ preventScroll: true });
+    requestAnimationFrame(() => fake.remove());
 
-    // 5. Normal start sequence
+    //    c) Instant “step on soul stash” fallback – guarantees unlock even if the above fail
+    if (soulStashPos) {
+        const orig = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
+        p.x = soulStashPos.x;   p.y = soulStashPos.y;
+        p.currentX = p.x * S;   p.currentY = p.y * S;
+        openSoulTerminal();     // triggers the real input.focus()
+        closeSoulTerminal();    // instantly close again (no flash)
+        p.x = orig.x;   p.y = orig.y;
+        p.currentX = orig.cx;   p.currentY = orig.cy;
+    }
+
+    // 4. Normal startup sequence
     preloadSounds();
     fadeSplash();
 
-    // Wake lock helper (defined only once)
+    // Wake lock
     async function requestWakeLock() {
         try {
             if ('wakeLock' in navigator) {
                 wakeLock = await navigator.wakeLock.request('screen');
-                console.log('Wake lock activated');
                 wakeLock.addEventListener('release', () => console.log('Wake lock released'));
             }
-        } catch (err) {
-            console.error('Wake lock error:', err);
-        }
+        } catch (e) { console.error('Wake lock error:', e); }
     }
-    document.addEventListener('visibilitychange', async () => {
-        if (wakeLock !== null && document.visibilityState === 'visible') {
-            await requestWakeLock();
-        }
+    document.addEventListener('visibilitychange', () => {
+        if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
     });
 
-    // Final delayed actions (fetch, leaderboard cache, etc.)
     setTimeout(() => {
         if (!gameOver && !splashActive) {
             requestWakeLock();
             fetchTxs();
             lastUpdate = Date.now();
 
-            // Leaderboard cache (first run only)
+            // Leaderboard cache (first session only)
             if (!localStorage.getItem('leaderboardCached')) {
-                fetchLeaderboard().then(() => {
-                    localStorage.setItem('leaderboardCached', 'true');
-                    cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-                });
-            } else {
-                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+                fetchLeaderboard().then(() => localStorage.setItem('leaderboardCached', 'true'));
             }
+            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
         }
     }, 2000);
 
-    // Reset music volume (your original behaviour)
+    // Original volume reset
     if (musicManager.current) {
-        const cur = musicManager.audios[musicManager.current];
-        if (cur) {
-            cur.currentTime = 0;
-            cur.volume = 1;
-        }
+        const a = musicManager.audios[musicManager.current];
+        if (a) { a.currentTime = 0; a.volume = 1; }
     }
     setTimeout(() => setSoundVolume(soundVolume), 100);
 }
