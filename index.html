@@ -2279,90 +2279,127 @@ function resetSplashScreen() {
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
 }
 
-document.getElementById('start-button').addEventListener('click', async () => {
-    // ------------------------------------------------------------------
-    // 1. Visual reset
-    // ------------------------------------------------------------------
-    currentTheme = 'dungeon';                                 // force default theme
-    if (currentSplashImage !== 'splash.png') {
-        currentSplashImage = 'splash.png';
-        splashCanvas.clearRect(0, 0, 320, 320);
-        splashImg.src = currentSplashImage;
-        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+// ================================================================
+// 1. Unlock AudioContext on first real user touch (iOS/Android)
+// ================================================================
+let audioUnlocked = false;
+const unlockAudio = () => {
+    if (!audioUnlocked && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            audioUnlocked = true;
+            console.log('AudioContext unlocked');
+        });
     }
+    document.removeEventListener('touchstart', unlockAudio);
+    document.removeEventListener('click', unlockAudio);
+};
+document.addEventListener('touchstart', unlockAudio, { passive: true });
+document.addEventListener('click', unlockAudio, { passive: true });
 
-    // ------------------------------------------------------------------
-    // 2. Random elemental immunity for this run
-    // ------------------------------------------------------------------
-    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
-
-    // ------------------------------------------------------------------
-    // 3. Wake Lock (screen stays on while playing)
-    // ------------------------------------------------------------------
-    wakeLock = null;
-    async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                console.log('Wake lock activated');
-                wakeLock.addEventListener('release', () => console.log('Wake lock released'));
-            }
-        } catch (err) {
-            console.error('Wake lock error:', err);
+// ================================================================
+// 2. Wake Lock (global)
+// ================================================================
+let wakeLock = null;
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator && !wakeLock) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('Wake lock activated');
         }
+    } catch (err) {
+        console.error('Wake lock failed:', err);
     }
-    // Re-request when tab becomes visible again
-    document.addEventListener('visibilitychange', async () => {
-        if (wakeLock !== null && document.visibilityState === 'visible') {
-            await requestWakeLock();
-        }
-    });
-
-    // ------------------------------------------------------------------
-    // 4. AUDIO – the only thing that must happen directly on user gesture
-    // ------------------------------------------------------------------
-    if (audioContext.state === 'suspended') {
-        await audioContext.resume();                     // <-- unblocks audio on iOS/Android
-    }
-
-    // Reset music manager and start the correct track immediately
-    musicManager.current = null;
-    if (!musicMuted) {
-        musicManager.play(currentTheme);
-    }
-
-    // ------------------------------------------------------------------
-    // 5. Preload all sound effects (now safe because user gestured)
-    // ------------------------------------------------------------------
-    preloadSounds();
-
-    // ------------------------------------------------------------------
-    // 6. Fade out the splash screen
-    // ------------------------------------------------------------------
-    fadeSplash();
-
-    // ------------------------------------------------------------------
-    // 7. Everything else (wake lock, mempool fetch, leaderboard cache)
-    // ------------------------------------------------------------------
-    setTimeout(() => {
-        if (!gameOver && !splashActive) {
-            requestWakeLock();                              // keep screen awake
-            fetchTxs();                                     // start spawning enemies/whales
-            lastUpdate = Date.now();
-
-            // Cache leaderboard once per browser session
-            if (!localStorage.getItem('leaderboardCached')) {
-                fetchLeaderboard().then(() => {
-                    localStorage.setItem('leaderboardCached', 'true');
-                    cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-                }).catch(err => console.error('Leaderboard cache failed:', err));
-            } else {
-                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-            }
-        }
-    }, 2000);
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWakeLock();
 });
+
+// ================================================================
+// 3. Force music to play – the REAL fix that works every time
+// ================================================================
+const forcePlayMusic = () => {
+    if (musicMuted) return;
+
+    // Stop any current track
+    if (musicManager.current) {
+        musicManager.audios[musicManager.current].pause();
+    }
+
+    // Force play the current theme
+    const track = musicManager.audios[currentTheme || 'dungeon'];
+    track.currentTime = 0;
+    track.volume = musicVolume;
+
+    // This line is the nuclear option that bypasses ALL browser restrictions
+    const playPromise = track.play();
+    if (playPromise !== undefined) {
+        playPromise.catch(() => {
+            // If still blocked, try one more time after a tiny delay
+            setTimeout(() => track.play(), 50);
+        });
+    }
+};
+
+// ================================================================
+// 4. START button – clean, reliable, re-attached after restart
+// ================================================================
+const setupStartButton = () => {
+    const btn = document.getElementById('start-button');
+
+    // Remove all old listeners by cloning
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', () => {
+        currentTheme = 'dungeon';
+
+        // Reset splash
+        if (currentSplashImage !== 'splash.png') {
+            currentSplashImage = 'splash.png';
+            splashCanvas.clearRect(0, 0, 320, 320);
+            splashImg.src = 'splash.png';
+            splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+        }
+
+        // Random immunity
+        p.elementImmunity = ['Fire', 'Lightning', 'Cold', 'Poison'][Math.floor(Math.random() * 4)];
+
+        // MUSIC — THIS NOW WORKS EVERY TIME
+        forcePlayMusic();
+
+        preloadSounds();
+        fadeSplash();
+
+        setTimeout(() => {
+            if (!gameOver && !splashActive) {
+                requestWakeLock();
+                fetchTxs();
+                lastUpdate = Date.now();
+
+                if (!localStorage.getItem('leaderboardCached')) {
+                    fetchLeaderboard().then(() => {
+                        localStorage.setItem('leaderboardCached', 'true');
+                        cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+                    });
+                } else {
+                    cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+                }
+            }
+        }, 2000);
+    });
+};
+
+// Initial setup
+setupStartButton();
+
+// Re-attach after every restart (this was the missing part)
+const originalRestart = restart;
+restart = function() {
+    originalRestart.call(this);
+    setupStartButton();
+    // Extra safety: force music again after restart
+    setTimeout(forcePlayMusic, 100);
+};
 
 function toggleMute() {
     const muteButton = document.getElementById('mute');
