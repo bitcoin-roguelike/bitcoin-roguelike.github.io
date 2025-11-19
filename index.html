@@ -997,76 +997,6 @@ function showInfo() {
     }, 5000); // Auto-hide after 5 seconds
 }
 
-// ————————————————————————————————————————————————————————————————
-// 1. GLOBAL Wake Lock – never undefined
-// ————————————————————————————————————————————————————————————————
-let wakeLock = null;
-async function requestWakeLock() {
-    try {
-        if ('wakeLock' in navigator && !wakeLock) {
-            wakeLock = await navigator.wakeLock.request('screen');
-            console.log('Wake lock activated');
-        }
-    } catch (err) {
-        console.error('Wake lock error:', err);
-    }
-}
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !wakeLock) requestWakeLock();
-});
-
-// ————————————————————————————————————————————————————————————————
-// 2. ONE AND ONLY START BUTTON – works every time, forever
-// ————————————————————————————————————————————————————————————————
-document.getElementById('start-button').addEventListener('click', () => {
-    currentTheme = 'dungeon';
-
-    // splash reset
-    currentSplashImage = 'splash.png';
-    splashCanvas.clearRect(0, 0, 320, 320);
-    splashImg.src = 'splash.png';
-    splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-
-    // random immunity
-    p.elementImmunity = ['Fire','Lightning','Cold','Poison'][Math.floor(Math.random()*4)];
-
-    // MUSIC — direct play inside real click = works 100%
-    if (!musicMuted) {
-        const track = musicManager.audios.dungeon;
-        track.currentTime = 0;
-        track.play();   // <-- this is the only line that matters
-    }
-
-    preloadSounds();
-    fadeSplash();
-
-    setTimeout(() => {
-        if (!gameOver && !splashActive) {
-            requestWakeLock();
-            fetchTxs();
-            lastUpdate = Date.now();
-
-            if (!localStorage.getItem('leaderboardCached')) {
-                fetchLeaderboard().then(() => localStorage.setItem('leaderboardCached', 'true'));
-            }
-        }
-    }, 2000);
-});
-
-// ————————————————————————————————————————————————————————————————
-// 3. RESTART – just show splash again, the listener above never dies
-// ————————————————————————————————————————————————————————————————
-const originalRestart = restart;
-restart = function () {
-    originalRestart.call(this);   // your old restart code
-
-    wakeLock = null;              // allow new wake lock
-
-    // Show splash again – the listener above is still attached!
-    document.getElementById('splash-screen').style.display = 'block';
-    document.getElementById('game-over').style.display = 'none';
-};
-
 function populateNameList() {
     const datalist = document.getElementById('name-list');
     datalist.innerHTML = ''; // Clear existing options
@@ -2348,6 +2278,119 @@ function resetSplashScreen() {
     splashImg.src = currentSplashImage;
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
 }
+
+document.getElementById('start-button').addEventListener('click', () => {
+    currentTheme = 'dungeon'; // Force default theme on game start
+    // Switch back to splash.png when starting
+    if (currentSplashImage !== 'splash.png') {
+        currentSplashImage = 'splash.png';
+        splashCanvas.clearRect(0, 0, 320, 320);
+        splashImg.src = currentSplashImage;
+        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    }
+
+    // Assign random elemental immunity
+    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+
+wakeLock = null;
+
+// Function to request wake lock
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Wake lock activated');
+      wakeLock.addEventListener('release', () => {
+        console.log('Wake lock released');
+      });
+    } else {
+      console.warn('Wake Lock API not supported in this browser. Adjust OS power settings manually.');
+      alert('Wake Lock not supported. To prevent sleep, disable screen timeout in your OS settings or play a silent audio loop.');
+    }
+  } catch (err) {
+    console.error('Wake lock error:', err);
+  }
+}
+
+// Re-request wake lock if visibility changes (e.g., tab switch)
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+});
+
+if (splashActive) {
+        preloadSounds();
+        // Ensure AudioContext is resumed for iOS
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                // Reset music manager state and play music after AudioContext is resumed
+                musicManager.current = null;
+                if (!musicMuted) {
+                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
+                }
+            }).catch(e => console.error('Failed to resume AudioContext:', e));
+        } else {
+            // Reset music manager state on restart
+            musicManager.current = null;
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play music if AudioContext is already running
+            }
+        }
+            // Fix: Properly reset MusicManager state and ensure audio context is ready
+    try {
+        if (audioContext && audioContext.state === 'suspended') {
+        musicManager.current = null;
+            audioContext.resume();
+        }
+
+        musicManager.mute(musicMuted); // Ensure proper mute state
+    } catch (e) {
+        console.warn('Error resetting music manager:', e);
+    }
+    
+// Set music volume to 0 when restarting
+setSoundVolume(0);
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
+fadeSplash();
+setTimeout(() => {
+    if (!gameOver && !splashActive) {
+        requestWakeLock();  // ← Add this to request wake lock on game start
+        fetchTxs();
+        lastUpdate = Date.now();
+        console.log('Initial fetchTxs triggered after splash, wave=', wave);
+        
+        // First-time leaderboard cache (only once per browser session)
+        if (!localStorage.getItem('leaderboardCached')) {
+            fetchLeaderboard().then(() => {
+                localStorage.setItem('leaderboardCached', 'true');
+                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+                console.log('Leaderboard cached on first start');
+            }).catch(err => console.error('Cache fetch failed:', err));
+        } else {
+            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+        }
+    }
+}, 2000);
+    }
+    
+    // Set music volume to max when starting
+if (musicManager.current) {
+    const currentAudio = musicManager.audios[musicManager.current];
+    if (currentAudio) {
+        currentAudio.currentTime = 0;
+        currentAudio.volume = 1;
+    }
+}
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
+});
 
 function toggleMute() {
     const muteButton = document.getElementById('mute');
@@ -4198,7 +4241,6 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;                // ← reset diamonds
                         updatePlayerState();          // ← update display
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
                     }
                 }
             }
@@ -4221,7 +4263,6 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
                     }
                 }
             }
@@ -4246,7 +4287,6 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-                        gameOver = true;
                     }
                 }
             }
@@ -5256,6 +5296,7 @@ if (wisps.length > 0) {
 }
                 }
 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
+
 playWebAudioSound(sounds.hit);
 if (p.hp <= 0 && p.immortal) {
     p.hp = 1;
@@ -5265,7 +5306,6 @@ if (p.hp <= 0 && p.immortal) {
     diamonds = 0;                // reset diamonds
     updatePlayerState();          // update inventory
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-    gameOver = true;
 }
 
 updatePlayerState(); // Check HP and armor state after damage
@@ -5431,13 +5471,10 @@ function applyWispAttack(wisp, target) {
 
 // Function to apply spell damage to player
 function applySpellDamage(x, y) {
-    // Check if player is standing on a dangerous area
     const dangerousArea = dangerousAreas.find(area => area.x === x && area.y === y);
-    
     if (dangerousArea) {
         let damage = 0;
         let damageType = "";
-        
         switch (dangerousArea.spellType) {
             case SPELL_TYPES.FIRE_WALL:
                 damage = 2;
@@ -5456,29 +5493,14 @@ function applySpellDamage(x, y) {
                 damageType = "Poison";
                 break;
         }
-        
-        // Check if player has immunity to this spell type
         if (p.elementImmunity === damageType || p.armorImmunity === damageType) {
             logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
-            return; // Skip damage application
+        } else {
+            p.hp -= damage;
+            logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
+            playWebAudioSound(sounds.hit);
         }
-        
-        p.hp -= damage;
-        logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
-        playWebAudioSound(sounds.hit);
-        
-        if (p.hp <= 0 && p.immortal) {
-            p.hp = 1;
-            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        } else if (p.hp <= 0) {
-            p.hp = 0;
-            diamonds = 0;                // reset diamonds
-            updatePlayerState();          // update inventory
-            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-            gameOver = true;
-        }
-        
-        updatePlayerState();
+        updatePlayerState(); // Centralized: surge if eligible, no early gameOver
     }
 }
 
@@ -7712,21 +7734,13 @@ waveActive = false;
             audioContext.resume();
         }
 
-        musicManager.mute(musicMuted); // Ensure proper mute state from localStorage
         // Set initial volumes
         setSoundVolume(soundVolume);
         setMusicVolume(musicVolume);
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
-    
-    // Set music volume to 0 when restarting
-    if (musicManager.current) {
-        const currentAudio = musicManager.audios[musicManager.current];
-        if (currentAudio) {
-            currentAudio.volume = 0;
-        }
-    }
+
 
     /* ------------------------------------------------------------------
        3. Reset UI elements
@@ -8646,6 +8660,8 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
 }
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
+
+// (deleted: moved to updatePlayerState() for centralized death check)
     document.getElementById('pickaxes').textContent = p.pickaxes;
     
 // Consolidated unique monster name display (prevents flicker)
@@ -8661,7 +8677,6 @@ if (visibleUniques.length > 0) {
         isHarbinger = true;
     }
 }
-
 const floorIndicator = document.getElementById('floor-indicator');
 const cachedText = window.currentFloorText || `Floor ${floor}`;
 const debounceMs = isHarbinger ? 2000 : 1000; // Longer for harbinger
@@ -8819,20 +8834,6 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
         draw();
     }
     
-// Final death check (after all updates)
-if (p.hp <= 0 && !gameOver) {
-    if (p.immortal) {
-        p.hp = 1;
-        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-    } else {
-        p.hp = 0;
-        diamonds = 0;                // reset diamonds
-        updatePlayerState();          // update inventory
-        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-        gameOver = true;
-    }
-}
-
     // Revert to unthrottled RAF for smooth interpolation; draw throttling is internal
     requestAnimationFrame(gameLoop);
 }
@@ -8881,20 +8882,6 @@ if (splashActive) {
                 musicManager.play(currentTheme); // Play music if AudioContext is already running
             }
         }
-            // Fix: Properly reset MusicManager state and ensure audio context is ready
-    try {
-        if (audioContext && audioContext.state === 'suspended') {
-        musicManager.current = null;
-            audioContext.resume();
-        }
-
-        musicManager.mute(musicMuted); // Ensure proper mute state
-    } catch (e) {
-        console.warn('Error resetting music manager:', e);
-    }
-    
-// Set music volume to 0 when restarting
-setSoundVolume(0);
 // Restore sound volume after preloading
 setTimeout(() => {
     setSoundVolume(soundVolume);
@@ -9290,14 +9277,6 @@ function startGame() {
         }
     }, 2000); // Match original start-button delay
 }
-
-// Add touchstart for mobile responsiveness
-document.getElementById('start-button').addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Prevent scroll/zoom
-    // Trigger the same logic as click
-    // (copy the entire click handler body here if needed, but since it's the same, just call startGame() if defined)
-    startGame();
-}, { passive: false });
 
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
