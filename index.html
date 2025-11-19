@@ -2289,10 +2289,6 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
-    // Assign random elemental immunity
-    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
-
 wakeLock = null;
 
 // Function to request wake lock
@@ -2356,26 +2352,15 @@ setSoundVolume(0);
 setTimeout(() => {
     setSoundVolume(soundVolume);
 }, 100);
-fadeSplash();
-setTimeout(() => {
-    if (!gameOver && !splashActive) {
-        requestWakeLock();  // ← Add this to request wake lock on game start
-        fetchTxs();
-        lastUpdate = Date.now();
-        console.log('Initial fetchTxs triggered after splash, wave=', wave);
-        
-        // First-time leaderboard cache (only once per browser session)
-        if (!localStorage.getItem('leaderboardCached')) {
-            fetchLeaderboard().then(() => {
-                localStorage.setItem('leaderboardCached', 'true');
-                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-                console.log('Leaderboard cached on first start');
-            }).catch(err => console.error('Cache fetch failed:', err));
-        } else {
-            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-        }
-    }
-}, 2000);
+        fadeSplash();
+        setTimeout(() => {
+            if (!gameOver && !splashActive) {
+                requestWakeLock();  // ← Add this to request wake lock on game start
+                fetchTxs();
+                lastUpdate = Date.now();
+                console.log('Initial fetchTxs triggered after splash, wave=', wave);
+            }
+        }, 2000);
     }
     
     // Set music volume to max when starting
@@ -8908,6 +8893,40 @@ currentTheme = 'dungeon'; // Force default theme on game start
     
 if (splashActive) {
         preloadSounds();
+        // Ensure AudioContext is resumed for iOS
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                // Reset music manager state and play music after AudioContext is resumed
+                musicManager.current = null;
+                if (!musicMuted) {
+                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
+                }
+            }).catch(e => console.error('Failed to resume AudioContext:', e));
+        } else {
+            // Reset music manager state on restart
+            musicManager.current = null;
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play music if AudioContext is already running
+            }
+        }
+            // Fix: Properly reset MusicManager state and ensure audio context is ready
+    try {
+        if (audioContext && audioContext.state === 'suspended') {
+        musicManager.current = null;
+            audioContext.resume();
+        }
+
+        musicManager.mute(musicMuted); // Ensure proper mute state
+    } catch (e) {
+        console.warn('Error resetting music manager:', e);
+    }
+    
+// Set music volume to 0 when restarting
+setSoundVolume(0);
+// Restore sound volume after preloading
+setTimeout(() => {
+    setSoundVolume(soundVolume);
+}, 100);
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -9254,6 +9273,7 @@ function startGame() {
         audioContext.resume().then(() => {
         }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
+    preloadSounds(); // Preload sounds after user interaction
     
     currentTheme = 'dungeon'; // Force default theme on game start
     // Set mute state based on saved preference
