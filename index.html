@@ -8908,40 +8908,6 @@ currentTheme = 'dungeon'; // Force default theme on game start
     
 if (splashActive) {
         preloadSounds();
-        // Ensure AudioContext is resumed for iOS
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                // Reset music manager state and play music after AudioContext is resumed
-                musicManager.current = null;
-                if (!musicMuted) {
-                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
-                }
-            }).catch(e => console.error('Failed to resume AudioContext:', e));
-        } else {
-            // Reset music manager state on restart
-            musicManager.current = null;
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play music if AudioContext is already running
-            }
-        }
-            // Fix: Properly reset MusicManager state and ensure audio context is ready
-    try {
-        if (audioContext && audioContext.state === 'suspended') {
-        musicManager.current = null;
-            audioContext.resume();
-        }
-
-        musicManager.mute(musicMuted); // Ensure proper mute state
-    } catch (e) {
-        console.warn('Error resetting music manager:', e);
-    }
-    
-// Set music volume to 0 when restarting
-setSoundVolume(0);
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
         fadeSplash();
         setTimeout(() => {
             if (!gameOver && !splashActive) {
@@ -9288,7 +9254,6 @@ function startGame() {
         audioContext.resume().then(() => {
         }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
-    preloadSounds(); // Preload sounds after user interaction
     
     currentTheme = 'dungeon'; // Force default theme on game start
     // Set mute state based on saved preference
