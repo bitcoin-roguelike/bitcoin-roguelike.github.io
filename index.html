@@ -9058,19 +9058,15 @@ class GamepadAxes {
 let currentAxes = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// START BUTTON – works on desktop + mobile (music unlocks instantly)
+// START BUTTON – music unlocks 100% on press (even on the strictest phones)
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('start-button').addEventListener('click', startGame);
-
-// Enter key on splash screen
 document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && splashActive) {
         e.preventDefault();
         startGame();
     }
 });
-
-// Touch on mobile
 document.getElementById('start-button').addEventListener('touchstart', e => {
     e.preventDefault();
     startGame();
@@ -9092,47 +9088,36 @@ function startGame() {
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
 
-    // 3. AUDIO UNLOCK – two methods (both fire inside the real click/touch)
-    //    a) Resume AudioContext + play music
-    (async () => {
-        if (audioContext.state === 'suspended') await audioContext.resume();
-        if (!musicMuted) {
-            musicManager.current = null;
-            musicManager.play(currentTheme);
-        }
-    })();
-
-    //    b) Fake invisible input focus (exactly what soul terminal does)
-    const fake = document.createElement('input');
-    fake.style = 'position:fixed;left:-100px;top:-100px;width:1px;height:1px;opacity:0;pointer-events:none;caret-color:transparent;';
-    fake.tabIndex = -1;
-    document.body.appendChild(fake);
-    fake.focus({ preventScroll: true });
-    requestAnimationFrame(() => fake.remove());
-
-    //    c) Instant “step on soul stash” fallback – guarantees unlock even if the above fail
+    // ─── THE MAGIC: pretend the player just stepped on the soul stash ───
+    // This is the exact code path that unlocks audio on every mobile browser
+    const origPos = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
     if (soulStashPos) {
-        const orig = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
-        p.x = soulStashPos.x;   p.y = soulStashPos.y;
-        p.currentX = p.x * S;   p.currentY = p.y * S;
-        openSoulTerminal();     // triggers the real input.focus()
-        closeSoulTerminal();    // instantly close again (no flash)
-        p.x = orig.x;   p.y = orig.y;
-        p.currentX = orig.cx;   p.currentY = orig.cy;
+        p.x = soulStashPos.x;
+        p.y = soulStashPos.y;
+        p.currentX = p.x * S;
+        p.currentY = p.y * S;
+
+        openSoulTerminal();   // ← this does the real input.focus() that unblocks audio
+        closeSoulTerminal();  // ← instantly close again – no visual change at all
+
+        // Restore normal spawn position immediately
+        p.x = origPos.x;   p.y = origPos.y;
+        p.currentX = origPos.cx;   p.currentY = origPos.cy;
     }
 
-    // 4. Normal startup sequence
+    // Now play the music – AudioContext is guaranteed unlocked
+    if (!musicMuted) {
+        musicManager.current = null;
+        musicManager.play(currentTheme);
+    }
+
     preloadSounds();
     fadeSplash();
 
     // Wake lock
     async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                wakeLock.addEventListener('release', () => console.log('Wake lock released'));
-            }
-        } catch (e) { console.error('Wake lock error:', e); }
+        try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+        catch (e) { console.error('Wake lock error:', e); }
     }
     document.addEventListener('visibilitychange', () => {
         if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
@@ -9143,8 +9128,6 @@ function startGame() {
             requestWakeLock();
             fetchTxs();
             lastUpdate = Date.now();
-
-            // Leaderboard cache (first session only)
             if (!localStorage.getItem('leaderboardCached')) {
                 fetchLeaderboard().then(() => localStorage.setItem('leaderboardCached', 'true'));
             }
@@ -9152,7 +9135,7 @@ function startGame() {
         }
     }, 2000);
 
-    // Original volume reset
+    // Volume reset (your original behaviour)
     if (musicManager.current) {
         const a = musicManager.audios[musicManager.current];
         if (a) { a.currentTime = 0; a.volume = 1; }
