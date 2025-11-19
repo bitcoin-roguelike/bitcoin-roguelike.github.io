@@ -204,9 +204,6 @@
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE and Edge */
 }
-#battle-log textarea:focus {
-    outline: none !important;
-}
 #inventory { 
     position: absolute;
     top: 10px;
@@ -806,11 +803,10 @@ button:hover {
     <span id="diamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
     <span id="perfectlyCutDiamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
     <span id="runes" style="display: none;">None</span><br> <!-- moved to soul terminal -->
-    <span id="resonance" style="display: none;">0%</span><br>
 </div>
         </div>
 <div id="battle-log">
-    <textarea id="battle-events" readonly tabindex="-1">Battle Log:</textarea>
+    <textarea id="battle-events" readonly>Battle Log:</textarea>
 </div>
 
 <!-- Soul Terminal Overlay -->
@@ -1423,9 +1419,6 @@ let lastDrawTime = null;
 let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
-let uniqueMonsterRevealActive = false;
-let uniqueMonsterRevealStartTime = 0;
-let uniqueMonsterRevealedThisFloor = false; // New: Per-floor limit
 let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
@@ -1536,18 +1529,6 @@ let cachedLeaderboard = null; // Store fetched leaderboard
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-let soulResonance = 0; // 0-100%, +1 per floor, maxed triggers resurrection
-let resonanceTriggeredThisRun = false; // One-time per run
-let wardenFlashStart = 0; // Timestamp for 500ms invert flash
-let wisps = []; // Array for active wisps (max 1)
-let wispPromptTimeout = null; // Timer for floor text prompt
-let deadWispCorpse = null; // {x, y, frameIndex, fadeStart: timestamp}
-let staticWispDangerSpoken = false;
-let wispIsSpeaking = false;
-let spellPulseTimer = 0;        // ← add this line
-let spellHarassTimer = 0;   // ← add this line
-let spellPulseInterval = 0;     // ← and this one
-let echoWardenPos = null; // Track warden position for draw
 let satoshiDrops = [];
 let runeDrops = []; // Array to store rune drops with positions and letters
 let scrollDrops = []; // Array to store scroll drops with positions
@@ -1609,14 +1590,6 @@ const types = [
     new EnemyType('Dolphin', 1, 10, 4, 3, 2),
     new EnemyType('Shark', 10, 100, 5, 5, 2),
     new EnemyType('Whale', 100, Infinity, 6, 4, 2)
-];
-
-// Wisp types (companion spells)
-const WISP_TYPES = [
-    { name: 'cold', damage: 0, range: 3, aoe: 'medium', effect: 'freeze' }, // Freeze AOE, no dmg
-    { name: 'fire', damage: 3, range: 2, aoe: 'single', effect: 'damage' }, // Strong single
-    { name: 'chain', damage: 1, range: 3, aoe: 'large', effect: 'chain' }, // Weak large AOE
-    { name: 'earth', damage: 2, range: 2, aoe: 'small', effect: 'quake' } // Strong small AOE
 ];
     // Add Cursed Trader as special enemy (not in types for tx spawning)
     const cursedTraderType = new EnemyType('Cursed Trader', 0, 0, 12, 2, 1); // Custom: 12 HP, 2 DMG, 1 move
@@ -1795,26 +1768,7 @@ types.forEach(t => {
 	assets.soul_stone.src = 'soul_stone.png';
 	assets.hooded_heirloom.src = 'hooded_heirloom.png';
 assets.cursed_ring = new Image(),
-assets.cursed_ring.src = 'cursed_ring.png';
-assets.echo_warden = new Image();
-assets.echo_warden.src = 'ἀρχάγγελος.png';
-assets.echo_warden.onerror = () => console.error('Failed to load echo_warden.png');
-// Unique monster reveal image
-assets.unique_monster_img = new Image();
-assets.unique_monster_img.src = 'unique_monster.png';
-
-// Wisp animation frames
-assets.wispFrames = [
-    new Image(), new Image(), new Image()
-];
-assets.wispFrames[0].src = 'wisp1.png';
-assets.wispFrames[1].src = 'wisp2.png';
-assets.wispFrames[2].src = 'wisp3.png';
-assets.wispFrames.forEach((frame, i) => {
-    frame.onerror = () => console.error(`Failed to load wisp frame ${i}: wisp${i+1}.png`);
-});
-
-assets.unique_monster_img.onerror = () => console.error('Failed to load unique_monster.png');	
+assets.cursed_ring.src = 'cursed_ring.png';	
 
 // Enemy background circles (16x16px animated)
 assets.enemyBg = [new Image(), new Image(), new Image()];
@@ -2168,74 +2122,6 @@ function playWebAudioSound(soundObj) {
             soundObj.isPlaying = false;
                     }
     }, soundObj.duration);
-}
-
-// Ultra low-fi 8-bit / C64 style wisp voice + music ducking
-function wispSpeak(type) {
-    if (musicMuted || !audioContext || wispIsSpeaking) return;
-
-    wispIsSpeaking = true;
-    const originalVolume = musicManager.volume;
-
-    // Gently duck the music (feels like Navi!)
-    if (musicManager.current) {
-        musicManager.audios[musicManager.current].volume = originalVolume * 0.25;
-    }
-
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    osc.type = 'square';
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-    gain.gain.setValueAtTime(0.180, audioContext.currentTime); // 50% louder (0.09 × 2)
-
-    let duration = 0.38;
-    if (type === 'danger') {
-        const notes = [220, 277.18, 329.63, 440];
-        let t = audioContext.currentTime;
-        notes.forEach((f, i) => {
-            osc.frequency.setValueAtTime(f * (1 + i*0.05), t);
-            t += 0.09;
-        });
-    } else if (type === 'victory') {
-        duration = 0.85; // longer to fit the laugh
-        osc.type = 'sine';
-        gain.gain.setValueAtTime(0.18, audioContext.currentTime);
-
-        // Laughing pattern: "plooiiihhhiihiihhiung" in pure 8-bit fairy voice
-        let t = audioContext.currentTime;
-
-        // ploooooiii (long rising glide)
-        osc.frequency.setValueAtTime(880, t);           // A5 start
-        osc.frequency.exponentialRampToValueAtTime(1760, t + 0.28); // fast rise to A6
-
-        // hhhiihiihhi (quick giggling ups and downs)
-        t += 0.30;
-        const giggle = [1760, 1396.96, 1760, 1396.96, 1760, 1567.98];
-        giggle.forEach((f, i) => {
-            osc.frequency.setValueAtTime(f, t + i*0.07);
-        });
-
-        // final "ung" (soft drop)
-        osc.frequency.exponentialRampToValueAtTime(880, t + 0.50);
-    }
-
-    // start/stop once – works for both danger and victory
-    osc.start();
-    osc.stop(audioContext.currentTime + duration);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-    // Restore music after the voice finishes
-    osc.onended = () => {
-        // Only restore music immediately for victory jingle
-        if (type === 'victory') {
-            if (musicManager.current && !musicMuted) {
-                musicManager.audios[musicManager.current].volume = originalVolume;
-            }
-        }
-        // For danger: music stays ducked until player heals above 8 HP
-        wispIsSpeaking = false;
-    };
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -2607,7 +2493,6 @@ function initMap() {
             whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
             initialSpawnDoneThisFloor = false;
             initialWaveSpawned = false;
-	    uniqueMonsterRevealedThisFloor = false; // Reset animation limit for new floor
             map = Array(H).fill().map(() => Array(W).fill(1));
             fogMap = Array(H).fill().map(() => Array(W).fill(0));
             rooms = [];
@@ -2621,13 +2506,6 @@ function initMap() {
             blacksmithPos = null;
             waypointPos = null;
             exit = null; // Prevent stairs and related enemy spawning
-            echoWardenPos = null; // Clear warden on new floor
-            wardenFlashStart = 0; // Clear flash on new floor
-                for (let yy = 0; yy < H; yy++) {
-                    for (let xx = 0; xx < W; xx++) {
-                        if (map[yy][xx] === 24) map[yy][xx] = 0; // Clear warden tile
-                    }
-                }
 
             dpadButtons = document.querySelectorAll('#dpad button');
             actionsButtons = document.querySelectorAll('#actions button');
@@ -3299,7 +3177,6 @@ needsRedraw = true;
 
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
-if (gameOver) return; // Prevent spam calls post-death
 if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
     p.hasDiamondArmor = false;
     p.hasArmor = true;
@@ -3333,41 +3210,6 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
         logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
     }
 
-    // Sync wisp HP to half player HP and check for death (all damage types)
-    if (wisps.length > 0) {
-        const wisp = wisps[0];
-        wisp.hp = Math.floor(p.hp / 2);
-        wisp.maxHP = Math.floor(p.maxHP / 2);
-        if (wisp.hp <= 0) {
-            wisps = [];
-            logBattleEvent(`Floor ${floor} - Wisp perishes!`);
-            sounds.gameover.currentTime = 0;
-            sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
-            deadWispCorpse = {
-                x: wisp.x, y: wisp.y,
-                frameIndex: wisp.anim.frameIndex,
-                fadeStart: Date.now()
-            };
-        }
-    }
-
-    // Wisp low-fi danger voice (8 HP or less)
-    if (p.hp <= 8 && wisps.length > 0) {
-        staticWispDangerSpoken = false; // reset flag
-    }
-    if (p.hp <= 8 && wisps.length > 0 && !staticWispDangerSpoken) {
-        wispSpeak('danger');
-        staticWispDangerSpoken = true; // speak only once per low-HP event
-    }
-
-    // Restore music when healing above 8 HP (after danger voice ducked it)
-    if (p.hp > 8 && wisps.length > 0) {
-        if (musicManager.current && !musicMuted) {
-            musicManager.audios[musicManager.current].volume = musicManager.volume;
-        }
-        staticWispDangerSpoken = false; // reset so it can speak again next time
-    }
-
     // Check if player is on blacksmith tile and can get diamond armor or diamond hand
     if (map[p.y][p.x] === 15 && p.perfectlyCutDiamonds > 0) {
         if (!p.hasDiamondArmor) {
@@ -3396,7 +3238,6 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('diamonds').textContent = diamonds;
     document.getElementById('perfectlyCutDiamonds').textContent = p.perfectlyCutDiamonds;
-    document.getElementById('resonance').textContent = `${soulResonance}%`;
     
     // Add soul items to display
     if (p.inSoulTerminal) {
@@ -3422,59 +3263,6 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
         const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
         p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
         logBattleEvent(`Floor ${floor} - Cursed Ring shattered! HP unchanged at ${p.hp}/${p.maxHP}. Gained ${p.elementImmunity} immunity.`);
-    }
-
-    // Centralized death check (immortal + resonance + normal)
-    if (p.hp <= 0 && !gameOver) {
-        if (p.immortal) {
-            p.hp = 1;
-            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        } else if (soulResonance >= 100 && !resonanceTriggeredThisRun) {
-            // Resonance Surge: One-time resurrection
-            resonanceTriggeredThisRun = true;
-            soulResonance = 0; // Consume meter
-            p.hp = 100;
-            p.hasArmor = true; // Leather armor
-            p.maxHP = 36; // Leather max
-            p.soulStormCharges = 256;
-            // Clear all enemies (with drops, like RIP)
-            enemies.forEach(enemy => {
-                kills[enemy.type.name]++;
-                if (enemy.type.name !== 'Cursed Trader' && !enemy.uniqueName) {
-                    // Drop sats (simplified)
-                    if (map[enemy.y][enemy.x] === 0) {
-                        map[enemy.y][enemy.x] = 3;
-                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                    }
-                }
-                handleUniqueMonsterReward(enemy); // Handle uniques
-            });
-            enemies = []; // Wipe enemies
-        // Place Echo Warden directly on player's death spot
-        const wx = p.x;
-        const wy = p.y;
-        echoWardenPos = {x: wx, y: wy};
-        map[wy][wx] = 24; // New tile type for warden
-            // Effects
-            playWebAudioSound(sounds.rune); // Rune sound
-            logBattleEvent(`Floor ${floor} - Resonance Surge! Echo Warden descends—enemies vanquished, HP restored to 100, leather armor granted, soul charges maxed.`);
-            updateSatsDisplay();
-            needsRedraw = true;
-            // Trigger 500ms invert flash on warden entry
-            wardenFlashStart = Date.now();
-                    gameOver = false; // Force reset if spell/attack overrode
-        console.log('DEBUG: Post-surge force - HP:', p.hp, 'gameOver:', gameOver); // Remove after test
-        } else {
-            // Normal death
-            p.hp = 0;
-            diamonds = 0;
-            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-            gameOver = true; // Centralized set
-            updatePlayerState(); // Run death/resonance check
-            // 2s input lock
-            inputBlocked = true;
-            setTimeout(() => { inputBlocked = false; }, 1000);
-        }
     }
 
     needsRedraw = true;
@@ -4154,8 +3942,6 @@ if (p.moving) {
     
 const oldX = p.x;
 const oldY = p.y;
-p.startX = p.x; // Track actual start for lerp
-p.startY = p.y;
 p.x = nx;
 p.y = ny;
 p.targetTileX = nx;
@@ -4165,9 +3951,6 @@ p.deltaY = (ny - oldY) * 2;
 p.stepsLeft = 8;
 p.moving = true;
 p.anim.direction = newDirection;
-    p.moveStartTime = performance.now(); // Track start for smooth lerp
-    p.moveDuration = 200; // ms per tile (tune for feel)
-
 // Animation frame update logic here
 if (p.moving) {
     const now = performance.now();
@@ -4180,11 +3963,6 @@ if (p.moving) {
 
         // Apply spell damage when moving onto dangerous areas
         applySpellDamage(p.x, p.y);
-
-        // Standing still on a dangerous tile still hurts!
-        if (dangerousAreas.some(area => area.x === p.x && area.y === p.y)) {
-            applySpellDamage(p.x, p.y);
-        }
         
         if (map[ny][nx] === 2) { 
             p.potions++; 
@@ -4241,6 +4019,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;                // ← reset diamonds
                         updatePlayerState();          // ← update display
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                        gameOver = true;
                     }
                 }
             }
@@ -4263,6 +4042,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                        gameOver = true;
                     }
                 }
             }
@@ -4273,7 +4053,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                     p.hp = 0;
                     logBattleEvent(`Floor ${floor} - Fell into Hole: Hero Fell! Reached Floor ${floor}`);
                     playWebAudioSound(sounds.hole);
-                    updatePlayerState(); // Run death/resonance check
+                    gameOver = true;
                 } else {
                     const oldHP = p.hp;
                     p.hp = Math.ceil(p.hp / 2);
@@ -4287,6 +4067,7 @@ if (map[ny][nx] === 6 && !inHideout) {
                         diamonds = 0;
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+                        gameOver = true;
                     }
                 }
             }
@@ -4415,13 +4196,7 @@ if (available.length > 0 && !p.curseActive) {
                     !portals.some(p => p.x === pos.x && p.y === pos.y)
                 );
                 if (adjacent.length > 0) {
-                    // Filter out stairs tile
-                    const validAdjacent = adjacent.filter(pos => 
-                        !(exit && pos.x === exit.x && pos.y === exit.y)
-                    );
-                    const portalPos = validAdjacent.length > 0 
-                        ? validAdjacent[Math.floor(Math.random() * validAdjacent.length)]
-                        : adjacent[0]; // fallback if all blocked (extremely rare)
+                    const portalPos = adjacent[Math.floor(Math.random() * adjacent.length)];
                     map[portalPos.y][portalPos.x] = 12; // Portal tile
                     portals.push({
                         x: portalPos.x,
@@ -4707,42 +4482,11 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
     initialSpawnDoneThisFloor = false;
     enemies = [];
     floor++;
-// Build soul resonance +2% per floor (every 50 floors, max 100%)
-soulResonance = Math.min(100, soulResonance + 2);
-resonanceTriggeredThisRun = false; // Reset for new run
-logBattleEvent(`Floor ${floor} - Soul Resonance: ${soulResonance}%`); // Optional subtle log
-
-// Spawn wisp on floor 3
-if (floor === 3 && wisps.length === 0) {
-    const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
-    wisps.push({
-        x: p.x, y: p.y,
-        currentX: p.x * S, currentY: p.y * S,
-        hp: Math.floor(p.hp / 2), maxHP: Math.floor(p.maxHP / 2),
-        type: wispType,
-        attackCounter: 0,
-        targetTileX: p.x, targetTileY: p.y,
-        deltaX: 0, deltaY: 0, stepsLeft: 0, moving: false,
-        anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }, // Cycle every 200ms
-        lastPos: null
-    });
-    logBattleEvent(`Floor ${floor} - A loyal wisp companion appears!`);
-    const floorIndicator = document.getElementById('floor-indicator');
-    // Triple wisp spawn chime (staggered for audibility)
-    playWebAudioSound(sounds.pickup);
-    setTimeout(() => playWebAudioSound(sounds.pickup), 100);
-    setTimeout(() => playWebAudioSound(sounds.pickup), 200);
-    floorIndicator.textContent = `Floor ${floor} - Wisp joined!`;
-    wispPromptTimeout = setTimeout(() => {
-        floorIndicator.textContent = `Floor ${floor}`;
-    }, 3000);
-}
     p.shrineUsedThisFloor = false;  // Reset shrine flag for new floor
     initialWaveSpawned = false;
     waveActive = false;
     exit = null;
     killsLog = [];
-    uniqueMonsterRevealedThisFloor = false; // Explicit reset before new floor
     battleLog = []; // Clear battleLog to prevent memory buildup
     // Reset special sound tracking for the new floor
     specialSoundsPlayedThisFloor.lava = false;
@@ -4760,7 +4504,6 @@ if (floor === 3 && wisps.length === 0) {
     p.atk = p.hasDiamondHand ? 3 : 2;
     initMap();
     nextApiCallTime = null;
-    deadWispCorpse = null; // Clear wisp corpse on floor transition
 
     // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
     const floorIndicator = document.getElementById('floor-indicator');
@@ -5127,7 +4870,6 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
     }
     
     moveEnemies();
-updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
     updatePlayerState();
     
     // Check if player is standing on a rune tile (specifically placed rune)
@@ -5171,21 +4913,8 @@ updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
 
 function moveEnemies() {
     if (gameOver || splashActive) return;
-
-    // Unique monster spells damage player even when standing still
-    dangerousAreas.forEach(area => {
-        if (area.x === p.x && area.y === p.y) {
-            applySpellDamage(p.x, p.y);
-        }
-    });    
-
-enemies.forEach(e => {
-    if (e.frozen && e.frozenTurns > 0) {
-        e.frozenTurns--;
-        if (e.frozenTurns <= 0) e.frozen = false;
-        return; // Skip move
-    }
-    let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
+    enemies.forEach(e => {
+        let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
         if (dist <= 5) {
             let moves = e.type.move, steps = 0;
 let startX = e.x, startY = e.y;
@@ -5267,36 +4996,11 @@ dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
                     // Trigger visual flash
                     auraHitStartTime = Date.now();
                 } else {
-p.hp -= damage;
-const auraMsg = p.hasCursedRing ? ' (Aura depleted; ' : ' ';
-logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG${auraMsg}HP now ${p.hp}${p.hasCursedRing ? ')' : ''}`);
-
-// Wisp vulnerability: Attack wisp if close (like player)
-if (wisps.length > 0) {
-    const wisp = wisps[0];
-    let wdx = wisp.x - e.x, wdy = wisp.y - e.y;
-    let wdist = Math.abs(wdx) + Math.abs(wdy);
-    if (wdist <= 1) { // Adjacent
-        let wDmg = e.type.atk;
-        wisp.hp -= wDmg;
-        logBattleEvent(`Floor ${floor} - ${e.type.name} attacks wisp for ${wDmg} dmg! (Wisp HP: ${wisp.hp})`);
-        if (wisp.hp <= 0) {
-            wisps = []; // Remove from active array
-            logBattleEvent(`Floor ${floor} - Wisp perishes!`);
-            sounds.gameover.currentTime = 0;
-            sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
-            // Place dead wisp on ground
-            deadWispCorpse = {
-                x: wisp.x, y: wisp.y,
-                frameIndex: wisp.anim.frameIndex,
-                fadeStart: Date.now()
-            };
-        }
-    }
-}
+                    p.hp -= damage;
+                    const auraMsg = p.hasCursedRing ? ' (Aura depleted; ' : ' ';
+                    logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG${auraMsg}HP now ${p.hp}${p.hasCursedRing ? ')' : ''}`);
                 }
 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
-
 playWebAudioSound(sounds.hit);
 if (p.hp <= 0 && p.immortal) {
     p.hp = 1;
@@ -5306,19 +5010,15 @@ if (p.hp <= 0 && p.immortal) {
     diamonds = 0;                // reset diamonds
     updatePlayerState();          // update inventory
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+    gameOver = true;
 }
 
 updatePlayerState(); // Check HP and armor state after damage
             }
     });
-    
-    // Single death/surge check after all enemy actions
-    updatePlayerState();
-    
 if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
     if (placeStairs()) {
         wave++;
-        if (wisps.length > 0) wispSpeak('victory'); // happy jingle
         waveActive = false;
         document.getElementById('wave').textContent = wave;
         logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
@@ -5326,155 +5026,18 @@ if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActiv
         logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
     }
 }
-}
 
-function updateWisps() {
-    if (wisps.length === 0 || gameOver || splashActive) return;
-    const wisp = wisps[0]; // Only 1 wisp
-    wisp.attackCounter++; // Increment per enemy turn (every call)
-   
-    // Move close to player (realtime, random bob within 1-2 tiles)
-    let dx = p.x - wisp.x, dy = p.y - wisp.y;
-    let dist = Math.abs(dx) + Math.abs(dy);
-    if (dist > 2 || Math.random() < 0.3) { // Chase if far, or random wander
-        let nx = wisp.x, ny = wisp.y;
-        if (dist > 2) {
-            nx += dx > 0 ? 1 : (dx < 0 ? -1 : 0);
-            ny += dy > 0 ? 1 : (dy < 0 ? -1 : 0);
-        } else {
-            // Random close move
-            const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
-            const randDir = dirs[Math.floor(Math.random() * dirs.length)];
-            nx += randDir.dx; ny += randDir.dy;
-        }
-        if (nx >= 0 && nx < W && ny >= 0 && ny < H && 
-            map[ny][nx] === 0 && 
-            !(nx === p.x && ny === p.y) &&
-            // Avoid all item/special tiles so player always sees drops
-            ![7,23].includes(map[ny][nx])) {  // only avoid Gnome (7) and Cursed Ring (23)
-            const oldX = wisp.x, oldY = wisp.y;
-            wisp.x = nx; wisp.y = ny;
-            wisp.targetTileX = nx; wisp.targetTileY = ny;
-            wisp.deltaX = (nx - oldX) * 2; // Pixel step
-            wisp.deltaY = (ny - oldY) * 2;
-            wisp.stepsLeft = 8; // 8 sub-steps per tile
-            wisp.moving = true;
-            // Keep current at start for interp
-        }
-    }
-   
-    // Attack every 2nd enemy turn if enemy in range
-    if (wisp.attackCounter % 2 === 0) {
-        const inRangeEnemies = enemies.filter(e => {
-            let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-            return edist <= wisp.type.range && e.hp > 1;  // ← ignore 1-HP enemies
-        });
-        if (inRangeEnemies.length > 0) {
-            const target = inRangeEnemies[0]; // Nearest/simple
-            applyWispAttack(wisp, target);
-        }
-    }
-   
-    // Animate idle bob
-    const now = performance.now();
-    if (now - wisp.anim.lastFrameTime >= 400) {
-        wisp.anim.frameIndex = (wisp.anim.frameIndex + 1) % 3; // Cycle 3 frames
-        wisp.anim.lastFrameTime = now;
-    }
-    needsRedraw = true;
-}
-
-function applyWispAttack(wisp, target) {
-    const dmg = wisp.type.damage;
-    let effectMsg = '';
-    let visibleEffect = ''; // For log visibility
-    let actualDmg = 0;
-  
-    if (dmg > 0) {
-        actualDmg = Math.min(dmg, target.hp); // Clamp to prevent over-log
-        target.hp -= actualDmg;
-        target.hp = Math.max(actualDmg > 0 ? 1 : 0, target.hp); // Mercy: 1 HP min if dmg>0 (freeze skips)
-        let verb = '';
-        switch (wisp.type.name) {
-            case 'fire':   verb = 'scorches'; visibleEffect = '[FIRE BOLT]'; break;
-            case 'cold':   verb = 'freezes';  visibleEffect = '[FROST NOVA]'; break;
-            case 'chain':  verb = 'zaps';     visibleEffect = '[CHAIN LIGHTNING]'; break;
-            case 'earth':  verb = 'smashes';  visibleEffect = '[EARTHQUAKE]'; break;
-            default:       verb = 'hits';     visibleEffect = `[${wisp.type.name.toUpperCase()}]`;
-        }
-        effectMsg = actualDmg > 0 
-            ? `Wisp ${verb} ${target.type.name} for ${actualDmg} damage!`
-            : `Wisp ${verb} ${target.type.name}!`;
-    } else if (wisp.type.effect === 'freeze') {
-        // Simple freeze: skip enemy turn (set flag)
-        target.frozen = true;
-        target.frozenTurns = 1;
-        effectMsg = `Wisp freezes ${target.type.name}!`;
-        visibleEffect = '[FROST LOCK]';
-        actualDmg = 0; // No dmg
-    }
-   
-    // Only log if effect applied (dmg>0 or freeze)
-    if (actualDmg > 0 || wisp.type.effect === 'freeze') {
-        logBattleEvent(`Floor ${floor} - ${effectMsg} (${target.type.name} HP: ${target.hp}) ${visibleEffect}`);
-        // Flash target + sound for feedback
-        target.wispHitFlash = { time: Date.now(), type: wisp.type.name }; // Flag + type for colored flash
-        sounds.attack.currentTime = 0; // Reset for quick replay
-        sounds.attack.play().catch(e => console.error('Wisp attack sound error:', e));
-    }
-   
-    // AOE simulation (simple: damage nearby if aoe)
-    if (wisp.type.aoe !== 'single') {
-        enemies.forEach(e => {
-            if (e !== target) {
-                let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-                if (edist <= Math.floor(wisp.type.range * (wisp.type.aoe === 'medium' ? 1.5 : 2))) {
-                    let chainDmg = Math.floor(dmg / 2);
-                    if (chainDmg > 0) {
-                        let actualChain = Math.min(chainDmg, e.hp);
-                        e.hp -= actualChain;
-                        e.hp = Math.max(0, e.hp);
-                        logBattleEvent(`${visibleEffect} chains to ${e.type.name} for ${actualChain} dmg! (HP: ${e.hp})`);
-                    }
-                }
-            }
-        });
-    }
-   
-    // Handle target death if hp<=0
-    if (target.hp <= 0) {
-        kills[target.type.name]++;
-        handleUniqueMonsterReward(target);
-        enemies = enemies.filter(en => en !== target);
-        logBattleEvent(`Floor ${floor} - Wisp slays ${target.type.name}!`);
-    } else if (actualDmg > 0 && target.hp === 1) {
-        logBattleEvent(`Floor ${floor} - Wisp spares ${target.type.name}!`);
-    }
-    // No message when skipping 1-HP enemies – keeps log clean
-   
-    // Stub for wisp death (called separately in enemy attacks, not here)
-    if (wisp.hp <= 0) {
-        wisps = []; // Remove from active array
-        logBattleEvent(`Floor ${floor} - Wisp slain!`);
-        sounds.gameover.currentTime = 0;
-        sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
-        // Place dead wisp on ground
-        deadWispCorpse = {
-            x: wisp.x, y: wisp.y,
-            frameIndex: wisp.anim.frameIndex,
-            fadeStart: Date.now()
-        };
-    }
-   
-    needsRedraw = true;
 }
 
 // Function to apply spell damage to player
 function applySpellDamage(x, y) {
+    // Check if player is standing on a dangerous area
     const dangerousArea = dangerousAreas.find(area => area.x === x && area.y === y);
+    
     if (dangerousArea) {
         let damage = 0;
         let damageType = "";
+        
         switch (dangerousArea.spellType) {
             case SPELL_TYPES.FIRE_WALL:
                 damage = 2;
@@ -5493,14 +5056,29 @@ function applySpellDamage(x, y) {
                 damageType = "Poison";
                 break;
         }
+        
+        // Check if player has immunity to this spell type
         if (p.elementImmunity === damageType || p.armorImmunity === damageType) {
             logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
-        } else {
-            p.hp -= damage;
-            logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
-            playWebAudioSound(sounds.hit);
+            return; // Skip damage application
         }
-        updatePlayerState(); // Centralized: surge if eligible, no early gameOver
+        
+        p.hp -= damage;
+        logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
+        playWebAudioSound(sounds.hit);
+        
+        if (p.hp <= 0 && p.immortal) {
+            p.hp = 1;
+            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        } else if (p.hp <= 0) {
+            p.hp = 0;
+            diamonds = 0;                // reset diamonds
+            updatePlayerState();          // update inventory
+            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+            gameOver = true;
+        }
+        
+        updatePlayerState();
     }
 }
 
@@ -6386,13 +5964,6 @@ if (enemy.type.name === 'Cursed Trader') {
         hit.hp -= damage;
         logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
         playWebAudioSound(sounds.hit);
-        
-        // Wisp sync attack: Assist player's target
-        if (wisps.length > 0) {
-            const wisp = wisps[0];
-            applyWispAttack(wisp, hit);
-        }
-        
 if (hit.hp <= 0) {
     kills[hit.type.name]++;
     let dropPlaced = false;
@@ -6688,7 +6259,6 @@ if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && 
 }
     
     moveEnemies();
-updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
     needsRedraw = true;
     setTimeout(() => {
         swordActive = false;
@@ -6716,7 +6286,6 @@ if (p.curseActive) {
     logBattleEvent(`Floor ${floor} - Potion Used: +${p.hp - oldHP} HP (now ${p.hp})`);
     sounds.potion.play().catch(e => console.error('Potion sound error:', e));
     moveEnemies();
-updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
     updatePlayerState();
     needsRedraw = true;
 }
@@ -6790,16 +6359,12 @@ checkRunewords();
             addTerminalLineToContent('Soul Terminal ver 1.0');
             addTerminalLineToContent('');  
     // Display soul-related items
-    addTerminalLineToContent('---- Soul Inventory ----');
-    addTerminalLineToContent(`Soul Resonance: ${soulResonance}%`);
+    addTerminalLineToContent('--- Soul Inventory ---');
     addTerminalLineToContent(`Soul Stones: ${p.soulStones}`);
     addTerminalLineToContent(`Soul Shards: ${p.soulShards}`);
     addTerminalLineToContent(`Soul Orbs: ${p.soulOrbs}`);
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
     addTerminalLineToContent('');
-
-    // Display regular inventory items
-    addTerminalLineToContent('---- Regular Inventory ----');
     
 // Display resistances (elemental and armor)
 let resistanceText = '';
@@ -6821,6 +6386,8 @@ if (p.hasCursedRing) {
     addTerminalLineToContent('');
 }
     
+    // Display regular inventory items
+    addTerminalLineToContent('--- Regular Inventory ---');
     addTerminalLineToContent(`Health: ${p.hp}`);
     addTerminalLineToContent(`Potions: ${p.potions}`);
     addTerminalLineToContent(`Pickaxes: ${p.pickaxes}`);
@@ -6884,7 +6451,7 @@ case 'clear':
 case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
-    addTerminalLineToContent('  convert ----- Convert soul stones, shards, wisp');
+    addTerminalLineToContent('  convert ----- Convert soul items');
     addTerminalLineToContent('  set --------- Settings');
     addTerminalLineToContent('  clear ------- Clear screen');
     addTerminalLineToContent('  leaderboard - View top 10 scores');
@@ -6894,9 +6461,8 @@ case 'help':
     break;
 case 'convert':
             if (args.length === 0) {
-                addTerminalLineToContent('Usage: convert stones [count]');
-                addTerminalLineToContent('Usage: convert shards [count]');
-                addTerminalLineToContent('Usage: convert wisp [count]');
+                addTerminalLineToContent('Usage: convert stones');
+                addTerminalLineToContent('Usage: convert shards');
                 addTerminalLineToContent('_____________________');
                 addTerminalLineToContent('Type "help" for help.');
             } else {
@@ -6964,36 +6530,6 @@ case 'convert':
                             addTerminalLineToContent('_____________________');
     	                    addTerminalLineToContent('Type "help" for help.');
                         }
-                        break;
-                    case 'wisp':
-                        if (floor < 3) {
-                            addTerminalLineToContent('You must reach Floor 3 to resurrect a wisp.');
-                        } else if (wisps.length > 0) {
-                            addTerminalLineToContent('You already have a loyal wisp companion.');
-                        } else if (p.soulOrbs >= 10) {
-                            p.soulOrbs -= 10;
-                            const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
-                            wisps.push({
-                                x: p.x, y: p.y,
-                                currentX: p.x * S, currentY: p.y * S,
-                                hp: Math.floor(p.hp / 2), maxHP: Math.floor(p.maxHP / 2),
-                                type: wispType,
-                                attackCounter: 0,
-                                targetTileX: p.x, targetTileY: p.y,
-                                deltaX: 0, deltaY: 0, stepsLeft: 0, moving: false,
-                                anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 },
-                                lastPos: null
-                            });
-                            addTerminalLineToContent('10 Soul Orbs consumed – a loyal wisp has been resurrected!');
-                            logBattleEvent(`Floor ${floor} - Wisp resurrected from the Soul Terminal!`);
-                            playWebAudioSound(sounds.pickup);
-                            setTimeout(() => playWebAudioSound(sounds.pickup), 100);
-                            setTimeout(() => playWebAudioSound(sounds.pickup), 200);
-                        } else {
-                            addTerminalLineToContent(`Need 10 Soul Orbs (you have ${p.soulOrbs}).`);
-                        }
-                        addTerminalLineToContent('_____________________');
-                        addTerminalLineToContent('Type "help" for help.');
                         break;
                     default:
                         addTerminalLineToContent('ERROR!');
@@ -7466,6 +7002,42 @@ function cleanupEventListeners() {
             }
         }
     }
+    
+    // Clear existing event listeners from document
+    if (document._keydownHandler) {
+        document.removeEventListener('keydown', document._keydownHandler);
+        document._keydownHandler = null;
+    }
+    if (document._keyupHandler) {
+        document.removeEventListener('keyup', document._keyupHandler);
+        document._keyupHandler = null;
+    }
+
+    // Clear keyboard movement interval
+    if (keyboardMovementTimer) {
+        clearInterval(keyboardMovementTimer);
+        keyboardMovementTimer = null;
+    }
+    if (document._touchstartHandler) {
+        document.removeEventListener('touchstart', document._touchstartHandler);
+        document._touchstartHandler = null;
+    }
+    if (document._touchmoveHandler) {
+        document.removeEventListener('touchmove', document._touchmoveHandler);
+        document._touchmoveHandler = null;
+    }
+    if (document._touchendHandler) {
+        document.removeEventListener('touchend', document._touchendHandler);
+        document._touchendHandler = null;
+    }
+    if (document._gamepadConnectedHandler) {
+        window.removeEventListener('gamepadconnected', document._gamepadConnectedHandler);
+        document._gamepadConnectedHandler = null;
+    }
+    if (document._gamepadDisconnectedHandler) {
+        window.removeEventListener('gamepaddisconnected', document._gamepadDisconnectedHandler);
+        document._gamepadDisconnectedHandler = null;
+    }
 }
 
 /* ------------------------------------------------------------------
@@ -7639,8 +7211,6 @@ p.auraMoveCounter = 0; // Reset aura move counter
     diamonds = 0;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity on restart
-    soulResonance = 0;
-    wardenFlashStart = 0; // Clear flash on restart
     
     p.runes = [];
     runeDrops = runeDrops.filter(r => !r.specific);			// maybe
@@ -7656,8 +7226,6 @@ p.auraMoveCounter = 0; // Reset aura move counter
     p.y = 2;
     p.atk = 2;
 enemies = [];
-    wisps = []; // Clear wisp on restart
-    deadWispCorpse = null; // Clear corpse too
 enemyBgFrameTimes.clear(); // Clear bg animation tracking
     map = [];
     rooms = [];
@@ -7732,11 +7300,6 @@ waveActive = false;
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('sats').textContent = '0';
-    // Reset unique monster animation
-    uniqueMonsterRevealActive = false;
-    uniqueMonsterRevealedThisFloor = false;
-    window.currentFloorText = `Floor ${floor}`;
-    window.lastUniqueSetTime = 0;
     document.getElementById('game-over').style.display = 'none';
     document.getElementById('submit-score').style.display = 'none';
     document.getElementById('view-leaderboard').style.display = 'none';
@@ -7857,16 +7420,6 @@ if (p.moving) {
     }
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
-    // Warden entry flash: Invert colors for 500ms
-if (wardenFlashStart > 0) {
-    const elapsed = Date.now() - wardenFlashStart;
-    if (elapsed < 500) {
-        c.filter = 'invert(1)'; // Quick dramatic invert
-    } else {
-        c.filter = 'none'; // Reset
-        wardenFlashStart = 0;
-    }
-}
     if (gameOver) {
         const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
         gameOverCanvas.clearRect(0, 0, 320, 320);
@@ -8010,9 +7563,6 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 23) { // Cursed Ring
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
         }
-        if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
-            c.drawImage(assets.echo_warden, x * S, y * S, S, S);
-        }
         // Draw stairs after portals to ensure proper visibility
         if (exit && exit.x === x && exit.y === y) {
             c.drawImage(assets.stairs, x * S, y * S, S, S);
@@ -8037,23 +7587,6 @@ highlightTiles.forEach(tile => {
         }
     }
 });
-
-// Draw fading dead wisp corpse
-if (deadWispCorpse) {
-    const elapsed = Date.now() - deadWispCorpse.fadeStart;
-    const fadeAlpha = Math.max(0, 1 - (elapsed / 5000)); // Fade over 5s
-    if (fadeAlpha > 0) {
-        const frame = assets.wispFrames[deadWispCorpse.frameIndex];
-        if (frame.complete) {
-            c.save();
-            c.globalAlpha = fadeAlpha * 0.75; // 0.75 opacity for corpse
-            c.drawImage(frame, deadWispCorpse.x * S, deadWispCorpse.y * S, S, S);
-            c.restore();
-        }
-    } else {
-        deadWispCorpse = null; // Cleanup after fade
-    }
-}
 
 // In the draw function, after drawing items but before drawing player:
 // Draw shrines with fog handling
@@ -8211,7 +7744,6 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
     if (enemies.length === 0 && !exit) {
         if (placeStairs()) {
             wave++;
-            if (wisps.length > 0) wispSpeak('victory'); // happy jingle
             waveActive = false;
             document.getElementById('wave').textContent = wave;
             logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
@@ -8222,102 +7754,12 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
     needsRedraw = true;
 }
 
-// Draw wisp companion (always, no dist gate + debug)
-wisps.forEach(wisp => {
-    if (wisp.x >= 0 && wisp.x < W && wisp.y >= 0 && wisp.y < H) {
-        const dist = Math.sqrt((wisp.x - p.x) ** 2 + (wisp.y - p.y) ** 2);
-        const alpha = 1.0; // Force full vis for debug (revert to fade later)
-     
-        // Auto-sync if too far
-        if (dist > 6) {
-            wisp.x = p.x; wisp.y = p.y;
-            wisp.currentX = p.x * S; wisp.currentY = p.y * S;
-            console.log('Wisp synced'); // Debug: Check console
-        }
-     
-        const now = performance.now();
-        const bobOffset = Math.floor(Math.sin(now / 400) * 2 + 1); // Snaps to 0,1,2px (prominent, pixel-perfect)
-        let drawY = wisp.currentY + bobOffset;
-     
-        c.save();
-        c.globalAlpha = alpha;
-    
-        // Trail (keep for path vis)
-        if (wisp.lastPos) {
-            c.strokeStyle = `rgba(255,255,255,${0.3 * alpha})`;
-            c.lineWidth = 2;
-            c.beginPath();
-            c.moveTo(wisp.lastPos.x, wisp.lastPos.y);
-            c.lineTo(wisp.currentX + S/2, drawY + S/2);
-            c.stroke();
-        }
-        wisp.lastPos = {x: wisp.currentX + S/2, y: drawY + S/2};
-    
-        // Color tint based on HP ratio (white to red)
-        const hpRatio = wisp.hp / wisp.maxHP;
-        c.save(); // Inner tint isolation
-        c.globalCompositeOperation = 'multiply';
-        const tintColor = `rgb(${Math.floor(255 * (1 - hpRatio))}, ${Math.floor(255 * hpRatio)}, ${Math.floor(255 * hpRatio)})`;
-        const tintGradient = c.createLinearGradient(0, 0, S, S);
-        tintGradient.addColorStop(0, tintColor);
-        tintGradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
-        c.fillStyle = tintGradient;
-        c.fillRect(wisp.currentX, drawY, S, S);
-        c.globalCompositeOperation = 'source-over'; // Reset after multiply
-        c.restore(); // End inner tint
-        const frame = assets.wispFrames[wisp.anim.frameIndex];
-        if (frame.complete) {
-            c.drawImage(frame, wisp.currentX, drawY, S, S);
-        }
-    
-        c.restore();
-     
-        // Subtle always-visible HP bar (green outline, scales with HP)
-        c.save();
-        c.strokeStyle = 'rgba(0, 255, 0, 0.9)'; // Live green (50% more opaque)
-        c.lineWidth = 1.5; // 50% thicker
-        c.lineCap = 'round';
-        const ratio = wisp.hp / wisp.maxHP;
-        const sensitiveRatio = Math.max(0, Math.min(1, ratio * 1.5)); // 1.5x sensitivity (shrinks 50% faster, clamped 0-1)
-        const barWidth = S * sensitiveRatio; // No min needed—stays 0-S
-        c.beginPath();
-        c.moveTo(wisp.currentX, drawY - 3);
-        c.lineTo(wisp.currentX + barWidth, drawY - 3);
-        c.stroke();
-        c.restore();
-     
-        c.restore();
-    }
-});
 
     // Draw fog overlay
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] !== 1 && !fogMap[y][x]) {
             c.fillStyle = 'rgba(0, 0, 0, 0.7)';
             c.fillRect(x * S, y * S, S, S);
-        }
-    }
-   
-    // Draw unique monster reveal animation (centered 64x64 overlay)
-    if (uniqueMonsterRevealActive) {
-        const elapsed = now - uniqueMonsterRevealStartTime;
-        if (elapsed > 1000) {
-            uniqueMonsterRevealActive = false;
-        } else {
-            // Smooth linear ramp: scale 1x (64px) → 5x (320px), alpha 1.0 → 0.0 over 0.5s
-            const normalized = elapsed / 1000; // 0 to 1 over full 1s
-            let scale = 1 + normalized * 4; // Linear: 1x → 5x
-            let alpha = 1 - normalized; // Linear fade to 0
-            c.save();
-            c.imageSmoothingEnabled = false; // Pixel-perfect, no anti-aliasing
-            c.globalAlpha = alpha;
-            const scaledW = 64 * scale;
-            const scaledH = 64 * scale;
-            const offsetX = (320 - scaledW) / 2;
-            const offsetY = (320 - scaledH) / 2;
-            c.drawImage(assets.unique_monster_img, offsetX, offsetY, scaledW, scaledH);
-            c.restore();
-            c.imageSmoothingEnabled = true; // Re-enable for rest of draw()
         }
     }
     
@@ -8578,27 +8020,8 @@ enemies.forEach(e => {
         }
         
         // Draw the processed sprite to the main canvas
-c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
-c.restore();
-
-// Wisp hit flash on enemies (inside loop)
-        if (e.wispHitFlash && Date.now() - e.wispHitFlash.time < 200) {
-            c.save();
-            let flashColor = 'rgba(0, 232, 216, 0.5)'; // Default cyan (freeze)
-            switch (e.wispHitFlash.type) {
-                case 'earth': flashColor = 'rgba(139, 69, 19, 0.6)'; // Brown quake
-                    break;
-                case 'chain': flashColor = 'rgba(255, 255, 0, 0.5)'; // Yellow lightning
-                    break;
-                case 'fire': flashColor = 'rgba(103, 0, 0, 0.55)'; // Red fire bolt
-                    break;
-                // cold/freeze stays cyan
-            }
-            c.fillStyle = flashColor;
-            c.fillRect(e.currentX, e.currentY, S, S);
-            c.restore();
-            if (Date.now() - e.wispHitFlash.time > 200) delete e.wispHitFlash;
-        }
+        c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
+        c.restore();
     }
 });
 
@@ -8632,14 +8055,12 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
 }
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
-
-// (deleted: moved to updatePlayerState() for centralized death check)
     document.getElementById('pickaxes').textContent = p.pickaxes;
     
 // Consolidated unique monster name display (prevents flicker)
 let uniqueNameToShow = null;
 let isHarbinger = false;
-const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && fogMap[e.y][e.x] === 1);
+const visibleUniques = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 1);
 if (visibleUniques.length > 0) {
     uniqueNameToShow = visibleUniques[0].uniqueName; // First visible
 } else {
@@ -8649,16 +8070,16 @@ if (visibleUniques.length > 0) {
         isHarbinger = true;
     }
 }
+
 const floorIndicator = document.getElementById('floor-indicator');
 const cachedText = window.currentFloorText || `Floor ${floor}`;
 const debounceMs = isHarbinger ? 2000 : 1000; // Longer for harbinger
-// Always set text for harbinger/visible (separate from animation trigger)
 if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs) && !floorIndicator.textContent.startsWith("Runeword")) {
     floorIndicator.textContent = uniqueNameToShow;
     window.currentFloorText = uniqueNameToShow;
     window.lastUniqueSetTime = now;
     activeUniqueMonsterName = uniqueNameToShow;
-   
+    
     // Auto-clear after 5s
     setTimeout(() => {
         if (activeUniqueMonsterName === uniqueNameToShow) {
@@ -8671,12 +8092,6 @@ if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUn
     floorIndicator.textContent = `Floor ${floor}`;
     window.currentFloorText = `Floor ${floor}`;
     activeUniqueMonsterName = null;
-}
-// Trigger animation ONLY on visible (non-harbinger) uniques
-if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMonsterRevealedThisFloor) {
-    uniqueMonsterRevealActive = true;
-    uniqueMonsterRevealStartTime = now;
-    uniqueMonsterRevealedThisFloor = true; // Mark as revealed this floor
 }
     
     needsRedraw = false;
@@ -8722,44 +8137,17 @@ if (gameOver) {
 }
     
 updateProjectiles();
-
-    // Unique monster harasses player who stands still inside its spell
-    const playerOnSpell = dangerousAreas.some(area => area.x === p.x && area.y === p.y);
-    if (playerOnSpell) {
-        if (spellHarassTimer === 0) {
-            spellHarassTimer = performance.now() + 2000 + Math.random() * 2000; // first harass in 2–4s
-        }
-        if (performance.now() >= spellHarassTimer) {
-            const caster = enemies.find(e => 
-                e.uniqueName && e.spell && dangerousAreas.some(a => a.spellType === e.spell && a.x === p.x && a.y === p.y)
-            );
-            if (caster) {
-                applySpellDamage(p.x, p.y); // harass = damage
-                logBattleEvent(`Floor ${floor} - ${caster.uniqueName} surges through the ${caster.spell}!`);
-                moveEnemies(); // normal AI moves everyone naturally
-                needsRedraw = true;
-            }
-            spellHarassTimer = performance.now() + 2000 + Math.random() * 2000; // next pulse every 2–4s
-        }
-    } else {
-        spellHarassTimer = 0; // reset when player leaves spell
-    }
-
 // Simple delta updates (run every frame for smooth movement)
 if (p.moving) {
-    const elapsed = performance.now() - p.moveStartTime;
-    const progress = Math.min(elapsed / p.moveDuration, 1); // 0 to 1 over duration
-    const eased = 0.5 + 0.5 * Math.sin(Math.PI * progress - Math.PI / 2); // Smooth ease-in-out
-    p.currentX = p.startX * S + eased * (p.x * S - p.startX * S);
-    p.currentY = p.startY * S + eased * (p.y * S - p.startY * S);
-    p.currentX = Math.floor(p.currentX); // Pixel-snap
-    p.currentY = Math.floor(p.currentY);
-    if (progress >= 1) {
-        p.moving = false;
-        p.anim.frameIndex = 0; // Reset to idle frame on stop
-        p.currentX = p.x * S;
-        p.currentY = p.y * S;
-    }
+    p.currentX += p.deltaX;
+    p.currentY += p.deltaY;
+    p.stepsLeft--;
+if (p.stepsLeft <= 0) {
+    p.moving = false;
+    p.anim.frameIndex = 0;  // Reset to idle frame on stop
+    p.currentX = p.x * S;
+    p.currentY = p.y * S;
+}
     needsRedraw = true;
 }
 enemies.forEach(e => {
@@ -8775,22 +8163,6 @@ enemies.forEach(e => {
         needsRedraw = true;
     }
 });
-
-// Interp wisp movement
-wisps.forEach(wisp => {
-    if (wisp.moving) {
-        wisp.currentX += wisp.deltaX;
-        wisp.currentY += wisp.deltaY;
-        wisp.stepsLeft--;
-        if (wisp.stepsLeft <= 0) {
-            wisp.moving = false;
-            wisp.currentX = wisp.x * S;
-            wisp.currentY = wisp.y * S;
-        }
-        needsRedraw = true;
-    }
-});
-
 // Frame animation (only when moving) - throttled
 const now = performance.now();
 if (p.moving && now - p.anim.lastFrameTime >= 50) {
@@ -8806,6 +8178,20 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
         draw();
     }
     
+// Final death check (after all updates)
+if (p.hp <= 0 && !gameOver) {
+    if (p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+    } else {
+        p.hp = 0;
+        diamonds = 0;                // reset diamonds
+        updatePlayerState();          // update inventory
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+    }
+}
+
     // Revert to unthrottled RAF for smooth interpolation; draw throttling is internal
     requestAnimationFrame(gameLoop);
 }
@@ -9180,6 +8566,98 @@ class GamepadAxes {
 // Global instance for current gamepad axes
 let currentAxes = null;
 
+// Start game function for splash screen
+function startGame() {
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
+    if (!splashActive) {
+        return;
+    }
+    
+    // Switch back to splash.png when starting
+    if (currentSplashImage !== 'splash.png') {
+        currentSplashImage = 'splash.png';
+        splashCanvas.clearRect(0, 0, 320, 320);
+        splashImg.src = currentSplashImage;
+        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    }
+    
+    const startButton = document.getElementById('start-button');
+    startButton.style.background = '#00b7ef'; // Mimic hover
+    setTimeout(() => {
+        startButton.style.background = '#00e8d8'; // Revert
+    }, 200);
+    
+    // Check for gamepad at game start
+    if (navigator.getGamepads) {
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                gamepadIndex = i;
+                console.log('Gamepad detected at game start:', gamepads[i].id);
+                break;
+            }
+        }
+    }
+    
+    // Resume AudioContext
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+        }).catch(e => console.error('Failed to resume AudioContext:', e));
+    }
+    preloadSounds(); // Preload sounds after user interaction
+    
+    currentTheme = 'dungeon'; // Force default theme on game start
+    // Set mute state based on saved preference
+    musicManager.mute(musicMuted);
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
+    musicManager.current = null; // Reset MusicManager state
+    musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
+    musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+    
+    if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is loaded
+        console.log('Playing music from start:', currentTheme); // Debug log
+        musicManager.play(currentTheme); // Play the music immediately
+    } else {
+        console.log('Audio not ready, waiting for', currentTheme); // Debug log
+        musicManager.audios[currentTheme].load(); // Force reload
+        musicManager.audios[currentTheme].oncanplaythrough = () => {
+            console.log('Audio ready, playing from start:', currentTheme); // Debug log
+            musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play once ready only if we should unmute
+            }
+        };
+    }
+    
+    fadeSplash();
+    
+    // Start gamepad polling if gamepad is connected
+    if (gamepadIndex !== null) {
+        gamepadPollingActive = true;
+        updateGamepad();
+    }
+    
+    hasPlayedOnce = true; // Mark that the player has started a game
+    
+    // Ensure fetchTxs is triggered after splash fade
+    setTimeout(() => {
+        if (!gameOver && !splashActive && floor > 0) {
+            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
+            fetchTxs();
+        } else {
+            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
+        }
+    }, 2000); // Match original start-button delay
+}
+
+// Add touchstart for mobile responsiveness
+document.getElementById('start-button').addEventListener('touchstart', (e) => {
+    e.preventDefault(); // Prevent scroll/zoom
+    // Trigger the same logic as click
+    // (copy the entire click handler body here if needed, but since it's the same, just call startGame() if defined)
+    startGame();
+}, { passive: false });
+
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
     if (gamepadIndex === null) {
@@ -9305,7 +8783,7 @@ if (!splashActive && !gameOver && inputBlocked) {
     const nowTime = Date.now();
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (p.inSoulTerminal && p.soulTerminalActive) {
-            //console.log('Gamepad Start: Exiting soul terminal'); // Debug log
+            console.log('Gamepad Start: Exiting soul terminal'); // Debug log
             closeSoulTerminal();
         }
         lastStartPressTime = nowTime;
@@ -9331,7 +8809,7 @@ if (buttons[1].pressed && !lastButtonsState[1]) {
         // Normal gameplay B button action
         attack();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
-    } else if (gameOver && gamepadIndex !== null && !inputBlocked) {  // ← Add !inputBlocked check here
+    } else if (gameOver && gamepadIndex !== null) {
         if (!gameOverBPressed) {
             if (!scoreSubmitted && floor >= 3) {
                 // Submit score if eligible
@@ -9545,9 +9023,6 @@ function exitScreensaver() {
     cancelAnimationFrame(screensaverLoopId);
     screensaverLoopId = null;
   }
-  if (screensaverCanvas) {
-    screensaverCtx.clearRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
-  }
   startTime = 0;
 }
 
@@ -9600,20 +9075,7 @@ function drawScreensaver(timestamp) {
 
   const alpha = alphaForTime(tSec);
   if (alpha <= 0) {
-    // Fully clean up during long invisible periods – prevents memory leak
-    screensaverCtx.fillStyle = 'black';
-    screensaverCtx.fillRect(0, 0, screensaverCanvas.width, screensaverCanvas.height);
-    if (screensaverLoopId) {
-      cancelAnimationFrame(screensaverLoopId);
-      screensaverLoopId = null;
-    }
-    // Restart the loop only after the hide duration ends
-    setTimeout(() => {
-      if (screensaverActive) {
-        startTime = performance.now(); // reset cycle timer
-        screensaverLoopId = requestAnimationFrame(drawScreensaver);
-      }
-    }, HIDE_DURATION * 1000);
+    screensaverLoopId = requestAnimationFrame(drawScreensaver);
     return;
   }
 
@@ -9720,10 +9182,6 @@ document.addEventListener('keydown', function (e) {
   if (['a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Enter'].includes(e.key)) {
     handleMovement();
   }
-});
-// Prevent battle-log focus from gamepad/shoulder buttons
-document.getElementById('battle-events').addEventListener('focus', function() {
-    this.blur();
 });
     </script>
 </body>
