@@ -9076,17 +9076,24 @@ if (splashActive) {
 }
 
 // 2. Real START button – now the second gesture, music plays instantly
-document.getElementById('start-button').addEventListener('click', startGame);
+// START button – now behaves exactly like D-pad on mobile/tablet (unlocks audio reliably)
+document.getElementById('start-button').addEventListener('click', e => {
+    e.preventDefault();          // ← magic line #1
+    startGame();
+}, { passive: false });          // ← magic line #2
+
+document.getElementById('start-button').addEventListener('touchstart', e => {
+    e.preventDefault();          // already had this – keep it
+    startGame();
+}, { passive: false });          // already had this – keep it
+
+// Keep Enter key support
 document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && splashActive) {
         e.preventDefault();
         startGame();
     }
 });
-document.getElementById('start-button').addEventListener('touchstart', e => {
-    e.preventDefault();
-    startGame();
-}, { passive: false });
 
 function startGame() {
     if (!splashActive) return;
