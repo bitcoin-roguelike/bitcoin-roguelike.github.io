@@ -2295,9 +2295,12 @@ document.getElementById('start-button').addEventListener('click', () => {
             console.log('AudioContext resumed by START button');
             // Now safe to start music immediately
             musicManager.current = null;
-            if (!musicMuted) {
-                musicManager.play(currentTheme);
+            const musicAudio = musicManager.audios[currentTheme];
+            if (musicAudio && !musicMuted) {
+                musicAudio.currentTime = 0;
+                musicAudio.play().catch(() => {});
             }
+            musicManager.current = currentTheme;
         });
     } else {
         // Context already running → just play
@@ -2347,14 +2350,26 @@ if (splashActive) {
                 // Reset music manager state and play music after AudioContext is resumed
                 musicManager.current = null;
                 if (!musicMuted) {
-                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
+                    // Direct .play() on the actual <audio> element — this is what unblocks mobile audio
+const musicAudio = musicManager.audios[currentTheme];
+if (musicAudio && !musicMuted) {
+    musicAudio.currentTime = 0;
+    musicAudio.play().catch(() => {}); // this line is the only one that matters on mobile
+}
+musicManager.current = currentTheme; // keep the manager in sync
                 }
             }).catch(e => console.error('Failed to resume AudioContext:', e));
         } else {
             // Reset music manager state on restart
             musicManager.current = null;
             if (!musicMuted) {
-                musicManager.play(currentTheme); // Play music if AudioContext is already running
+                // Direct .play() on the actual <audio> element — this is what unblocks mobile audio
+const musicAudio = musicManager.audios[currentTheme];
+if (musicAudio && !musicMuted) {
+    musicAudio.currentTime = 0;
+    musicAudio.play().catch(() => {}); // this line is the only one that matters on mobile
+}
+musicManager.current = currentTheme; // keep the manager in sync
             }
         }
             // Fix: Properly reset MusicManager state and ensure audio context is ready
@@ -8934,9 +8949,12 @@ if (splashActive) {
             audioContext.resume().then(() => {
                 // Reset music manager state and play music after AudioContext is resumed
                 musicManager.current = null;
-                if (!musicMuted) {
-                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
+                const musicAudio = musicManager.audios[currentTheme];
+                if (musicAudio && !musicMuted) {
+                    musicAudio.currentTime = 0;
+                    musicAudio.play().catch(() => {});
                 }
+                musicManager.current = currentTheme;
             }).catch(e => console.error('Failed to resume AudioContext:', e));
         } else {
             // Reset music manager state on restart
@@ -9366,17 +9384,16 @@ function startGame() {
 // Add touchstart for mobile responsiveness
 document.getElementById('start-button').addEventListener('touchstart', (e) => {
     e.preventDefault();
-    // Same fix as click – use the guaranteed touch gesture
-    if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            musicManager.current = null;
-            if (!musicMuted) musicManager.play('dungeon');
-        });
-    } else {
-        musicManager.current = null;
-        if (!musicMuted) musicManager.play('dungeon');
+
+    // Direct play — works on every mobile device
+    const musicAudio = musicManager.audios['dungeon'];
+    if (musicAudio && !musicMuted) {
+        musicAudio.currentTime = 0;
+        musicAudio.play().catch(() => {});
     }
-    startGame(); // your existing function
+    musicManager.current = 'dungeon';
+
+    startGame();
 }, { passive: false });
 
 window.addEventListener("gamepadconnected", (e) => {
