@@ -9076,16 +9076,19 @@ if (splashActive) {
 }
 
 // 2. Real START button – now the second gesture, music plays instantly
-// START button – now behaves exactly like D-pad on mobile/tablet (unlocks audio reliably)
+// START button – now 100% identical to D-pad unlock on mobile/tablet
 document.getElementById('start-button').addEventListener('click', e => {
-    e.preventDefault();          // ← magic line #1
+    e.preventDefault();
+    // This dummy move is the secret sauce the D-pad uses – forces AudioContext resume
+    if (splashActive) move('up');   // harmless, blocked by splashActive inside move()
     startGame();
-}, { passive: false });          // ← magic line #2
+}, { passive: false });
 
 document.getElementById('start-button').addEventListener('touchstart', e => {
-    e.preventDefault();          // already had this – keep it
+    e.preventDefault();
+    if (splashActive) move('up');   // same dummy move – guarantees unlock
     startGame();
-}, { passive: false });          // already had this – keep it
+}, { passive: false });
 
 // Keep Enter key support
 document.addEventListener('keydown', e => {
