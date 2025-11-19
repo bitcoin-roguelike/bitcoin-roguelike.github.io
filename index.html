@@ -7466,42 +7466,6 @@ function cleanupEventListeners() {
             }
         }
     }
-    
-    // Clear existing event listeners from document
-    if (document._keydownHandler) {
-        document.removeEventListener('keydown', document._keydownHandler);
-        document._keydownHandler = null;
-    }
-    if (document._keyupHandler) {
-        document.removeEventListener('keyup', document._keyupHandler);
-        document._keyupHandler = null;
-    }
-
-    // Clear keyboard movement interval
-    if (keyboardMovementTimer) {
-        clearInterval(keyboardMovementTimer);
-        keyboardMovementTimer = null;
-    }
-    if (document._touchstartHandler) {
-        document.removeEventListener('touchstart', document._touchstartHandler);
-        document._touchstartHandler = null;
-    }
-    if (document._touchmoveHandler) {
-        document.removeEventListener('touchmove', document._touchmoveHandler);
-        document._touchmoveHandler = null;
-    }
-    if (document._touchendHandler) {
-        document.removeEventListener('touchend', document._touchendHandler);
-        document._touchendHandler = null;
-    }
-    if (document._gamepadConnectedHandler) {
-        window.removeEventListener('gamepadconnected', document._gamepadConnectedHandler);
-        document._gamepadConnectedHandler = null;
-    }
-    if (document._gamepadDisconnectedHandler) {
-        window.removeEventListener('gamepaddisconnected', document._gamepadDisconnectedHandler);
-        document._gamepadDisconnectedHandler = null;
-    }
 }
 
 /* ------------------------------------------------------------------
