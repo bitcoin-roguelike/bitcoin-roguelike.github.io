@@ -9300,14 +9300,6 @@ function startGame() {
     }, 2000); // Match original start-button delay
 }
 
-// Add touchstart for mobile responsiveness
-document.getElementById('start-button').addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Prevent scroll/zoom
-    // Trigger the same logic as click
-    // (copy the entire click handler body here if needed, but since it's the same, just call startGame() if defined)
-    startGame();
-}, { passive: false });
-
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
     if (gamepadIndex === null) {
