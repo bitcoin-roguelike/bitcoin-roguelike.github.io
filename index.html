@@ -9071,10 +9071,29 @@ document.addEventListener('keydown', e => {
     }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  START BUTTON + ENTER KEY + TOUCH → fixes music on mobile
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('start-button').addEventListener('click', startGame);
+
+// Allow Enter key on splash screen
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && splashActive) {
+        e.preventDefault();
+        startGame();
+    }
+});
+
+// Also allow direct touch on the button (mobile)
+document.getElementById('start-button').addEventListener('touchstart', e => {
+    e.preventDefault();
+    startGame();
+}, { passive: false });
+
 function startGame() {
     if (!splashActive) return;
 
-    // ─── 1. Force correct splash image ─────────────────────────────────────
+    // 1. Force splash image & theme
     currentTheme = 'dungeon';
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
@@ -9083,27 +9102,36 @@ function startGame() {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
-    // ─── 2. Random elemental immunity (kept from your code) ─────────────────
+    // 2. Random elemental immunity
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
 
-    // ─── 3. AUDIO FIX – this is the important part for mobile ───────────────
-    // Resume AudioContext + start music synchronously inside the user gesture
+    // 3. AUDIO FIX – unblock Web Audio on iOS/Android exactly like soul terminal does
     (async () => {
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
         }
         if (!musicMuted) {
-            musicManager.current = null;           // reset manager
-            musicManager.play(currentTheme);       // start music immediately
+            musicManager.current = null;
+            musicManager.play(currentTheme); // starts immediately inside the real user gesture
         }
     })();
 
-    // ─── 4. Preload sounds & fade out splash ───────────────────────────────
+    // ─── Fake focus to unlock audio on mobile (completely invisible, no flash) ───
+    const fakeInput = document.createElement('input');
+    fakeInput.style = 'position:fixed; left:-100px; top:-100px; width:1px; height:1px; opacity:0; pointer-events:none; caret-color:transparent;';
+    fakeInput.tabIndex = -1;                   // prevent it from ever being tabbed to
+    fakeInput.autocomplete = 'off';            // no autocomplete dropdown
+    document.body.appendChild(fakeInput);
+    fakeInput.focus({ preventScroll: true });  // focus without any visual side-effect
+    // Remove immediately – no frame flash even on the slowest devices
+    requestAnimationFrame(() => fakeInput.remove());
+
+    // 5. Normal start sequence
     preloadSounds();
     fadeSplash();
 
-    // ─── 5. Wake lock + first fetch (unchanged) ────────────────────────────
+    // Wake lock helper (defined only once)
     async function requestWakeLock() {
         try {
             if ('wakeLock' in navigator) {
@@ -9121,13 +9149,14 @@ function startGame() {
         }
     });
 
+    // Final delayed actions (fetch, leaderboard cache, etc.)
     setTimeout(() => {
         if (!gameOver && !splashActive) {
             requestWakeLock();
             fetchTxs();
             lastUpdate = Date.now();
 
-            // Leaderboard cache (first session only)
+            // Leaderboard cache (first run only)
             if (!localStorage.getItem('leaderboardCached')) {
                 fetchLeaderboard().then(() => {
                     localStorage.setItem('leaderboardCached', 'true');
@@ -9138,15 +9167,17 @@ function startGame() {
             }
         }
     }, 2000);
-}
 
-// Add touchstart for mobile responsiveness
-document.getElementById('start-button').addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Prevent scroll/zoom
-    // Trigger the same logic as click
-    // (copy the entire click handler body here if needed, but since it's the same, just call startGame() if defined)
-    startGame();
-}, { passive: false });
+    // Reset music volume (your original behaviour)
+    if (musicManager.current) {
+        const cur = musicManager.audios[musicManager.current];
+        if (cur) {
+            cur.currentTime = 0;
+            cur.volume = 1;
+        }
+    }
+    setTimeout(() => setSoundVolume(soundVolume), 100);
+}
 
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
