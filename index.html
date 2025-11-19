@@ -9041,87 +9041,28 @@ class GamepadAxes {
 // Global instance for current gamepad axes
 let currentAxes = null;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SPLASH SCREEN – audio unlock happens automatically (first gesture)
-// START BUTTON – now counts as the second gesture → music starts immediately
-// ─────────────────────────────────────────────────────────────────────────────
-
-// 1. Silent audio unlock as soon as the splash screen is visible (first gesture)
-if (splashActive) {
-    // Fake a tiny silent sound to force AudioContext unlock on page load/tap anywhere
-    const unlockOsc = audioContext.createOscillator();
-    unlockOsc.frequency.value = 1; // inaudible
-    unlockOsc.connect(audioContext.destination);
-    unlockOsc.start(0);
-    unlockOsc.stop(audioContext.currentTime + 0.001);
-
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(() => {});
-    }
-
-    // Fake a "move" on the soul stash to trigger the terminal focus (proven unlock)
-    const orig = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
-    if (soulStashPos) {
-        p.x = soulStashPos.x;
-        p.y = soulStashPos.y;
-        p.currentX = p.x * S;
-        p.currentY = p.y * S;
-
-        openSoulTerminal();
-        closeSoulTerminal();
-
-        p.x = orig.x; p.y = orig.y;
-        p.currentX = orig.cx; p.currentY = orig.cy;
-    }
-}
-
-// 2. Real START button – now the second gesture, music plays instantly
-// START button – now 100% identical to D-pad unlock on mobile/tablet
-document.getElementById('start-button').addEventListener('click', e => {
-    e.preventDefault();
-    // This dummy move is the secret sauce the D-pad uses – forces AudioContext resume
-    if (splashActive) move('up');   // harmless, blocked by splashActive inside move()
-    startGame();
-}, { passive: false });
-
-document.getElementById('start-button').addEventListener('touchstart', e => {
-    e.preventDefault();
-    if (splashActive) move('up');   // same dummy move – guarantees unlock
-    startGame();
-}, { passive: false });
-
-// Keep Enter key support
-document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && splashActive) {
-        e.preventDefault();
-        startGame();
-    }
-});
-
+// Start game function for splash screen
 function startGame() {
-    if (!splashActive) return;
-
-    // 1. Resume AudioContext on the real user gesture
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(e => console.error('AudioContext resume failed:', e));
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
+    if (!splashActive) {
+        return;
     }
-
-    // 2. Update mute button UI
-    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
-
-    // 3. Splash image reset
+    
+    // Switch back to splash.png when starting
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
         splashCanvas.clearRect(0, 0, 320, 320);
         splashImg.src = currentSplashImage;
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
-
+    
     const startButton = document.getElementById('start-button');
-    startButton.style.background = '#00b7ef';
-    setTimeout(() => startButton.style.background = '#00e8d8', 200);
-
-    // Gamepad detection at start
+    startButton.style.background = '#00b7ef'; // Mimic hover
+    setTimeout(() => {
+        startButton.style.background = '#00e8d8'; // Revert
+    }, 200);
+    
+    // Check for gamepad at game start
     if (navigator.getGamepads) {
         const gamepads = navigator.getGamepads();
         for (let i = 0; i < gamepads.length; i++) {
@@ -9132,59 +9073,68 @@ function startGame() {
             }
         }
     }
-
-    preloadSounds();
-
-    currentTheme = 'dungeon';
-
-    // ────── MUSIC: the exact working logic from your old version ──────
-    musicManager.mute(musicMuted);
-    musicManager.current = null;
-    const track = musicManager.audios[currentTheme];
-    track.pause();
-    track.currentTime = 0;
-
-    if (track.readyState >= 2) {
-        if (!musicMuted) musicManager.play(currentTheme);
-    } else {
-        track.oncanplaythrough = () => {
-            track.oncanplaythrough = null;
-            if (!musicMuted) musicManager.play(currentTheme);
-        };
-        track.load();
+    
+    // Resume AudioContext
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+        }).catch(e => console.error('Failed to resume AudioContext:', e));
     }
-    // ─────────────────────────────────────────────────────────────────────
-
+    preloadSounds(); // Preload sounds after user interaction
+    
+    currentTheme = 'dungeon'; // Force default theme on game start
+    // Set mute state based on saved preference
+    musicManager.mute(musicMuted);
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
+    musicManager.current = null; // Reset MusicManager state
+    musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
+    musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+    
+    if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is loaded
+        console.log('Playing music from start:', currentTheme); // Debug log
+        musicManager.play(currentTheme); // Play the music immediately
+    } else {
+        console.log('Audio not ready, waiting for', currentTheme); // Debug log
+        musicManager.audios[currentTheme].load(); // Force reload
+        musicManager.audios[currentTheme].oncanplaythrough = () => {
+            console.log('Audio ready, playing from start:', currentTheme); // Debug log
+            musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
+            if (!musicMuted) {
+                musicManager.play(currentTheme); // Play once ready only if we should unmute
+            }
+        };
+    }
+    
     fadeSplash();
-
+    
+    // Start gamepad polling if gamepad is connected
     if (gamepadIndex !== null) {
         gamepadPollingActive = true;
         updateGamepad();
     }
-
-    hasPlayedOnce = true;
-
-    // ────── wakeLock & cachedLeaderboard – exactly as you had them ──────
-    async function requestWakeLock() {
-        try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
-        catch (e) { console.error('Wake lock error:', e); }
-    }
-    document.addEventListener('visibilitychange', () => {
-        if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
-    });
-
+    
+    hasPlayedOnce = true; // Mark that the player has started a game
+    
+    // Ensure fetchTxs is triggered after splash fade
     setTimeout(() => {
-        if (!gameOver && !splashActive) {
-            requestWakeLock();
+        if (!gameOver && !splashActive && floor > 0) {
+            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
             fetchTxs();
-            if (!localStorage.getItem('leaderboardCached')) {
-                fetchLeaderboard().then(() => localStorage.setItem('leaderboardCached', 'true'));
-            }
-            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+        } else {
+            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
         }
-    }, 2000);
-    // ─────────────────────────────────────────────────────────────────────
+    }, 2000); // Match original start-button delay
 }
+
+// START button – now works 100% on desktop + mobile/tablet (click + touch)
+document.getElementById('start-button').addEventListener('click', e => {
+    e.preventDefault();
+    startGame();
+}, { passive: false });
+
+document.getElementById('start-button').addEventListener('touchstart', e => {
+    e.preventDefault();
+    startGame();
+}, { passive: false });
 
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
@@ -9311,7 +9261,7 @@ if (!splashActive && !gameOver && inputBlocked) {
     const nowTime = Date.now();
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (p.inSoulTerminal && p.soulTerminalActive) {
-            //console.log('Gamepad Start: Exiting soul terminal'); // Debug log
+            console.log('Gamepad Start: Exiting soul terminal'); // Debug log
             closeSoulTerminal();
         }
         lastStartPressTime = nowTime;
@@ -9337,7 +9287,7 @@ if (buttons[1].pressed && !lastButtonsState[1]) {
         // Normal gameplay B button action
         attack();
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
-    } else if (gameOver && gamepadIndex !== null && !inputBlocked) {  // ← Add !inputBlocked check here
+    } else if (gameOver && gamepadIndex !== null) {
         if (!gameOverBPressed) {
             if (!scoreSubmitted && floor >= 3) {
                 // Submit score if eligible
