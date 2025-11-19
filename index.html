@@ -9237,9 +9237,10 @@ let currentAxes = null;
 
 // Start game function for splash screen
 function startGame() {
-    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
     musicMuted = false;
     musicManager.mute(false);
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
+
     
     if (!splashActive) {
         return;
@@ -9270,37 +9271,7 @@ function startGame() {
             }
         }
     }
-    
-    // Resume AudioContext
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-        }).catch(e => console.error('Failed to resume AudioContext:', e));
-    }
-    preloadSounds(); // Preload sounds after user interaction
-    
-    currentTheme = 'dungeon'; // Force default theme on game start
-    // Set mute state based on saved preference
-    musicManager.mute(musicMuted);
-    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
-    musicManager.current = null; // Reset MusicManager state
-    musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
-    musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-    
-    if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is loaded
-        console.log('Playing music from start:', currentTheme); // Debug log
-        musicManager.play(currentTheme); // Play the music immediately
-    } else {
-        console.log('Audio not ready, waiting for', currentTheme); // Debug log
-        musicManager.audios[currentTheme].load(); // Force reload
-        musicManager.audios[currentTheme].oncanplaythrough = () => {
-            console.log('Audio ready, playing from start:', currentTheme); // Debug log
-            musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play once ready only if we should unmute
-            }
-        };
-    }
-    
+        
     fadeSplash();
     
     // Start gamepad polling if gamepad is connected
