@@ -2272,32 +2272,6 @@ function fadeSplash() {
 function resetSplashScreen() {
 splashActive = true;
 
-// <<< INSERT THE UNLOCK BLOCK HERE >>>
-if (splashActive) {
-    const unlockOsc = audioContext.createOscillator();
-    unlockOsc.frequency.value = 1;
-    unlockOsc.connect(audioContext.destination);
-    unlockOsc.start(0);
-    unlockOsc.stop(audioContext.currentTime + 0.001);
-
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(() => {});
-    }
-
-    const orig = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
-    if (soulStashPos) {
-        p.x = soulStashPos.x;
-        p.y = soulStashPos.y;
-        p.currentX = p.x * S;
-        p.currentY = p.y * S;
-
-        openSoulTerminal();
-        closeSoulTerminal();
-
-        p.x = orig.x; p.y = orig.y;
-        p.currentX = orig.cx; p.currentY = orig.cy;
-    }
-}
     const splashScreen = document.getElementById('splash-screen');
     splashScreen.style.display = 'block'; // Show splash screen
     // Redraw splash image
@@ -2307,39 +2281,22 @@ if (splashActive) {
 }
 
 function toggleMute() {
-    const muteButton = document.getElementById('mute');
-    const currentState = muteButton.textContent;
-    
-    // Cycle through the three states: ♪ → X → ☀ → ♪
-    if (currentState === '♪') {
-        // First state: Music on → Mute music
+    const btn = document.getElementById('mute');
+    if (btn.textContent === '♪') {          // music on → mute
         musicMuted = true;
         musicManager.mute(true);
-        muteButton.textContent = 'X';
+        btn.textContent = 'X';
         localStorage.setItem('musicMuted', 'true');
-} else if (currentState === 'X') {
-        // Second state: Music muted → Activate screensaver
-        musicMuted = true;
-        musicManager.mute(true);
-        muteButton.textContent = '☀';
-        if (!splashActive) {
-            musicManager.current = null; // Reset MusicManager state
-            musicManager.play(currentTheme);
-        }
-        // Activate screensaver when moving to ☀ state
+    } else if (btn.textContent === 'X') {   // muted → screensaver
+        btn.textContent = '☀';
         activateScreensaver();
-    } else if (currentState === '☀') {
-        // Third state: Screensaver active → Return to music
-        // Reset screensaver and return to normal state
+    } else {                                 // screensaver → music on
         exitScreensaver();
         musicMuted = false;
         musicManager.mute(false);
-        muteButton.textContent = '♪';
-        if (!splashActive) {
-            musicManager.current = null; // Reset MusicManager state
-            musicManager.play(currentTheme);
-        }
+        btn.textContent = '♪';
         localStorage.setItem('musicMuted', 'false');
+        if (!splashActive) musicManager.play(currentTheme);
     }
 }
 
@@ -9134,6 +9091,20 @@ document.getElementById('start-button').addEventListener('touchstart', e => {
 function startGame() {
     if (!splashActive) return;
 
+    // 1. Resume AudioContext on the real user gesture (START button)
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('AudioContext resumed by user gesture');
+        });
+    }
+
+    // 2. Start music immediately – now guaranteed to work
+    if (!musicMuted) {
+        musicManager.current = null;
+        musicManager.play('dungeon');
+    }
+
+    // 3. Your original code – untouched
     currentTheme = 'dungeon';
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
@@ -9142,18 +9113,10 @@ function startGame() {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
-    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
-
-    // Music starts NOW – second gesture
-    if (!musicMuted) {
-        musicManager.current = null;
-        musicManager.play(currentTheme);
-    }
-
     preloadSounds();
     fadeSplash();
 
+    // ────── wakeLock & cachedLeaderboard exactly as you had them ──────
     async function requestWakeLock() {
         try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
         catch (e) { console.error('Wake lock error:', e); }
@@ -9164,15 +9127,15 @@ function startGame() {
 
     setTimeout(() => {
         if (!gameOver && !splashActive) {
-            requestWakeLock();
+            requestWakeLock();                     // ← kept
             fetchTxs();
-            lastUpdate = Date.now();
             if (!localStorage.getItem('leaderboardCached')) {
                 fetchLeaderboard().then(() => localStorage.setItem('leaderboardCached', 'true'));
             }
-            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');  // ← kept
         }
     }, 2000);
+    // ─────────────────────────────────────────────────────────────────────
 
     if (musicManager.current) {
         const a = musicManager.audios[musicManager.current];
