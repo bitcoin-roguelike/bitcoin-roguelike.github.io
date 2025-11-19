@@ -9091,21 +9091,15 @@ document.getElementById('start-button').addEventListener('touchstart', e => {
 function startGame() {
     if (!splashActive) return;
 
-    // 1. Resume AudioContext on the real user gesture (START button)
+    // 1. Resume AudioContext on the real user gesture
     if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-            console.log('AudioContext resumed by user gesture');
-        });
+        audioContext.resume().catch(e => console.error('AudioContext resume failed:', e));
     }
 
-    // 2. Start music immediately – now guaranteed to work
-    if (!musicMuted) {
-        musicManager.current = null;
-        musicManager.play('dungeon');
-    }
+    // 2. Update mute button UI
+    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪';
 
-    // 3. Your original code – untouched
-    currentTheme = 'dungeon';
+    // 3. Splash image reset
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
         splashCanvas.clearRect(0, 0, 320, 320);
@@ -9113,10 +9107,54 @@ function startGame() {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
+    const startButton = document.getElementById('start-button');
+    startButton.style.background = '#00b7ef';
+    setTimeout(() => startButton.style.background = '#00e8d8', 200);
+
+    // Gamepad detection at start
+    if (navigator.getGamepads) {
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                gamepadIndex = i;
+                console.log('Gamepad detected at game start:', gamepads[i].id);
+                break;
+            }
+        }
+    }
+
     preloadSounds();
+
+    currentTheme = 'dungeon';
+
+    // ────── MUSIC: the exact working logic from your old version ──────
+    musicManager.mute(musicMuted);
+    musicManager.current = null;
+    const track = musicManager.audios[currentTheme];
+    track.pause();
+    track.currentTime = 0;
+
+    if (track.readyState >= 2) {
+        if (!musicMuted) musicManager.play(currentTheme);
+    } else {
+        track.oncanplaythrough = () => {
+            track.oncanplaythrough = null;
+            if (!musicMuted) musicManager.play(currentTheme);
+        };
+        track.load();
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     fadeSplash();
 
-    // ────── wakeLock & cachedLeaderboard exactly as you had them ──────
+    if (gamepadIndex !== null) {
+        gamepadPollingActive = true;
+        updateGamepad();
+    }
+
+    hasPlayedOnce = true;
+
+    // ────── wakeLock & cachedLeaderboard – exactly as you had them ──────
     async function requestWakeLock() {
         try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
         catch (e) { console.error('Wake lock error:', e); }
@@ -9127,21 +9165,15 @@ function startGame() {
 
     setTimeout(() => {
         if (!gameOver && !splashActive) {
-            requestWakeLock();                     // ← kept
+            requestWakeLock();
             fetchTxs();
             if (!localStorage.getItem('leaderboardCached')) {
                 fetchLeaderboard().then(() => localStorage.setItem('leaderboardCached', 'true'));
             }
-            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');  // ← kept
+            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
         }
     }, 2000);
     // ─────────────────────────────────────────────────────────────────────
-
-    if (musicManager.current) {
-        const a = musicManager.audios[musicManager.current];
-        if (a) { a.currentTime = 0; a.volume = 1; }
-    }
-    setTimeout(() => setSoundVolume(soundVolume), 100);
 }
 
 window.addEventListener("gamepadconnected", (e) => {
