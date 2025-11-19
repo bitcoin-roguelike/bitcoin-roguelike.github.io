@@ -1560,6 +1560,9 @@ let gameOverSoundPlayed = false;
 let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
+let snowflakes = [];
+let snowyHellActive = false;        // master switch
+let snowyHellToggleFloor = 0;       // for slow random toggles
 let autoSubmitTriggered = false;
 let inputBlocked = false;
 let soulStashPos = null; // Position of soul stash on current floor
@@ -1727,9 +1730,15 @@ types.forEach(t => {
         assets.themes.paradise.floor.src = 'paradise_floor.png';
         assets.themes.paradise.wall.src = 'paradise_wall.png';
         assets.themes.paradise.special.src = 'pond.png';
+        // Normal hell
         assets.themes.hell.floor.src = 'hell_floor.png';
         assets.themes.hell.wall.src = 'hell_wall.png';
         assets.themes.hell.special.src = 'lava.png';
+        // Snowy hell overrides (used when snowyHellActive = true)
+        assets.themes.hell.snowy_floor = new Image();
+        assets.themes.hell.snowy_wall = new Image();
+        assets.themes.hell.snowy_floor.src = 'hell_floor.png';   // reuse base texture
+        assets.themes.hell.snowy_wall.src = 'hell_wall.png';     // reuse base texture
         assets.themes.ruins.floor.src = 'ring_floor.png';
         assets.themes.ruins.wall.src = 'ring_wall.png';
         assets.themes.ruins.special.src = 'ring_hole.png';
@@ -2743,6 +2752,40 @@ updateFogMap(p.x, p.y);
         if (floor % 3 === 0 && floor > 1) {
             currentTheme = selectNewTheme(currentTheme);
         }
+        
+        // 50% chance that a hell theme block becomes snowy hell (locked for the whole block)
+        if (currentTheme === 'hell') {
+            if (snowyHellToggleFloor === floor - 2 || snowyHellToggleFloor === floor - 1 || snowyHellToggleFloor === floor) {
+                // We are inside an existing snowy hell streak – keep it
+                snowyHellActive = true;
+                needsRedraw = true;
+            } else if (!snowyHellActive) {
+                // Fresh hell block – roll the dice once
+                if (Math.random() < 0.5) { // change back to 0.125 when you're done testing
+                    snowyHellActive = true;
+                    snowyHellToggleFloor = floor;
+                    needsRedraw = true;
+
+                    // initialise snowflakes (only once per streak)
+                    snowflakes = [];
+                    for (let i = 0; i < 120; i++) {
+                        snowflakes.push({
+                            x: Math.random() * 320,
+                            y: Math.random() * 320 - 100,
+                            speed: 0.2 + Math.random() * 0.4,
+                            size: 1 + Math.random() * 2,
+                            sway: Math.random() * 2
+                        });
+                    }
+                    logBattleEvent(`Floor ${floor} - Hell froze over! Snowy Hell begins…`);
+                }
+            }
+        } else {
+            // Not hell anymore – turn snow off
+            snowyHellActive = false;
+            snowflakes = [];
+        }
+        
         // Update text color based on theme
         let textColor;
         switch (currentTheme) {
@@ -7913,10 +7956,35 @@ if (wardenFlashStart > 0) {
     if (splashActive) { needsRedraw = false; return; }
 
     const radius = 4;
-    // Draw walls first
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        if (map[y][x] === 1) c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
-    }
+        // ───── FLOOR & WALLS (with Snowy Hell override) ─────
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+            const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
+
+            if (map[y][x] === 1) { // walls
+                if (snowyHellActive) {
+                    c.save();
+                    c.drawImage(assets.themes.hell.wall, x * S, y * S, S, S);
+                    c.globalCompositeOperation = 'source-atop';
+                    c.fillStyle = 'rgba(190,240,255,0.85)';     // icy blue-white
+                    c.fillRect(x * S, y * S, S, S);
+                    c.restore();
+                } else {
+                    c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
+                }
+            } else if (isVisible && map[y][x] !== 1) { // floors
+                if (snowyHellActive) {
+                    c.save();
+                    c.drawImage(assets.themes.hell.floor, x * S, y * S, S, S);
+                    c.globalCompositeOperation = 'source-atop';
+                    c.fillStyle = 'rgba(240,250,255,0.80)';     // light snow cover
+                    c.fillRect(x * S, y * S, S, S);
+                    c.restore();
+                } else {
+                    c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+                }
+            }
+        }
 // Save floor state before entering hideout (moved here to run once per draw)
 if (!inHideout) {
 previousFloorState = {
@@ -8708,6 +8776,23 @@ if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMon
 }
     
     needsRedraw = false;
+    
+        // ───── SNOW (only in snowy hell) ─────
+        if (snowyHellActive && snowflakes.length) {
+            c.fillStyle = 'rgba(255,255,255,0.9)';
+            snowflakes.forEach(f => {
+                f.y += f.speed;
+                f.x += Math.sin(performance.now() / 1000 + f.sway) * 0.3;
+                if (f.y > 320) {
+                    f.y = -5;
+                    f.x = Math.random() * 320;
+                }
+                if (f.x < -10) f.x = 319;
+                if (f.x > 330) f.x = 0;
+                c.fillRect(f.x, f.y, f.size, f.size);
+            });
+        }    
+    
 frameCount++;  // Add this line
 }
 
