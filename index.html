@@ -2289,6 +2289,25 @@ document.getElementById('start-button').addEventListener('click', () => {
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
 
+// === CRITICAL FIX: Start music + unlock audio context on user gesture ===
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            console.log('AudioContext resumed by START button');
+            // Now safe to start music immediately
+            musicManager.current = null;
+            if (!musicMuted) {
+                musicManager.play(currentTheme);
+            }
+        });
+    } else {
+        // Context already running → just play
+        musicManager.current = null;
+        if (!musicMuted) {
+            musicManager.play(currentTheme);
+        }
+    }
+    // === End of fix ===
+
     // Assign random elemental immunity
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
@@ -9346,10 +9365,18 @@ function startGame() {
 
 // Add touchstart for mobile responsiveness
 document.getElementById('start-button').addEventListener('touchstart', (e) => {
-    e.preventDefault(); // Prevent scroll/zoom
-    // Trigger the same logic as click
-    // (copy the entire click handler body here if needed, but since it's the same, just call startGame() if defined)
-    startGame();
+    e.preventDefault();
+    // Same fix as click – use the guaranteed touch gesture
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            musicManager.current = null;
+            if (!musicMuted) musicManager.play('dungeon');
+        });
+    } else {
+        musicManager.current = null;
+        if (!musicMuted) musicManager.play('dungeon');
+    }
+    startGame(); // your existing function
 }, { passive: false });
 
 window.addEventListener("gamepadconnected", (e) => {
