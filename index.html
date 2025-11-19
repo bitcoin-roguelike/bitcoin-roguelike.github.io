@@ -7748,28 +7748,8 @@ waveActive = false;
     projectiles = []; // Add this line to reset projectiles array on restart
     populateNameList();
     
-// Fix: Properly reset MusicManager state and ensure audio context is ready
-    try {
-        if (audioContext && audioContext.state === 'suspended') {
-        musicManager.current = null;
-            audioContext.resume();
-        }
-
-        musicManager.mute(musicMuted); // Ensure proper mute state from localStorage
-        // Set initial volumes
-        setSoundVolume(soundVolume);
-        setMusicVolume(musicVolume);
-    } catch (e) {
-        console.warn('Error resetting music manager:', e);
-    }
-    
-    // Set music volume to 0 when restarting
-    if (musicManager.current) {
-        const currentAudio = musicManager.audios[musicManager.current];
-        if (currentAudio) {
-            currentAudio.volume = 0;
-        }
-    }
+// Set music volume to 0 when restarting
+setMusicVolume(0);
 
     /* ------------------------------------------------------------------
        3. Reset UI elements
@@ -8890,7 +8870,7 @@ document.addEventListener('keydown', e => {
         if (splashActive && !hasPlayedOnce) {
             return; // Block Enter on initial splash screen
         }
-        if (splashActive && hasPlayedOnce) {
+        if (splashActive && hasPlayedOnce) {        
             const startButton = document.getElementById('start-button');
             startButton.style.background = '#00b7ef'; // Mimic :hover color
             setTimeout(() => {
@@ -8943,13 +8923,18 @@ setTimeout(() => {
     setSoundVolume(soundVolume);
 }, 100);
         fadeSplash();
-        setTimeout(() => {
-            if (!gameOver && !splashActive) {
-                fetchTxs();
-                lastUpdate = Date.now();
-                console.log('Initial fetchTxs triggered after splash, wave=', wave);
+    setTimeout(() => {
+        if (!gameOver && !splashActive) {
+            fetchTxs();
+            lastUpdate = Date.now();
+            console.log('Initial fetchTxs triggered after splash, wave=', wave);
+
+            // ←←←  NEW: start music only now (after splash fade)
+            if (!musicMuted) {
+                musicManager.play(currentTheme);
             }
-        }, 2000);
+        }
+    }, 2000);
     }
     
     // Set music volume to max when starting
@@ -9253,6 +9238,9 @@ let currentAxes = null;
 // Start game function for splash screen
 function startGame() {
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
+    musicMuted = false;
+    musicManager.mute(false);
+    
     if (!splashActive) {
         return;
     }
@@ -9495,10 +9483,7 @@ if (buttons[1].pressed && !lastButtonsState[1]) {
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     } else if (gameOver && gamepadIndex !== null && !inputBlocked) {  // ← Add !inputBlocked check here
         if (!gameOverBPressed) {
-            if (!scoreSubmitted && floor >= 3) {
-                // Submit score if eligible
-                submitScoreWithRandomName();
-            } else if (floor < 3) {
+            if (floor < 3) {
                 // Show message for low floors
                 document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
                 document.getElementById('leaderboard-output').style.display = 'block';
@@ -9523,8 +9508,10 @@ if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime >
         // Exit soul terminal
         closeSoulTerminal();
     } else if (splashActive) {
+    setMusicVolume(100);
         startGame();
     } else if (gameOver) {
+setMusicVolume(0);
         restart();
     } else {
         // Existing else logic (if any)
@@ -9603,18 +9590,6 @@ document.addEventListener('contextmenu', function(e) {
         return false;
     }
 }, { passive: false });
-
-// Function to submit score with random name
-function submitScoreWithRandomName() {
-    if (gameOver && !scoreSubmitted && gamepadIndex !== null) {
-        // Select a random name from the names array
-        const randomName = names[Math.floor(Math.random() * names.length)];
-        document.getElementById('username-input').value = randomName;
-        
-        // Submit the score
-        submitScore();
-    }
-}
 
 function displayUniqueMonsterName() {
     if (!activeUniqueMonsterName) return;
