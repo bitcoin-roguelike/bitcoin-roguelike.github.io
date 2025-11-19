@@ -8928,11 +8928,6 @@ setTimeout(() => {
             fetchTxs();
             lastUpdate = Date.now();
             console.log('Initial fetchTxs triggered after splash, wave=', wave);
-
-            // ←←←  NEW: start music only now (after splash fade)
-            if (!musicMuted) {
-                musicManager.play(currentTheme);
-            }
         }
     }, 2000);
     }
@@ -9241,6 +9236,8 @@ function startGame() {
     musicManager.mute(false);
     document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
 
+setMusicVolume(100);
+
     
     if (!splashActive) {
         return;
@@ -9282,15 +9279,6 @@ function startGame() {
     
     hasPlayedOnce = true; // Mark that the player has started a game
     
-    // Ensure fetchTxs is triggered after splash fade
-    setTimeout(() => {
-        if (!gameOver && !splashActive && floor > 0) {
-            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
-            fetchTxs();
-        } else {
-            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
-        }
-    }, 2000); // Match original start-button delay
 }
 
 // Add touchstart for mobile responsiveness
