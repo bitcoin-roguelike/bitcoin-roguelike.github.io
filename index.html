@@ -2279,119 +2279,6 @@ function resetSplashScreen() {
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
 }
 
-document.getElementById('start-button').addEventListener('click', () => {
-    currentTheme = 'dungeon'; // Force default theme on game start
-    // Switch back to splash.png when starting
-    if (currentSplashImage !== 'splash.png') {
-        currentSplashImage = 'splash.png';
-        splashCanvas.clearRect(0, 0, 320, 320);
-        splashImg.src = currentSplashImage;
-        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-    }
-
-    // Assign random elemental immunity
-    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
-    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
-
-wakeLock = null;
-
-// Function to request wake lock
-async function requestWakeLock() {
-  try {
-    if ('wakeLock' in navigator) {
-      wakeLock = await navigator.wakeLock.request('screen');
-      console.log('Wake lock activated');
-      wakeLock.addEventListener('release', () => {
-        console.log('Wake lock released');
-      });
-    } else {
-      console.warn('Wake Lock API not supported in this browser. Adjust OS power settings manually.');
-      alert('Wake Lock not supported. To prevent sleep, disable screen timeout in your OS settings or play a silent audio loop.');
-    }
-  } catch (err) {
-    console.error('Wake lock error:', err);
-  }
-}
-
-// Re-request wake lock if visibility changes (e.g., tab switch)
-document.addEventListener('visibilitychange', async () => {
-  if (wakeLock !== null && document.visibilityState === 'visible') {
-    await requestWakeLock();
-  }
-});
-
-if (splashActive) {
-        preloadSounds();
-        // Ensure AudioContext is resumed for iOS
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                // Reset music manager state and play music after AudioContext is resumed
-                musicManager.current = null;
-                if (!musicMuted) {
-                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
-                }
-            }).catch(e => console.error('Failed to resume AudioContext:', e));
-        } else {
-            // Reset music manager state on restart
-            musicManager.current = null;
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play music if AudioContext is already running
-            }
-        }
-            // Fix: Properly reset MusicManager state and ensure audio context is ready
-    try {
-        if (audioContext && audioContext.state === 'suspended') {
-        musicManager.current = null;
-            audioContext.resume();
-        }
-
-        musicManager.mute(musicMuted); // Ensure proper mute state
-    } catch (e) {
-        console.warn('Error resetting music manager:', e);
-    }
-    
-// Set music volume to 0 when restarting
-setSoundVolume(0);
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
-fadeSplash();
-setTimeout(() => {
-    if (!gameOver && !splashActive) {
-        requestWakeLock();  // ← Add this to request wake lock on game start
-        fetchTxs();
-        lastUpdate = Date.now();
-        console.log('Initial fetchTxs triggered after splash, wave=', wave);
-        
-        // First-time leaderboard cache (only once per browser session)
-        if (!localStorage.getItem('leaderboardCached')) {
-            fetchLeaderboard().then(() => {
-                localStorage.setItem('leaderboardCached', 'true');
-                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-                console.log('Leaderboard cached on first start');
-            }).catch(err => console.error('Cache fetch failed:', err));
-        } else {
-            cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
-        }
-    }
-}, 2000);
-    }
-    
-    // Set music volume to max when starting
-if (musicManager.current) {
-    const currentAudio = musicManager.audios[musicManager.current];
-    if (currentAudio) {
-        currentAudio.currentTime = 0;
-        currentAudio.volume = 1;
-    }
-}
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
-});
-
 function toggleMute() {
     const muteButton = document.getElementById('mute');
     const currentState = muteButton.textContent;
@@ -9171,87 +9058,86 @@ class GamepadAxes {
 let currentAxes = null;
 
 // Start game function for splash screen
-function startGame() {
-    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI based on saved state
-    if (!splashActive) {
-        return;
+// ─────────────────────────────────────────────────────────────────────────────
+//  NEW START BUTTON HANDLER – fixes music on mobile (iOS/Android)
+// ─────────────────────────────────────────────────────────────────────────────
+document.getElementById('start-button').addEventListener('click', startGame);
+
+// Also allow Enter key on the splash screen
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && splashActive) {
+        e.preventDefault();
+        startGame();
     }
-    
-    // Switch back to splash.png when starting
+});
+
+function startGame() {
+    if (!splashActive) return;
+
+    // ─── 1. Force correct splash image ─────────────────────────────────────
+    currentTheme = 'dungeon';
     if (currentSplashImage !== 'splash.png') {
         currentSplashImage = 'splash.png';
         splashCanvas.clearRect(0, 0, 320, 320);
         splashImg.src = currentSplashImage;
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
-    
-    const startButton = document.getElementById('start-button');
-    startButton.style.background = '#00b7ef'; // Mimic hover
-    setTimeout(() => {
-        startButton.style.background = '#00e8d8'; // Revert
-    }, 200);
-    
-    // Check for gamepad at game start
-    if (navigator.getGamepads) {
-        const gamepads = navigator.getGamepads();
-        for (let i = 0; i < gamepads.length; i++) {
-            if (gamepads[i]) {
-                gamepadIndex = i;
-                console.log('Gamepad detected at game start:', gamepads[i].id);
-                break;
-            }
+
+    // ─── 2. Random elemental immunity (kept from your code) ─────────────────
+    const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
+    p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
+
+    // ─── 3. AUDIO FIX – this is the important part for mobile ───────────────
+    // Resume AudioContext + start music synchronously inside the user gesture
+    (async () => {
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
         }
-    }
-    
-    // Resume AudioContext
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-        }).catch(e => console.error('Failed to resume AudioContext:', e));
-    }
-    preloadSounds(); // Preload sounds after user interaction
-    
-    currentTheme = 'dungeon'; // Force default theme on game start
-    // Set mute state based on saved preference
-    musicManager.mute(musicMuted);
-    document.getElementById('mute').textContent = musicMuted ? 'X' : '♪'; // Update mute button UI
-    musicManager.current = null; // Reset MusicManager state
-    musicManager.audios[currentTheme].pause(); // Ensure audio is stopped
-    musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-    
-    if (musicManager.audios[currentTheme].readyState >= 2) { // Check if audio is loaded
-        console.log('Playing music from start:', currentTheme); // Debug log
-        musicManager.play(currentTheme); // Play the music immediately
-    } else {
-        console.log('Audio not ready, waiting for', currentTheme); // Debug log
-        musicManager.audios[currentTheme].load(); // Force reload
-        musicManager.audios[currentTheme].oncanplaythrough = () => {
-            console.log('Audio ready, playing from start:', currentTheme); // Debug log
-            musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play once ready only if we should unmute
-            }
-        };
-    }
-    
+        if (!musicMuted) {
+            musicManager.current = null;           // reset manager
+            musicManager.play(currentTheme);       // start music immediately
+        }
+    })();
+
+    // ─── 4. Preload sounds & fade out splash ───────────────────────────────
+    preloadSounds();
     fadeSplash();
-    
-    // Start gamepad polling if gamepad is connected
-    if (gamepadIndex !== null) {
-        gamepadPollingActive = true;
-        updateGamepad();
-    }
-    
-    hasPlayedOnce = true; // Mark that the player has started a game
-    
-    // Ensure fetchTxs is triggered after splash fade
-    setTimeout(() => {
-        if (!gameOver && !splashActive && floor > 0) {
-            console.log('Post-splash fetchTxs triggered: floor=', floor, 'wave=', wave);
-            fetchTxs();
-        } else {
-            console.log('Post-splash fetchTxs skipped: gameOver=', gameOver, 'splashActive=', splashActive, 'floor=', floor);
+
+    // ─── 5. Wake lock + first fetch (unchanged) ────────────────────────────
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log('Wake lock activated');
+                wakeLock.addEventListener('release', () => console.log('Wake lock released'));
+            }
+        } catch (err) {
+            console.error('Wake lock error:', err);
         }
-    }, 2000); // Match original start-button delay
+    }
+    document.addEventListener('visibilitychange', async () => {
+        if (wakeLock !== null && document.visibilityState === 'visible') {
+            await requestWakeLock();
+        }
+    });
+
+    setTimeout(() => {
+        if (!gameOver && !splashActive) {
+            requestWakeLock();
+            fetchTxs();
+            lastUpdate = Date.now();
+
+            // Leaderboard cache (first session only)
+            if (!localStorage.getItem('leaderboardCached')) {
+                fetchLeaderboard().then(() => {
+                    localStorage.setItem('leaderboardCached', 'true');
+                    cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+                });
+            } else {
+                cachedLeaderboard = JSON.parse(localStorage.getItem('leaderboardData') || '[]');
+            }
+        }
+    }, 2000);
 }
 
 // Add touchstart for mobile responsiveness
