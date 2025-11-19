@@ -9058,39 +9058,22 @@ class GamepadAxes {
 let currentAxes = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// START BUTTON – one press only, music unlocks instantly on mobile
+// START BUTTON – music unlocks instantly with proven soul stash trick
 // ─────────────────────────────────────────────────────────────────────────────
-let firstGestureDone = false;
-
-function handleFirstGesture() {
-    if (firstGestureDone) return;
-    firstGestureDone = true;
-
-    // Silent first gesture – resume AudioContext only
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(() => {});
+document.getElementById('start-button').addEventListener('click', startGame);
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && splashActive) {
+        e.preventDefault();
+        startGame();
     }
+});
+document.getElementById('start-button').addEventListener('touchstart', e => {
+    e.preventDefault();
+    startGame();
+}, { passive: false });
 
-    // Remove listeners so it fires only once
-    document.removeEventListener('click', handleFirstGesture);
-    document.removeEventListener('touchstart', handleFirstGesture);
-}
-
-// Catch the very first click/touch on the splash screen (silent first gesture)
-document.addEventListener('click', handleFirstGesture);
-document.addEventListener('touchstart', handleFirstGesture, { passive: true });
-
-// Real START button – simulates a second gesture internally if needed
 function startGame() {
     if (!splashActive) return;
-
-    // If first gesture hasn't happened yet, fake it now (still inside the real click)
-    if (!firstGestureDone) {
-        firstGestureDone = true;
-        if (audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-    }
 
     // 1. Splash image + theme
     currentTheme = 'dungeon';
@@ -9105,16 +9088,32 @@ function startGame() {
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
 
-    // Music starts immediately – browser now treats this as a valid gesture
+    preloadSounds();
+    fadeSplash();
+
+    // ─── PROVEN AUDIO UNLOCK: teleport player onto soul stash for one tick ───
+    const orig = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
+    if (soulStashPos) {
+        p.x = soulStashPos.x;
+        p.y = soulStashPos.y;
+        p.currentX = p.x * S;
+        p.currentY = p.y * S;
+
+        openSoulTerminal();   // <-- real input.focus() → audio unblocked
+        closeSoulTerminal();  // <-- instantly closed, no visual change
+
+        // Restore spawn position
+        p.x = orig.x; p.y = orig.y;
+        p.currentX = orig.cx; p.currentY = orig.cy;
+    }
+
+    // Music now plays – AudioContext is unlocked
     if (!musicMuted) {
         musicManager.current = null;
         musicManager.play(currentTheme);
     }
 
-    preloadSounds();
-    fadeSplash();
-
-    // Wake lock
+    // Wake lock & delayed actions (unchanged)
     async function requestWakeLock() {
         try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
         catch (e) { console.error('Wake lock error:', e); }
@@ -9135,27 +9134,12 @@ function startGame() {
         }
     }, 2000);
 
-    // Original volume reset
     if (musicManager.current) {
         const a = musicManager.audios[musicManager.current];
         if (a) { a.currentTime = 0; a.volume = 1; }
     }
     setTimeout(() => setSoundVolume(soundVolume), 100);
 }
-
-// Wire START button – one press only
-document.getElementById('start-button').addEventListener('click', startGame);
-document.getElementById('start-button').addEventListener('touchstart', e => {
-    e.preventDefault();
-    startGame();
-}, { passive: false });
-
-document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && splashActive) {
-        e.preventDefault();
-        startGame();
-    }
-});
 
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
