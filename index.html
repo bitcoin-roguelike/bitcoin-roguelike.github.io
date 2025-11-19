@@ -9058,22 +9058,39 @@ class GamepadAxes {
 let currentAxes = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// START BUTTON – music unlocks 100% on press (even on the strictest phones)
+// START BUTTON – one press only, music unlocks instantly on mobile
 // ─────────────────────────────────────────────────────────────────────────────
-document.getElementById('start-button').addEventListener('click', startGame);
-document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && splashActive) {
-        e.preventDefault();
-        startGame();
-    }
-});
-document.getElementById('start-button').addEventListener('touchstart', e => {
-    e.preventDefault();
-    startGame();
-}, { passive: false });
+let firstGestureDone = false;
 
+function handleFirstGesture() {
+    if (firstGestureDone) return;
+    firstGestureDone = true;
+
+    // Silent first gesture – resume AudioContext only
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(() => {});
+    }
+
+    // Remove listeners so it fires only once
+    document.removeEventListener('click', handleFirstGesture);
+    document.removeEventListener('touchstart', handleFirstGesture);
+}
+
+// Catch the very first click/touch on the splash screen (silent first gesture)
+document.addEventListener('click', handleFirstGesture);
+document.addEventListener('touchstart', handleFirstGesture, { passive: true });
+
+// Real START button – simulates a second gesture internally if needed
 function startGame() {
     if (!splashActive) return;
+
+    // If first gesture hasn't happened yet, fake it now (still inside the real click)
+    if (!firstGestureDone) {
+        firstGestureDone = true;
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+    }
 
     // 1. Splash image + theme
     currentTheme = 'dungeon';
@@ -9088,24 +9105,7 @@ function startGame() {
     const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
     p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
 
-    // ─── THE MAGIC: pretend the player just stepped on the soul stash ───
-    // This is the exact code path that unlocks audio on every mobile browser
-    const origPos = { x: p.x, y: p.y, cx: p.currentX, cy: p.currentY };
-    if (soulStashPos) {
-        p.x = soulStashPos.x;
-        p.y = soulStashPos.y;
-        p.currentX = p.x * S;
-        p.currentY = p.y * S;
-
-        openSoulTerminal();   // ← this does the real input.focus() that unblocks audio
-        closeSoulTerminal();  // ← instantly close again – no visual change at all
-
-        // Restore normal spawn position immediately
-        p.x = origPos.x;   p.y = origPos.y;
-        p.currentX = origPos.cx;   p.currentY = origPos.cy;
-    }
-
-    // Now play the music – AudioContext is guaranteed unlocked
+    // Music starts immediately – browser now treats this as a valid gesture
     if (!musicMuted) {
         musicManager.current = null;
         musicManager.play(currentTheme);
@@ -9135,13 +9135,27 @@ function startGame() {
         }
     }, 2000);
 
-    // Volume reset (your original behaviour)
+    // Original volume reset
     if (musicManager.current) {
         const a = musicManager.audios[musicManager.current];
         if (a) { a.currentTime = 0; a.volume = 1; }
     }
     setTimeout(() => setSoundVolume(soundVolume), 100);
 }
+
+// Wire START button – one press only
+document.getElementById('start-button').addEventListener('click', startGame);
+document.getElementById('start-button').addEventListener('touchstart', e => {
+    e.preventDefault();
+    startGame();
+}, { passive: false });
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && splashActive) {
+        e.preventDefault();
+        startGame();
+    }
+});
 
 window.addEventListener("gamepadconnected", (e) => {
     // Only connect if no gamepad is currently connected or if it's a different gamepad
