@@ -2635,10 +2635,32 @@ function playUniqueMonsterSound(uniqueName) {
     }
 }
 
+function updateSnowState() {
+    if (currentTheme === 'hell' && currentThemeBlock === 'hell_snowy') {
+        snowyHellActive = true;
+        // make sure we have snowflakes if they got cleared
+        if (snowflakes.length === 0) {
+            for (let i = 0; i < 120; i++) {
+                snowflakes.push({
+                    x: Math.random() * 320,
+                    y: Math.random() * 320 - 100,
+                    speed: 0.2 + Math.random() * 0.4,
+                    size: 1 + Math.random() * 2,
+                    sway: Math.random() * 2
+                });
+            }
+        }
+    } else {
+        snowyHellActive = false;
+        snowflakes = []; // instantly stop snow
+    }
+}
+
 function initMap() {
     try {
         if (inHideout) {
             currentTheme = 'hideout';
+            updateSnowState();
             document.documentElement.style.setProperty('--text-color', '#ff8c00');
             document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
                 el.style.color = '#ff8c00';
@@ -2823,6 +2845,7 @@ if (floor % 3 === 0 && floor > 1) {
         snowyHellActive = true;
     }
 }
+updateSnowState(); // make sure snowflakes match
         
         // Update text color based on theme
         let textColor;
@@ -5048,6 +5071,7 @@ if (map[ny][nx] === 25) {
                 initialWaveSpawned = previousFloorState.initialWaveSpawned;
                 waveActive = previousFloorState.waveActive;
 currentTheme = previousFloorState.currentTheme;
+updateSnowState();
 fogMap = previousFloorState.fogMap.map(row => [...row]);  // ← Add this line
 const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
 p.x = portal ? portal.x : 2;
@@ -7754,6 +7778,7 @@ function startPuzzleRoom() {
 
     // Force dungeon visuals & hideout music
     currentTheme = 'dungeon';
+    updateSnowState();
     musicManager.play('hideout');
     musicManager.current = 'hideout';
 
@@ -7856,11 +7881,21 @@ if (floor >= 30) {
     inPuzzleRoom = false;
     inHideout = false;
 
-    // Restore original visual theme
-    if (puzzlePreviousTheme !== null) {
-        currentTheme = puzzlePreviousTheme;
-        puzzlePreviousTheme = null;
+// Restore the ORIGINAL theme we had before entering the puzzle
+if (puzzlePreviousTheme !== null) {
+    currentTheme = puzzlePreviousTheme;
+    puzzlePreviousTheme = null;
+}
+
+// Properly restore snowy hell state if we were in a snowy hell block
+if (currentTheme === 'hell') {
+    if (currentThemeBlock === 'hell_snowy') {
+        snowyHellActive = true;
+    } else {
+        snowyHellActive = false;
     }
+}
+updateSnowState();  // ensures snowflakes + snowy tiles match the theme
 
     // FAKE A HIDE-OUT VISIT — this magically restores the correct music!
     musicManager.play('hideout');
@@ -8453,12 +8488,12 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
     if (isVisible && map[y][x] !== 1) {
 
-// SNOWY HELL OVERRIDE — use snowy texture instead of currentTheme
-        if (snowyHellActive) {
-            c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
-        } else {
-            c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
-        }
+// Draw floor — snowy hell only when BOTH in hell theme AND snowy block is active
+if (currentTheme === 'hell' && snowyHellActive) {
+    c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
+} else {
+    c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+}
         
         // Draw dangerous areas (spells) before other items
         dangerousAreas.forEach(area => {
