@@ -7735,11 +7735,7 @@ function startPuzzleRoom() {
     puzzleReturnPos = { x: p.x, y: p.y };  // Remember where player entered — used later for stairs!
     puzzlePreviousTheme = currentTheme;  // ← Save original theme
 
-    enemies = []; // critical!
-    projectiles = [];
-    highlightTiles = [];
-    dangerousAreas = [];
-    
+    enemies = []; // critical!    
     isFetchingTxs = true;
 
 // === CRITICAL: KILL ANY OLD EXIT FROM PREVIOUS FLOOR ===
@@ -8590,12 +8586,10 @@ if (map[y][x] === 25) { // Puzzle portal tile
                 c.drawImage(assets.boulder, b.x*S, b.y*S, S, S);
             });
 
-            // === MULTIPLE HEART FRAMERS (pulsing) ===
-            puzzleHeartFramers.forEach((h, i) => {
-                c.save();
-                c.globalAlpha = 0.9 + 0.1 * Math.sin(performance.now() / 200 + i * 0.5);
-                c.drawImage(assets.heartFramer, h.x*S, h.y*S, S, S);
-                c.restore();
+            // === MULTIPLE HEART FRAMERS ===
+            // Draw heart framers — NO PULSATING (mobile performance fix!)
+            puzzleHeartFramers.forEach(h => {
+                c.drawImage(assets.heartFramer, h.x * S, h.y * S, S, S);
             });
 
             // === CHEST — OPENS ONLY WHEN ALL HEARTS COLLECTED ===
