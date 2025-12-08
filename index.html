@@ -1430,6 +1430,11 @@ let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
 let auraFlashDuration = 300; // New: Flash duration in ms
+
+let puzzlePreviousTheme = null;  // remembers theme before entering puzzle portal
+let currentThemeBlock = null;  // 'hell_normal' or 'hell_snowy' for the current 3-floor block
+let puzzleCurrentLayout = null;  // ← ADD THIS
+
 let map = [],
 p = {
 x: 2,
@@ -1569,6 +1574,16 @@ let soulStashPos = null; // Position of soul stash on current floor
 let soulTerminalActive = false; // Whether soul terminal is currently open
 let soulTerminalCommand = ''; // Current command input
 let soulTerminalCursorPos = 0; // Cursor position in command
+
+// Puzzle Room System (v2 — proper L2 style)
+let inPuzzleRoom = false;
+let puzzleHazards = [];      // {x,y,type} — lava, water, quicksand
+let puzzleArrows = [];       // {x,y,dir} — 'up','down','left','right'
+let puzzleBoulders = [];     // {x,y}
+let puzzleHeartFramers = []; // array of {x,y} — collect ALL to open chest
+let puzzleChest = null;      // {x,y}
+let puzzleReturnPos = null;
+let puzzleTheme = 'hell';    // hell, desert, paradise
 
 const specialSoundsPlayedThisFloor = {
     lava: false,
@@ -1737,7 +1752,7 @@ types.forEach(t => {
         // Snowy hell overrides (used when snowyHellActive = true)
         assets.themes.hell.snowy_floor = new Image();
         assets.themes.hell.snowy_wall = new Image();
-        assets.themes.hell.snowy_floor.src = 'hell_floor.png';   // reuse base texture
+        assets.themes.hell.snowy_floor.src = 'hell_floor_snow.png';
         assets.themes.hell.snowy_wall.src = 'hell_wall.png';     // reuse base texture
         assets.themes.ruins.floor.src = 'ring_floor.png';
         assets.themes.ruins.wall.src = 'ring_wall.png';
@@ -1795,6 +1810,23 @@ types.forEach(t => {
 	assets.themes.hideout.diamond_wall.src = 'diamond_wall.png';
 	assets.soul_orb_statue.src = 'soul_orb_statue.png';
 	assets.shrine.src = 'shrine.png';
+
+// Puzzle room assets
+assets.puzzlePortal = [new Image(), new Image(), new Image()];
+assets.puzzlePortal[0].src = 'puzzle_portal_1.png';
+assets.puzzlePortal[1].src = 'puzzle_portal_2.png';
+assets.puzzlePortal[2].src = 'puzzle_portal_3.png';
+assets.boulder = new Image();
+assets.boulder.src = 'boulder.png';
+assets.heartFramer = new Image();
+assets.heartFramer.src = 'heart_framer.png';
+assets.chestClosed = new Image();
+assets.chestClosed.src = 'chest_closed.png';
+assets.chestOpen = new Image();
+assets.chestOpen.src = 'chest_open.png';
+assets.arrowTile = new Image();
+assets.arrowTile.src = 'arrow_tile.png'; // will rotate based on direction
+	
 	assets.jeweller.src = 'jeweller.png';
 	assets.blacksmith.src = 'blacksmith.png';
 	assets.waypoint.src = 'waypoint.png';
@@ -2336,16 +2368,16 @@ if (splashActive) {
             audioContext.resume().then(() => {
                 // Reset music manager state and play music after AudioContext is resumed
                 musicManager.current = null;
-                if (!musicMuted) {
-                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
-                }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
             }).catch(e => console.error('Failed to resume AudioContext:', e));
         } else {
             // Reset music manager state on restart
             musicManager.current = null;
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play music if AudioContext is already running
-            }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
         }
             // Fix: Properly reset MusicManager state and ensure audio context is ready
     try {
@@ -2748,43 +2780,49 @@ updateFogMap(p.x, p.y);
             return;
         }
 
-        // Change theme every fourth floor
-        if (floor % 3 === 0 && floor > 1) {
-            currentTheme = selectNewTheme(currentTheme);
-        }
-        
-        // 50% chance that a hell theme block becomes snowy hell (locked for the whole block)
-        if (currentTheme === 'hell') {
-            if (snowyHellToggleFloor === floor - 2 || snowyHellToggleFloor === floor - 1 || snowyHellToggleFloor === floor) {
-                // We are inside an existing snowy hell streak – keep it
-                snowyHellActive = true;
-                needsRedraw = true;
-            } else if (!snowyHellActive) {
-                // Fresh hell block – roll the dice once
-                if (Math.random() < 0.5) { // change back to 0.125 when you're done testing
-                    snowyHellActive = true;
-                    snowyHellToggleFloor = floor;
-                    needsRedraw = true;
+// ——— THEME BLOCK CONSISTENCY ———
+if (floor % 3 === 0 && floor > 1) {
+    const newTheme = selectNewTheme(currentTheme);
 
-                    // initialise snowflakes (only once per streak)
-                    snowflakes = [];
-                    for (let i = 0; i < 120; i++) {
-                        snowflakes.push({
-                            x: Math.random() * 320,
-                            y: Math.random() * 320 - 100,
-                            speed: 0.2 + Math.random() * 0.4,
-                            size: 1 + Math.random() * 2,
-                            sway: Math.random() * 2
-                        });
-                    }
-                    logBattleEvent(`Floor ${floor} - Hell froze over! Snowy Hell begins…`);
+    if (newTheme === 'hell') {
+        // First time entering a new hell block?
+        if (currentThemeBlock !== 'hell_normal' && currentThemeBlock !== 'hell_snowy') {
+            // 50% chance to be snowy hell for the ENTIRE 3-floor block
+            currentThemeBlock = Math.random() < 0.5 ? 'hell_snowy' : 'hell_normal';
+            
+            // Apply the decision
+            snowyHellActive = (currentThemeBlock === 'hell_snowy');
+            
+            if (snowyHellActive) {
+                // Initialize snowflakes ONCE per block
+                snowflakes = [];
+                for (let i = 0; i < 120; i++) {
+                    snowflakes.push({
+                        x: Math.random() * 320,
+                        y: Math.random() * 320 - 100,
+                        speed: 0.2 + Math.random() * 0.4,
+                        size: 1 + Math.random() * 2,
+                        sway: Math.random() * 2
+                    });
                 }
+                logBattleEvent(`Floor ${floor} - Hell froze over! Snowy Hell begins…`);
             }
-        } else {
-            // Not hell anymore – turn snow off
-            snowyHellActive = false;
-            snowflakes = [];
         }
+        // Keep using the same hell variant for the whole block
+        currentTheme = 'hell';
+    } else {
+        // Not hell → reset everything
+        currentThemeBlock = null;
+        snowyHellActive = false;
+        snowflakes = [];
+        currentTheme = newTheme;
+    }
+} else {
+    // Not a theme-change floor → keep current hell variant (if any)
+    if (currentTheme === 'hell' && currentThemeBlock === 'hell_snowy') {
+        snowyHellActive = true;
+    }
+}
         
         // Update text color based on theme
         let textColor;
@@ -3096,7 +3134,8 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
 // Initialize dangerous areas array for spells
 dangerousAreas = [];
 
-        exit = null;
+exit = null;
+
         initialWaveSpawned = false;
         needsRedraw = true;
 
@@ -3137,9 +3176,9 @@ dangerousAreas = [];
         checkRunewordsAtFloorStart();
         // Update rune display
         //checkRunewords();
-        if (!musicMuted) {
-            musicManager.play(currentTheme);
-        }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
     } catch (e) {
         console.error('initMap Error:', e, e.stack);
         throw e;
@@ -3952,42 +3991,6 @@ if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
                         playWebAudioSound(sounds.pickup);
                     }
                 }
-
-                // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
-                if (!scrollDroppedThisFloor && Math.random() < 1/25) {
-                    let scrollPlaced = false;
-                    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
-                    if (map[enemy.y][enemy.x] === 0) {
-                        map[enemy.y][enemy.x] = 11; // Scroll tile
-                        scrollDrops.push({ x: enemy.x, y: enemy.y });
-                        scrollPlaced = true;
-                    } else {
-                        const adjacent = [
-                            { x: enemy.x, y: enemy.y - 1 },
-                            { x: enemy.x, y: enemy.y + 1 },
-                            { x: enemy.x - 1, y: enemy.y },
-                            { x: enemy.x + 1, y: enemy.y }
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny) &&
-                                !scrollDrops.some(s => s.x === nx && s.y === ny)
-                            ) {
-                                map[ny][nx] = 11; // Scroll tile
-                                scrollDrops.push({ x: nx, y: ny });
-                                scrollPlaced = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (scrollPlaced) {
-                        logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a scroll!`);
-                        playWebAudioSound(sounds.pickup);
-                    }
-                }
                 
                 // Rune drop logic (20% for Hell Shrimp, 10% for others)
                 if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
@@ -4086,8 +4089,21 @@ function move(dir) {
         // This is handled by the existing logic but we want to ensure it works properly
     }
 
+    // Save previous position for boulder pushing
+    if (!p.previousX) p.previousX = p.x;
+    if (!p.previousY) p.previousY = p.y;
+
     swordDir = dir;
     let nx = p.x, ny = p.y;
+    
+// === BLOCK MOVEMENT ON HAZARDS IN PUZZLE ROOMS ===
+    if (inPuzzleRoom) {
+        const hazardTile = map[ny] && map[ny][nx] === 6;
+        if (hazardTile) {
+            return; // Cannot walk on lava/quicksand/pond
+        }
+    }
+    
     let newDirection = p.anim.direction;
 
     if (dir === 'up') { ny--; newDirection = 'back'; }
@@ -4111,12 +4127,108 @@ if (p.moveCounter >= 2) {
     updatePlayerState();  // Call every 2 moves (shrine tick) to check aura too
 }
 
-    // Validate move before starting animation
-    if (nx < 0 || nx >= W || ny < 0 || ny >= H || isSolid(nx, ny)) {
-        p.anim.direction = newDirection; // Update direction for rendering
+    // === VALIDATE MOVE + BOULDER PUSHING (L2 style) ===
+    if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
+        p.anim.direction = newDirection;
         needsRedraw = true;
-        return; // Don't start animation
+        return;
     }
+
+    // Block walls
+    if (isSolid(nx, ny)) {
+        p.anim.direction = newDirection;
+        needsRedraw = true;
+        return;
+    }
+
+// ———————————————————————————————————————
+// PUZZLE ROOM: BOULDER & LAVA LOGIC (L2 perfect)
+// ———————————————————————————————————————
+if (inPuzzleRoom) {
+    const targetTile = map[ny][nx];
+
+    // 1. Raw lava (no boulder) → blocked
+    if (targetTile === 6 && !puzzleBoulders.some(b => b.x === nx && b.y === ny)) {
+        p.anim.direction = newDirection;
+        needsRedraw = true;
+        return;
+    }
+
+    // 2. There is a boulder on the target tile
+    if (puzzleBoulders.some(b => b.x === nx && b.y === ny)) {
+        const boulder = puzzleBoulders.find(b => b.x === nx && b.y === ny);
+
+        // 2a. Boulder on lava → walkable, not pushable
+        if (puzzleHazards.some(h => h.x === nx && h.y === ny)) {
+            // do nothing → player walks on bridge
+        }
+        // 2b. Boulder is pushable
+        else {
+            const pushX = nx + (dir === 'right' ? 1 : dir === 'left' ? -1 : 0);
+            const pushY = ny + (dir === 'down' ? 1 : dir === 'up' ? -1 : 0);
+
+            // Sacred blocks
+            if (puzzleChest && pushX === puzzleChest.x && pushY === puzzleChest.y) {
+                p.anim.direction = newDirection;
+                needsRedraw = true;
+                return;
+            }
+            if (puzzleHeartFramers.some(h => h.x === pushX && h.y === pushY)) {
+                p.anim.direction = newDirection;
+                needsRedraw = true;
+                return;
+            }
+
+if (pushX >= 0 && pushX < W && pushY >= 0 && pushY < H) {
+    let isSinkingIntoLava = false;
+
+    if (map[pushY][pushX] === 6) {
+        // ——— SINK INTO LAVA ———
+        isSinkingIntoLava = true;
+
+        map[pushY][pushX] = 0;
+
+        const boulderX = boulder.x;
+        const boulderY = boulder.y;
+
+        puzzleBoulders = puzzleBoulders.filter(b => b.x !== boulderX || b.y !== boulderY);
+        puzzleHazards = puzzleHazards.filter(h => h.x !== pushX || h.y !== pushY);
+        map[boulderY][boulderX] = 0;
+
+        highlightTiles.push({x: boulderX, y: boulderY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
+        highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
+
+        logBattleEvent("Boulder sinks and cools into permanent stone!");
+        playWebAudioSound(sounds.lava);
+    }
+    else if (map[pushY][pushX] !== 0) {
+        p.anim.direction = newDirection;
+        needsRedraw = true;
+        return;
+    }
+
+    // ——— PUSH SUCCESS ———
+    map[boulder.y][boulder.x] = 0; // old position → floor
+
+    if (!isSinkingIntoLava) {
+        map[pushY][pushX] = 26;
+    }
+
+    boulder.x = pushX;
+    boulder.y = pushY;
+}
+            else {
+                p.anim.direction = newDirection;
+                needsRedraw = true;
+                return;
+            }
+        }
+    }
+}
+
+// Save previous position for next frame's push detection
+p.previousX = p.x;
+p.previousY = p.y;
 
     if (!map[ny] || map[ny][nx] === undefined) {
         console.error('Invalid map access: nx=', nx, 'ny=', ny);
@@ -4438,46 +4550,69 @@ if (available.length > 0 && !p.curseActive) {
             updatePlayerState();              // updates inventory display
         }
         
-        if (map[ny][nx] === 11) { // Scroll tile
-            const scroll = scrollDrops.find(s => s.x === nx && s.y === ny);
-            if (scroll) {
-                map[ny][nx] = 0; // Consume scroll
-                scrollDrops = scrollDrops.filter(s => s !== scroll);
-                playWebAudioSound(sounds.pickup);
-                logBattleEvent(`Floor ${floor} - Scroll consumed! Town portal opened nearby!`);
-                // Find an adjacent tile for the portal
-                const adjacent = [
-                    { x: nx, y: ny - 1 },
-                    { x: nx, y: ny + 1 },
-                    { x: nx - 1, y: ny },
-                    { x: nx + 1, y: ny }
-                ].filter(pos => 
-                    pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H &&
-                    map[pos.y][pos.x] === 0 &&
-                    !enemies.some(e => e.x === pos.x && e.y === pos.y) &&
-                    !portals.some(p => p.x === pos.x && p.y === pos.y)
-                );
-                if (adjacent.length > 0) {
-                    // Filter out stairs tile
-                    const validAdjacent = adjacent.filter(pos => 
-                        !(exit && pos.x === exit.x && pos.y === exit.y)
-                    );
-                    const portalPos = validAdjacent.length > 0 
-                        ? validAdjacent[Math.floor(Math.random() * validAdjacent.length)]
-                        : adjacent[0]; // fallback if all blocked (extremely rare)
-                    map[portalPos.y][portalPos.x] = 12; // Portal tile
-                    portals.push({
-                        x: portalPos.x,
-                        y: portalPos.y,
-                        frameIndex: 0,
-                        lastFrameTime: performance.now(),
-                        frameDuration: 400  // Doubled for half speed
-                    });
-                } else {
-                    logBattleEvent(`Floor ${floor} - No space for town portal!`);
+if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
+    const scroll = scrollDrops.find(s => s.x === nx && s.y === ny);
+    if (scroll) {
+        map[ny][nx] = 0;
+        scrollDrops = scrollDrops.filter(s => s !== scroll);
+        playWebAudioSound(sounds.pickup);
+
+        // ——— WIDE SEARCH: try up to 2 tiles away + diagonals (13 positions) ———
+        const candidates = [];
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                if (dx === 0 && dy === 0) continue;               // skip the scroll tile itself
+                const px = nx + dx;
+                const py = ny + dy;
+                if (px >= 0 && px < W && py >= 0 && py < H &&
+                    map[py][px] === 0 &&                          // empty floor
+                    !enemies.some(e => e.x === px && e.y === py) && // no enemy
+                    !(exit && exit.x === px && exit.y === py)       // don’t overwrite stairs
+                ) {
+                    // give closer tiles higher priority (optional – looks nicer)
+                    const distance = Math.abs(dx) + Math.abs(dy);
+                    candidates.push({ x: px, y: py, dist: distance });
                 }
             }
         }
+
+        // Sort by distance so the portal prefers the closest free spot
+        candidates.sort((a, b) => a.dist - b.dist);
+
+        if (candidates.length > 0) {
+            const portalPos = candidates[0]; // take the closest valid spot
+
+            if (Math.random() < 0.5) {
+                // 50% → Puzzle Portal
+                map[portalPos.y][portalPos.x] = 25;
+                portals.push({
+                    x: portalPos.x,
+                    y: portalPos.y,
+                    type: 'puzzle',
+                    frameIndex: 0,
+                    lastFrameTime: performance.now(),
+                    frameDuration: 200
+                });
+                logBattleEvent(`Floor ${floor} - The scroll ignites... a Puzzle Portal opens nearby!`);
+                playWebAudioSound(sounds.secret);
+            } else {
+                // 50% → Town Portal
+                map[portalPos.y][portalPos.x] = 12;
+                portals.push({
+                    x: portalPos.x,
+                    y: portalPos.y,
+                    frameIndex: 0,
+                    lastFrameTime: performance.now(),
+                    frameDuration: 400
+                });
+                logBattleEvent(`Floor ${floor} - The scroll unrolls... a Town Portal appears!`);
+                playWebAudioSound(sounds.town_portal);
+            }
+        } else {
+            logBattleEvent(`Floor ${floor} - The scroll crumbles... no space for a portal!`);
+        }
+    }
+}
 
         // Check for adjacent special tiles (type 6) and play ambient sound once per floor
         if (currentTheme !== 'dungeon') {
@@ -4731,87 +4866,108 @@ return;
         }
 
 // Add this after the stairs logic in move function:
-if (exit && p.x === exit.x && p.y === exit.y && !inHideout) {
-
+if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !inPuzzleRoom check (puzzle room now uses same stairs)
     // clear console log for each stage to keep it from blowing up
     console.clear()
-
     // NEW: make sure the scroll flag is reset for the next floor
     scrollDroppedThisFloor = false;
-
     sounds.stairs.play().catch(e => console.error('Stairs sound error:', e));
     if (p.immortal) {
         p.immortal = false;
         logBattleEvent(`Floor ${floor} - HODL immortality has worn off!`);
     }
-    
+   
     enemiesSpawnedThisFloor = 0;
     uniqueMonstersSpawnedThisFloor = 0; // Reset unique monster spawn counter
     initialSpawnDoneThisFloor = false;
     enemies = [];
+   
+    // ← Removed the old inPuzzleRoom return logic — we now always go to next floor
+    // (finishPuzzleRoom() already set inPuzzleRoom = false and placed stairs)
+   
     floor++;
-// Build soul resonance +2% per floor (every 50 floors, max 100%)
-soulResonance = Math.min(100, soulResonance + 2);
-resonanceTriggeredThisRun = false; // Reset for new run
-logBattleEvent(`Floor ${floor} - Soul Resonance: ${soulResonance}%`); // Optional subtle log
+    
+    // CRITICAL: FULL WAVE & ENEMY RESET — this fixes dead Floor 2 after puzzle
+    wave = 1;
+    document.getElementById('wave').textContent = wave;
+    waveActive = false;
+    initialWaveSpawned = false;
+    initialSpawnDoneThisFloor = false;
+    enemiesSpawnedThisFloor = 0;
+    uniqueMonstersSpawnedThisFloor = 0;
+    whalesSpawnedThisFloor = 0;
+    enemies = [];
+    exit = null;  // Let placeStairs() work normally on new floor
 
-// Spawn wisp on floor 3
-if (floor === 3 && wisps.length === 0) {
-    const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
-    wisps.push({
-        x: p.x, y: p.y,
-        currentX: p.x * S, currentY: p.y * S,
-        hp: Math.floor(p.hp / 2), maxHP: Math.floor(p.maxHP / 2),
-        type: wispType,
-        attackCounter: 0,
-        targetTileX: p.x, targetTileY: p.y,
-        deltaX: 0, deltaY: 0, stepsLeft: 0, moving: false,
-        anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }, // Cycle every 200ms
-        lastPos: null
-    });
-    logBattleEvent(`Floor ${floor} - A loyal wisp companion appears!`);
-    const floorIndicator = document.getElementById('floor-indicator');
-    // Triple wisp spawn chime (staggered for audibility)
-    playWebAudioSound(sounds.pickup);
-    setTimeout(() => playWebAudioSound(sounds.pickup), 100);
-    setTimeout(() => playWebAudioSound(sounds.pickup), 200);
-    floorIndicator.textContent = `Floor ${floor} - Wisp joined!`;
-    wispPromptTimeout = setTimeout(() => {
-        floorIndicator.textContent = `Floor ${floor}`;
-    }, 3000);
-}
-    p.shrineUsedThisFloor = false;  // Reset shrine flag for new floor
+    // Build soul resonance +2% per floor (every 50 floors, max 100%)
+    soulResonance = Math.min(100, soulResonance + 2);
+    resonanceTriggeredThisRun = false; // Reset for new run
+    logBattleEvent(`Floor ${floor} - Soul Resonance: ${soulResonance}%`); // Optional subtle log
+    
+    // Spawn wisp on floor 3
+    if (floor === 3 && wisps.length === 0) {
+        const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
+        wisps.push({
+            x: p.x, y: p.y,
+            currentX: p.x * S, currentY: p.y * S,
+            hp: Math.floor(p.hp / 2), maxHP: Math.floor(p.maxHP / 2),
+            type: wispType,
+            attackCounter: 0,
+            targetTileX: p.x, targetTileY: p.y,
+            deltaX: 0, deltaY: 0, stepsLeft: 0, moving: false,
+            anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 }, // Cycle every 200ms
+            lastPos: null
+        });
+        logBattleEvent(`Floor ${floor} - A loyal wisp companion appears!`);
+        const floorIndicator = document.getElementById('floor-indicator');
+        // Triple wisp spawn chime (staggered for audibility)
+        playWebAudioSound(sounds.pickup);
+        setTimeout(() => playWebAudioSound(sounds.pickup), 100);
+        setTimeout(() => playWebAudioSound(sounds.pickup), 200);
+        floorIndicator.textContent = `Floor ${floor} - Wisp joined!`;
+        wispPromptTimeout = setTimeout(() => {
+            floorIndicator.textContent = `Floor ${floor}`;
+        }, 3000);
+    }
+   
+    p.shrineUsedThisFloor = false; // Reset shrine flag for new floor
     initialWaveSpawned = false;
     waveActive = false;
     exit = null;
     killsLog = [];
     uniqueMonsterRevealedThisFloor = false; // Explicit reset before new floor
     battleLog = []; // Clear battleLog to prevent memory buildup
+   
     // Reset special sound tracking for the new floor
     specialSoundsPlayedThisFloor.lava = false;
     specialSoundsPlayedThisFloor.quicksand = false;
     specialSoundsPlayedThisFloor.pond = false;
     specialSoundsPlayedThisFloor.rune = false;
     specialSoundsPlayedThisFloor.hole = false;
+   
     // Reset runewords to allow reactivation on new floor
     p.runewords = [];
     // Clear runeDrops specific runes to prevent stale entries
     runeDrops = runeDrops.filter(r => !r.specific);
+   
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
+   
     // Reset attack to base value before new floor (accounts for diamond hand)
     p.atk = p.hasDiamondHand ? 3 : 2;
+   
     initMap();
+    isFetchingTxs = false;   // ← THIS IS THE FIX – clears the stuck flag!
     nextApiCallTime = null;
     deadWispCorpse = null; // Clear wisp corpse on floor transition
-
+   
     // Show runeword message if active, otherwise show theme name for 3 s then revert to floor number
     const floorIndicator = document.getElementById('floor-indicator');
-    if (themeTimeoutId) clearTimeout(themeTimeoutId);   // cancel any old timer
-
+    if (themeTimeoutId) clearTimeout(themeTimeoutId); // cancel any old timer
+   
     // Check if any runewords are active
     const hasActiveRunewords = p.runewords.length > 0;
-    
+   
     if (hasActiveRunewords) {
         // Show runeword message with the whole rune part in uppercase
         const uppercasedRunewords = p.runewords.map(r => r.toUpperCase());
@@ -4823,36 +4979,51 @@ if (floor === 3 && wisps.length === 0) {
     } else {
         // Show theme name for 3 s, then revert to floor number
         const themeName = currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1);
-        floorIndicator.textContent = themeName;               // 1️⃣ show theme
-
-        themeTimeoutId = setTimeout(() => {                   // 3️⃣ after 3 s …
-            floorIndicator.textContent = `Floor ${floor}`;     // 2️⃣ revert
+        floorIndicator.textContent = themeName; // show theme
+        themeTimeoutId = setTimeout(() => { // after 3 s …
+            floorIndicator.textContent = `Floor ${floor}`; // revert
             themeTimeoutId = null;
         }, 3000);
     }
-    
+   
     const battleEvents = document.getElementById('battle-events');
     battleEvents.value = '';
     battleEvents.style.transform = 'translateX(-100%)';
     battleEvents.style.opacity = '0';
-    
+   
     // Immediately trigger fetchTxs after floor transition
     if (!gameOver && !splashActive && floor > 0) {
         fetchTxs();
         console.log(`Triggered fetchTxs for wave ${wave} on floor ${floor}`);
     }
-    
+   
     // Add proper exit handling to prevent teleportation issues
-    return; // ✅ This is CRUCIAL - stops further execution after exit
+    return; // This is CRUCIAL - stops further execution after exit
 }
 
         // In move function - before calling fetchTxs
-        if (map[ny][nx] === 12 && !inHideout) { // Portal tile in normal floor
-            playWebAudioSound(sounds.town_portal);
-            inHideout = true;
-            initMap();
-            return;
-        }
+        // Town Portal
+if (map[ny][nx] === 12 && !inHideout) {
+    playWebAudioSound(sounds.town_portal);
+    inHideout = true;
+    initMap();
+    return;
+}
+// Puzzle Portal — Enter the trial!
+if (map[ny][nx] === 25) {
+    const portal = portals.find(p => p.x === nx && p.y === ny && p.type === 'puzzle');
+    if (portal) {
+        playWebAudioSound(sounds.secret);  // Epic sound!
+
+        // SAVE where we came from — position + theme
+        puzzleReturnPos = { x: p.x, y: p.y };
+        puzzlePreviousTheme = currentTheme;  // ← THIS IS THE KEY!
+
+        logBattleEvent("You step into the shimmering rift... a sacred trial begins!");
+        startPuzzleRoom();
+        return;
+    }
+}
 
         if (map[ny][nx] === 16 && inHideout) {
             playWebAudioSound(sounds.town_portal);
@@ -4912,9 +5083,9 @@ logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
             }
         }
 
-        if (!musicMuted) {
-            musicManager.play(currentTheme);
-        }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
 
 // Handle soul stash interaction
 if (map[ny][nx] === 19 && !inHideout) { // Soul stash tile
@@ -5067,6 +5238,26 @@ if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
             }
         }
 
+// Puzzle: Collect heart framers
+if (inPuzzleRoom) {
+    const heartIndex = puzzleHeartFramers.findIndex(h => h.x === p.x && h.y === p.y);
+    if (heartIndex !== -1) {
+        puzzleHeartFramers.splice(heartIndex, 1);
+        playWebAudioSound(sounds.pickup);
+
+        const totalHearts = puzzleHeartFramers.length + 1; // +1 because we just picked one up
+        const collected = totalHearts - puzzleHeartFramers.length;
+
+        logBattleEvent(`Heart Framer ${collected}/${totalHearts} collected!`);
+        needsRedraw = true;
+    }
+
+    // Step on chest when all hearts are collected
+    if (puzzleHeartFramers.length === 0 && puzzleChest && p.x === puzzleChest.x && p.y === puzzleChest.y) {
+        finishPuzzleRoom();
+    }
+}
+
 if (map[ny][nx] === 23) { // Cursed ring
     if (p.hasCursedRing) {
         logBattleEvent(`Floor ${floor} - Cannot equip another Cursed Ring!`);
@@ -5165,6 +5356,25 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
         }, 100); // Small delay to prevent flicker
     }
 }
+
+        // === ARROW TILES FORCE MOVEMENT ===
+        if (inPuzzleRoom) {
+            const arrow = puzzleArrows.find(a => a.x === p.x && a.y === p.y);
+            if (arrow) {
+                let dir = null;
+                switch(arrow.dir) {
+                    case 'right': dir = 'right'; break;
+                    case 'left':  dir = 'left';  break;
+                    case 'up':    dir = 'up';    break;
+                    case 'down':  dir = 'down';  break;
+                }
+                if (dir) {
+                    // Force move in arrow direction
+                    move(dir);
+                    return; // Prevent normal movement this frame
+                }
+            }
+        }
 
         updateFogMap(p.x, p.y);
     }
@@ -5358,10 +5568,11 @@ updatePlayerState(); // Check HP and armor state after damage
     // Single death/surge check after all enemy actions
     updatePlayerState();
     
-if (enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
+// === ONLY PLACE STAIRS IN NORMAL DUNGEON — NEVER IN PUZZLE ROOMS ===
+if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
     if (placeStairs()) {
         wave++;
-        if (wisps.length > 0) wispSpeak('victory'); // happy jingle
+        if (wisps.length > 0) wispSpeak('victory');
         waveActive = false;
         document.getElementById('wave').textContent = wave;
         logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
@@ -5626,42 +5837,6 @@ if (hit.type.name === 'Cursed Trader') {
                     // No space for satoshi drop
                 }
                 }
-
-// Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
-if (!scrollDroppedThisFloor && Math.random() < 1/25) {
-    let scrollPlaced = false;
-    scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
-    if (map[hit.y][hit.x] === 0) {
-        map[hit.y][hit.x] = 11; // Scroll tile
-        scrollDrops.push({ x: hit.x, y: hit.y });
-        scrollPlaced = true;
-    } else {
-        const adjacent = [
-            { x: hit.x, y: hit.y - 1 },
-            { x: hit.x, y: hit.y + 1 },
-            { x: hit.x - 1, y: hit.y },
-            { x: hit.x + 1, y: hit.y }
-        ];
-        for (const pos of adjacent) {
-            const nx = pos.x, ny = pos.y;
-            if (
-                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                map[ny][nx] === 0 &&
-                !enemies.some(e => e.x === nx && e.y === ny) &&
-                !scrollDrops.some(s => s.x === nx && s.y === ny)
-            ) {
-                map[ny][nx] = 11; // Scroll tile
-                scrollDrops.push({ x: nx, y: ny });
-                scrollPlaced = true;
-                break;
-            }
-        }
-    }
-    if (scrollPlaced) {
-        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a scroll!`);
-        playWebAudioSound(sounds.pickup);
-    }
-}
               
                 // Cursed Ring drop (50% for Cursed Trader only)
                 if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5) {
@@ -6033,17 +6208,6 @@ function assignUniqueMonsterSpell(enemy) {
     return spell;
 }
 
-// Function to remove dangerous areas when a unique monster dies
-function removeDangerousAreas(monster) {
-    if (!monster.uniqueName || !monster.spell) return;
-    
-    // Remove all dangerous areas that match this spell type
-    dangerousAreas = dangerousAreas.filter(area => area.spellType !== monster.spell);
-    
-    // Redraw to reflect changes
-    needsRedraw = true;
-}
-
 // Enhanced draw for fading dangerous areas based on deathTime
 function drawFadingDangerousAreas() {
     dangerousAreas.forEach(area => {
@@ -6334,42 +6498,6 @@ handleUniqueMonsterReward(hit);
                             }
                         }
 
-                        // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
-                        if (!scrollDroppedThisFloor && Math.random() < 1/25) {
-                            let scrollPlaced = false;
-                            scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
-                            if (map[enemy.y][enemy.x] === 0) {
-                                map[enemy.y][enemy.x] = 11; // Scroll tile
-                                scrollDrops.push({ x: enemy.x, y: enemy.y });
-                                scrollPlaced = true;
-                            } else {
-                                const adjacent = [
-                                    { x: enemy.x, y: enemy.y - 1 },
-                                    { x: enemy.x, y: enemy.y + 1 },
-                                    { x: enemy.x - 1, y: enemy.y },
-                                    { x: enemy.x + 1, y: enemy.y }
-                                ];
-                                for (const pos of adjacent) {
-                                    const nx = pos.x, ny = pos.y;
-                                    if (
-                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                        map[ny][nx] === 0 &&
-                                        !enemies.some(e => e.x === nx && e.y === ny) &&
-                                        !scrollDrops.some(s => s.x === nx && s.y === ny)
-                                    ) {
-                                        map[ny][nx] = 11; // Scroll tile
-                                        scrollDrops.push({ x: nx, y: ny });
-                                        scrollPlaced = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (scrollPlaced) {
-                                logBattleEvent(`Floor ${floor} - ${enemy.type.name} dropped a scroll!`);
-                                playWebAudioSound(sounds.pickup);
-                            }
-                        }
-
                         // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
                         if (Math.random() < (enemy.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
                             let runeLetter;
@@ -6438,6 +6566,35 @@ if (enemy.type.name === 'Cursed Trader') {
         
 if (hit.hp <= 0) {
     kills[hit.type.name]++;
+    
+// ——— SCROLL DROP — 4% chance on any enemy kill ———
+if (!scrollDroppedThisFloor && Math.random() < 0.04) {
+    scrollDroppedThisFloor = true;
+    let placed = false;
+
+    const dead = typeof enemy !== 'undefined' ? enemy : hit;
+    if (!dead) return;
+
+    const positions = [{ x: dead.x, y: dead.y }];
+    const adj = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+    for (const d of adj) positions.push({ x: dead.x + d.dx, y: dead.y + d.dy });
+
+    for (const pos of positions) {
+        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 0) {
+            map[pos.y][pos.x] = 11; // SCROLL TILE
+            scrollDrops.push({ x: pos.x, y: pos.y });
+            logBattleEvent(`Floor ${floor} - A mysterious scroll drops from the enemy!`);
+            playWebAudioSound(sounds.pickup);
+            placed = true;
+            break;
+        }
+    }
+
+    if (!placed) {
+        console.warn("No space for scroll drop");
+    }
+}
+    
     let dropPlaced = false;
     
 // Handle unique monster rewards using new function
@@ -6538,42 +6695,6 @@ handleUniqueMonsterReward(hit);
                     p.soulStones++;
                     logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a Soul Stone!`);
                     playWebAudioSound(sounds.buzz);
-                }
-            }
-
-            // Scroll drop logic (1 in 25 chance, only if no scroll has dropped this floor)
-            if (!scrollDroppedThisFloor && Math.random() < 1/25) {
-                let scrollPlaced = false;
-                scrollDroppedThisFloor = true; // Mark scroll as dropped for this floor
-                if (map[hit.y][hit.x] === 0) {
-                    map[hit.y][hit.x] = 11; // Scroll tile
-                    scrollDrops.push({ x: hit.x, y: hit.y });
-                    scrollPlaced = true;
-                } else {
-                    const adjacent = [
-                        { x: hit.x, y: hit.y - 1 },
-                        { x: hit.x, y: hit.y + 1 },
-                        { x: hit.x - 1, y: hit.y },
-                        { x: hit.x + 1, y: hit.y }
-                    ];
-                    for (const pos of adjacent) {
-                        const nx = pos.x, ny = pos.y;
-                        if (
-                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                            map[ny][nx] === 0 &&
-                            !enemies.some(e => e.x === nx && e.y === ny) &&
-                            !scrollDrops.some(s => s.x === nx && s.y === ny)
-                        ) {
-                            map[ny][nx] = 11; // Scroll tile
-                            scrollDrops.push({ x: nx, y: ny });
-                            scrollPlaced = true;
-                            break;
-                        }
-                    }
-                }
-                if (scrollPlaced) {
-                    logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a scroll!`);
-                    playWebAudioSound(sounds.pickup);
                 }
             }
 
@@ -6928,6 +7049,7 @@ case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
     addTerminalLineToContent('  convert ----- Convert soul stones, shards, wisp');
+    addTerminalLineToContent('  reset ------- Restart current puzzle trial');
     addTerminalLineToContent('  set --------- Settings');
     addTerminalLineToContent('  clear ------- Clear screen');
     addTerminalLineToContent('  leaderboard - View top 10 scores');
@@ -7047,6 +7169,85 @@ case 'convert':
                 }
             }
             break;
+case 'reset':
+    if (!inPuzzleRoom) {
+        addTerminalLineToContent('ERROR: Can only reset from inside a trial!');
+        addTerminalLineToContent('_____________________');
+        addTerminalLineToContent('Type "help" for help.');
+        break;
+    }
+        addTerminalLineToContent('Trial is reset!');
+        addTerminalLineToContent('Type exit or press start on the gamepad.');
+        addTerminalLineToContent('_____________________');
+        addTerminalLineToContent('Type "help" for help.');
+        
+        puzzleReturnPos = { x: p.x, y: p.y };  // keep current position
+        puzzlePreviousTheme = currentTheme;
+
+        enemies = [];
+        isFetchingTxs = true;
+        exit = null;
+
+        currentTheme = 'dungeon';
+        musicManager.play('hideout');
+        musicManager.current = 'hideout';
+
+        // —— RESET CURRENT PUZZLE ROOM (exact same layout) ——
+        puzzleHazards = [];
+        puzzleArrows = [];
+        puzzleBoulders = [];
+        puzzleHeartFramers = [];
+        puzzleChest = null;
+        soulStashPos = null;
+
+        // Re-apply the exact same layout we entered with
+        const PX = 3, PY = 2;
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                if (x >= PX && x < PX+14 && y >= PY && y < PY+12) {
+                    map[y][x] = 0;
+                } else {
+                    map[y][x] = 1;
+                }
+            }
+        }
+        fogMap = Array(H).fill().map(() => Array(W).fill(1));
+
+        // Re-parse the exact same template string we used on entry
+let tierTemplates = PUZZLE_TEMPLATES.common;
+if (floor >= 15) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.rare);
+if (floor >= 30) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.legendary);
+const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];  // ← Use saved, fallback random
+        const layout = layoutStr.trim().split('\n');
+
+        for (let y = 0; y < layout.length; y++) {
+            for (let x = 0; x < layout[y].length; x++) {
+                const cx = PX + x;
+                const cy = PY + y;
+                const ch = layout[y][x];
+                if (ch === '#') map[cy][cx] = 1;
+                if (ch === '@') { p.x = cx; p.y = cy; p.currentX = cx*S; p.currentY = cy*S; }
+                if (ch === 'B') { puzzleBoulders.push({x:cx,y:cy}); map[cy][cx] = 26; }
+                if (ch === 'H') puzzleHeartFramers.push({x:cx,y:cy});
+                if (ch === 'C') puzzleChest = {x:cx,y:cy};
+                if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:'lava'}); map[cy][cx] = 6; }
+                if (ch === '>') puzzleArrows.push({x:cx,y:cy,dir:'right'});
+                if (ch === '<') puzzleArrows.push({x:cx,y:cy,dir:'left'});
+                if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
+                if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
+                if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
+            }
+        }
+
+        logBattleEvent("The trial has been reborn from the void...");
+        needsRedraw = true;
+        musicManager.play('hideout');
+musicManager.current = 'hideout';  // Force pure hideout music
+
+closeSoulTerminal();
+    addTerminalLineToContent('_____________________');
+    addTerminalLineToContent('Type "help" for help.');
+    break;
 case 'set':
     if (args.length === 0) {
         addTerminalLineToContent('Settings:');
@@ -7432,6 +7633,241 @@ function removeDangerousAreas(monster) {
     needsRedraw = true;
 }
 
+// ———————————————————————————————————————————————————————
+// PUZZLE ROOM SYSTEM — L2 Style (final, perfect)
+// ———————————————————————————————————————————————————————
+
+// Puzzle designs
+const PUZZLE_TEMPLATES = {
+    common: [
+`##############
+#BHB.........#
+#.B......B...#
+#.<<<<<<<L<<.#
+#.vLL.....L^.#
+#.vLL.B.LLL^.#
+#.vLLBCBLLL^.#
+#.vLLBBBLLL^.#
+#.v>>>>>>>>^.#
+#............#
+#.S...@......#
+##############`,
+
+`##############
+#..L.....BBB.#
+#.BHB....BHB.#
+#.BBB.....L..#
+#............#
+#............#
+#.....C......#
+#......B.....#
+#...@........#
+#.S..........#
+#............#
+##############`
+    ],
+
+    rare: [
+`##############
+#..#..#..#...#
+#.BL..#.BL.B.#
+#..#..#..#BCB#
+#..#..#..#.B.#
+#..#..#..#...#
+#..#..#..#LLL#
+#..#..#..#LLL#
+#@.#..#..#...#
+#..#.BL..#.H.#
+#S.#..#..#...#
+##############`,
+
+`##############
+#....BLLL....#
+#...B.##..H..#
+#..B..##BBBBB#
+#.....##..L..#
+#.....###LLL##
+#.....##..L..#
+#.....##.....#
+#.@...##.....#
+#.....##..C..#
+#S....##.....#
+##############`
+    ],
+
+    legendary: [
+`##############
+#LHLLLLLLLLLL#
+#LLLLLLLLLLLL#
+#.BLLL.LLLLLL#
+#.BLBLCLBLLLL#
+#.BLLL.LLLBHB#
+#..LLLLLLL.B.#
+#..LLLLLLL...#
+#..v<<<>>#<<<#
+#.S>>>@....B.#
+#............#
+##############`,
+
+`##############
+#BC.B.###....#
+#B.BB.LHL....#
+#BB.B.###....#
+#.....######.#
+#.....##...#.#
+#.....B....#.#
+#.....##...#.#
+#.....##...#.#
+#.S.@...B..#.#
+#.....##H###H#
+##############`
+    ]
+};
+
+function startPuzzleRoom() {
+    inPuzzleRoom = true;
+    puzzleReturnPos = { x: p.x, y: p.y };  // Remember where player entered — used later for stairs!
+    puzzlePreviousTheme = currentTheme;  // ← Save original theme
+    enemies = []; // critical!
+    isFetchingTxs = true;
+
+// === CRITICAL: KILL ANY OLD EXIT FROM PREVIOUS FLOOR ===
+    exit = null;  // ← THIS IS THE FIX
+
+    const PX = 3, PY = 2;
+    const PW = 14, PH = 12;
+
+    // Force dungeon theme visuals for the puzzle room
+    currentTheme = 'dungeon';  // ← THIS IS THE KEY LINE
+
+// MUSIC & THEME TRICK: Force hideout music + fake theme state
+    musicManager.play('hideout');
+    musicManager.current = 'hideout';  // ← KILLS any lingering track instantly
+
+    // Clear puzzle area and set walls
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (x >= PX && x < PX+PW && y >= PY && y < PY+PH) {
+                map[y][x] = 0;     // floor
+            } else {
+                map[y][x] = 1;     // outer walls
+            }
+        }
+    }
+
+    fogMap = Array(H).fill().map(() => Array(W).fill(1));
+
+// Reset puzzle state
+puzzleHazards = [];
+puzzleArrows = [];
+puzzleBoulders = [];
+puzzleHeartFramers = [];
+puzzleChest = null;
+soulStashPos = null;
+
+// ───────────────────────────────────────────────
+// 1. Decide which layout to use
+let tierTemplates = PUZZLE_TEMPLATES.common;
+if (floor >= 15) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.rare);
+if (floor >= 30) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.legendary);
+
+// 2. Use saved layout if we have one (reset case), otherwise pick random
+const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+
+// 3. SAVE it as the current one (so future resets keep the exact same puzzle)
+puzzleCurrentLayout = layoutStr;
+
+// 4. Now parse it
+const layout = layoutStr.trim().split('\n');
+
+    // Always use lava.png as hazard visual (looks best)
+    const hazardVisual = 'lava';
+
+    // Parse the ASCII layout
+    for (let y = 0; y < layout.length; y++) {
+        for (let x = 0; x < layout[y].length; x++) {
+            const cx = PX + x;
+            const cy = PY + y;
+            const ch = layout[y][x];
+
+            if (ch === '#') map[cy][cx] = 1;
+            if (ch === '@') { p.x = cx; p.y = cy; p.currentX = cx*S; p.currentY = cy*S; }
+            if (ch === 'B') { puzzleBoulders.push({x:cx,y:cy}); map[cy][cx] = 26; }
+            if (ch === 'H') puzzleHeartFramers.push({x:cx,y:cy});
+            if (ch === 'C') puzzleChest = {x:cx,y:cy};
+            if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:hazardVisual}); map[cy][cx] = 6; }
+            if (ch === '>') puzzleArrows.push({x:cx,y:cy,dir:'right'});
+            if (ch === '<') puzzleArrows.push({x:cx,y:cy,dir:'left'});
+            if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
+            if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
+            if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
+        }
+    }
+
+    const originalHeartCount = puzzleHeartFramers.length;
+
+document.getElementById('floor-indicator').textContent =
+    floor >= 30 ? 'LEGENDARY TRIAL' :
+    floor >= 15 ? 'Rare Trial' : 'Trial of Wisdom';
+
+    musicManager.play('hideout');
+    logBattleEvent("A sacred trial of wisdom begins...");
+    needsRedraw = true;
+}
+
+function finishPuzzleRoom() {
+    logBattleEvent("The ancient chest opens... power surges through you!");
+    if (wisps.length > 0) wispSpeak('victory');
+
+// REWARDS BASED ON FLOOR — fair, consistent, feels earned
+if (floor >= 30) {
+    // Legendary tier floors — always give diamond + soul orb + RIP runes
+    diamonds += 1;
+    p.soulOrbs += 1;
+    p.runes.push('r','i','p');
+    logBattleEvent("LEGENDARY REWARD: +1 Diamond +1 Soul Orb + RIP runes!");
+} else if (floor >= 15) {
+    // Rare tier floors — always give pickaxe + RIP runes
+    p.pickaxes += 1;
+    p.runes.push('r','i','p');
+    logBattleEvent("RARE REWARD: +1 Pickaxe + RIP runes!");
+} else {
+    // Common tier floors — just pickaxe
+    p.pickaxes += 1;
+    logBattleEvent("Trial complete! +1 Pickaxe");
+}
+
+// ——— EXIT PUZZLE ROOM ———
+    inPuzzleRoom = false;
+    inHideout = false;
+
+    // Restore original visual theme
+    if (puzzlePreviousTheme !== null) {
+        currentTheme = puzzlePreviousTheme;
+        puzzlePreviousTheme = null;
+    }
+
+    // FAKE A HIDE-OUT VISIT — this magically restores the correct music!
+    musicManager.play('hideout');
+    puzzlePreviousTheme = null;
+
+    // Clear all puzzle state
+    puzzleHazards = [];
+    puzzleArrows = [];
+    puzzleBoulders = [];
+    puzzleHeartFramers = [];
+    puzzleChest = null;
+    soulStashPos = null;
+    puzzleReturnPos = null;
+
+    // Stairs appear under player
+    exit = { x: p.x, y: p.y };
+    map[p.y][p.x] = 0;
+
+    logBattleEvent("Stairs appear beneath you!");
+    needsRedraw = true;
+}
+
 function cleanupEventListeners() {
     // Clear any existing intervals
     if (touchMoveInterval) {
@@ -7769,6 +8205,8 @@ waveActive = false;
     hasPlayedOnce = true;  // allow the "Enter" key to start the next game
     projectiles = []; // Add this line to reset projectiles array on restart
     populateNameList();
+ 
+    currentThemeBlock = null;  // 'hell_normal' or 'hell_snowy' for the current 3-floor block
     
 // Fix: Properly reset MusicManager state and ensure audio context is ready
     try {
@@ -7956,35 +8394,21 @@ if (wardenFlashStart > 0) {
     if (splashActive) { needsRedraw = false; return; }
 
     const radius = 4;
-        // ───── FLOOR & WALLS (with Snowy Hell override) ─────
-        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-            const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
-            const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
-
-            if (map[y][x] === 1) { // walls
-                if (snowyHellActive) {
-                    c.save();
-                    c.drawImage(assets.themes.hell.wall, x * S, y * S, S, S);
-                    c.globalCompositeOperation = 'source-atop';
-                    c.fillStyle = 'rgba(190,240,255,0.85)';     // icy blue-white
-                    c.fillRect(x * S, y * S, S, S);
-                    c.restore();
-                } else {
-                    c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
-                }
-            } else if (isVisible && map[y][x] !== 1) { // floors
-                if (snowyHellActive) {
-                    c.save();
-                    c.drawImage(assets.themes.hell.floor, x * S, y * S, S, S);
-                    c.globalCompositeOperation = 'source-atop';
-                    c.fillStyle = 'rgba(240,250,255,0.80)';     // light snow cover
-                    c.fillRect(x * S, y * S, S, S);
-                    c.restore();
-                } else {
-                    c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
-                }
-            }
+// ───── WALLS ONLY (with Snowy Hell tint) ─────
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (map[y][x] === 1) { // walls only
+        if (snowyHellActive) {
+            c.save();
+            c.drawImage(assets.themes.hell.wall, x * S, y * S, S, S);
+            c.globalCompositeOperation = 'source-atop';
+            c.fillStyle = 'rgba(190,240,255,0.85)'; // icy tint on walls
+            c.fillRect(x * S, y * S, S, S);
+            c.restore();
+        } else {
+            c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
         }
+    }
+}
 // Save floor state before entering hideout (moved here to run once per draw)
 if (!inHideout) {
 previousFloorState = {
@@ -8013,7 +8437,13 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
     const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
     if (isVisible && map[y][x] !== 1) {
-        c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+
+// SNOWY HELL OVERRIDE — use snowy texture instead of currentTheme
+        if (snowyHellActive) {
+            c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
+        } else {
+            c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+        }
         
         // Draw dangerous areas (spells) before other items
         dangerousAreas.forEach(area => {
@@ -8073,6 +8503,18 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
                 c.drawImage(assets.town_portal[portal.frameIndex], x * S, y * S, S, S);
             }
         }
+if (map[y][x] === 25) { // Puzzle portal tile
+    const portal = portals.find(p => p.x === x && p.y === y && p.type === 'puzzle');
+    if (portal) {
+        const now = performance.now();
+        if (now - portal.lastFrameTime >= portal.frameDuration) {
+            portal.frameIndex = (portal.frameIndex + 1) % assets.puzzlePortal.length;
+            portal.lastFrameTime = now;
+            needsRedraw = true;
+        }
+        c.drawImage(assets.puzzlePortal[portal.frameIndex], x * S, y * S, S, S);
+    }
+}
         if (map[y][x] === 13) { // Diamond wall
             c.drawImage(assets.themes.hideout.diamond_wall, x * S, y * S, S, S);
         }
@@ -8106,6 +8548,53 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         if (map[y][x] === 23) { // Cursed Ring
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
         }
+        
+        // === PUZZLE ROOM ELEMENTS — FINAL & PERFECT ===
+        if (inPuzzleRoom) {
+            // 1. Dungeon floor & walls (clean look)
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    if (map[y][x] === 0) c.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
+                    if (map[y][x] === 1) c.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
+                }
+            }
+
+            // 2. Hazards (always lava.png — looks amazing)
+            puzzleHazards.forEach(h => {
+                c.drawImage(assets.themes.hell.special, h.x*S, h.y*S, S, S);
+            });
+
+            // 3. Arrow tiles
+            puzzleArrows.forEach(a => {
+                c.save();
+                c.translate(a.x*S + S/2, a.y*S + S/2);
+                const rot = {up: -Math.PI/2, down: Math.PI/2, left: Math.PI, right: 0}[a.dir];
+                c.rotate(rot);
+                c.drawImage(assets.arrowTile, -S/2, -S/2, S, S);
+                c.restore();
+            });
+
+            // 4. BOULDERS — NOW VISIBLE!
+            puzzleBoulders.forEach(b => {
+                c.drawImage(assets.boulder, b.x*S, b.y*S, S, S);
+            });
+
+            // === MULTIPLE HEART FRAMERS (pulsing) ===
+            puzzleHeartFramers.forEach((h, i) => {
+                c.save();
+                c.globalAlpha = 0.9 + 0.1 * Math.sin(performance.now() / 200 + i * 0.5);
+                c.drawImage(assets.heartFramer, h.x*S, h.y*S, S, S);
+                c.restore();
+            });
+
+            // === CHEST — OPENS ONLY WHEN ALL HEARTS COLLECTED ===
+            if (puzzleChest) {
+                const allCollected = puzzleHeartFramers.length === 0;
+                const img = allCollected ? assets.chestOpen : assets.chestClosed;
+                c.drawImage(img, puzzleChest.x*S, puzzleChest.y*S, S, S);
+            }
+        }
+        
         if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
             c.drawImage(assets.echo_warden, x * S, y * S, S, S);
         }
@@ -8956,16 +9445,16 @@ if (splashActive) {
             audioContext.resume().then(() => {
                 // Reset music manager state and play music after AudioContext is resumed
                 musicManager.current = null;
-                if (!musicMuted) {
-                    musicManager.play(currentTheme); // Play music after AudioContext is resumed
-                }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
             }).catch(e => console.error('Failed to resume AudioContext:', e));
         } else {
             // Reset music manager state on restart
             musicManager.current = null;
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play music if AudioContext is already running
-            }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
         }
 // Restore sound volume after preloading
 setTimeout(() => {
@@ -9336,9 +9825,9 @@ function startGame() {
         musicManager.audios[currentTheme].oncanplaythrough = () => {
             console.log('Audio ready, playing from start:', currentTheme); // Debug log
             musicManager.audios[currentTheme].currentTime = 0; // Reset to start of track
-            if (!musicMuted) {
-                musicManager.play(currentTheme); // Play once ready only if we should unmute
-            }
+if (!musicMuted && !inPuzzleRoom) {
+    musicManager.play(currentTheme);
+}
         };
     }
     
