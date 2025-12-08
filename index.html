@@ -4198,6 +4198,9 @@ if (pushX >= 0 && pushX < W && pushY >= 0 && pushY < H) {
         highlightTiles.push({x: boulderX, y: boulderY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
         highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
 
+        // And add this ONCE per frame (best in draw() or gameLoop):
+        highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
+        
         logBattleEvent("Boulder sinks and cools into permanent stone!");
         playWebAudioSound(sounds.lava);
     }
@@ -6418,6 +6421,8 @@ if (hit) {
             // Check if tile is within bounds and not a wall
             if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
                 highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
+                // And add this ONCE per frame (best in draw() or gameLoop):
+                highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
                 // Check if there's an enemy at this tile
                 const enemy = enemies.find(e => e.x === x && e.y === y);
                 
@@ -7435,7 +7440,8 @@ function activateSoulStorm() {
         // Check if tile is within bounds and not a wall
         if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
             highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
-            
+            // And add this ONCE per frame (best in draw() or gameLoop):
+            highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
             // Check if there's an enemy at this tile
             const enemy = enemies.find(e => e.x === x && e.y === y);
             
