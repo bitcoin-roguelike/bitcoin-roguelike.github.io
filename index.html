@@ -7734,7 +7734,12 @@ function startPuzzleRoom() {
     inPuzzleRoom = true;
     puzzleReturnPos = { x: p.x, y: p.y };  // Remember where player entered — used later for stairs!
     puzzlePreviousTheme = currentTheme;  // ← Save original theme
+
     enemies = []; // critical!
+    projectiles = [];
+    highlightTiles = [];
+    dangerousAreas = [];
+    
     isFetchingTxs = true;
 
 // === CRITICAL: KILL ANY OLD EXIT FROM PREVIOUS FLOOR ===
@@ -8881,13 +8886,17 @@ wisps.forEach(wisp => {
     }
 });
 
-    // Draw fog overlay
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        if (map[y][x] !== 1 && !fogMap[y][x]) {
-            c.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            c.fillRect(x * S, y * S, S, S);
+// Draw fog overlay — SKIP IN PUZZLE ROOMS (mobile performance fix!)
+if (!inPuzzleRoom) {
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] !== 1 && !fogMap[y][x]) {
+                c.fillStyle = 'rgba(0,0,0,0.7)';
+                c.fillRect(x * S, y * S, S, S);
+            }
         }
     }
+}
    
     // Draw unique monster reveal animation (centered 64x64 overlay)
     if (uniqueMonsterRevealActive) {
