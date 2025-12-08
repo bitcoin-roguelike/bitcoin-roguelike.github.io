@@ -7730,67 +7730,65 @@ const PUZZLE_TEMPLATES = {
     ]
 };
 
+// ──────────────────────────────────────────────────────────────────────
+// One-time off-screen canvas for the puzzle room background (dungeon theme)
+// ──────────────────────────────────────────────────────────────────────
+const puzzleBgCanvas = document.createElement('canvas');
+puzzleBgCanvas.width  = 320;
+puzzleBgCanvas.height = 320;
+const puzzleBgCtx = puzzleBgCanvas.getContext('2d'); // default alpha: true (reverted)
+
 function startPuzzleRoom() {
     inPuzzleRoom = true;
-    puzzleReturnPos = { x: p.x, y: p.y };  // Remember where player entered — used later for stairs!
-    puzzlePreviousTheme = currentTheme;  // ← Save original theme
+    puzzleReturnPos   = { x: p.x, y: p.y };      // remember where we came from
+    puzzlePreviousTheme = currentTheme;         // save original theme
 
-    enemies = []; // critical!    
-    isFetchingTxs = true;
+    enemies = [];          // critical – no enemies in puzzle rooms
+    isFetchingTxs = true; // stop mempool spawning while inside
 
-// === CRITICAL: KILL ANY OLD EXIT FROM PREVIOUS FLOOR ===
-    exit = null;  // ← THIS IS THE FIX
+    // Kill any old exit (prevents weird teleport bugs)
+    exit = null;
 
     const PX = 3, PY = 2;
     const PW = 14, PH = 12;
 
-    // Force dungeon theme visuals for the puzzle room
-    currentTheme = 'dungeon';  // ← THIS IS THE KEY LINE
-
-// MUSIC & THEME TRICK: Force hideout music + fake theme state
+    // Force dungeon visuals & hideout music
+    currentTheme = 'dungeon';
     musicManager.play('hideout');
-    musicManager.current = 'hideout';  // ← KILLS any lingering track instantly
+    musicManager.current = 'hideout';
 
-    // Clear puzzle area and set walls
+    // ───── Clear the puzzle area + outer walls ─────
     for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
             if (x >= PX && x < PX+PW && y >= PY && y < PY+PH) {
                 map[y][x] = 0;     // floor
             } else {
-                map[y][x] = 1;     // outer walls
+                map[y][x] = 1;     // wall
             }
         }
     }
 
     fogMap = Array(H).fill().map(() => Array(W).fill(1));
 
-// Reset puzzle state
-puzzleHazards = [];
-puzzleArrows = [];
-puzzleBoulders = [];
-puzzleHeartFramers = [];
-puzzleChest = null;
-soulStashPos = null;
+    // Reset puzzle state
+    puzzleHazards = [];
+    puzzleArrows  = [];
+    puzzleBoulders = [];
+    puzzleHeartFramers = [];
+    puzzleChest = null;
+    soulStashPos = null;
 
-// ───────────────────────────────────────────────
-// 1. Decide which layout to use
-let tierTemplates = PUZZLE_TEMPLATES.common;
-if (floor >= 15) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.rare);
-if (floor >= 30) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.legendary);
+    // ───── Choose layout (same one on reset) ─────
+    let tierTemplates = PUZZLE_TEMPLATES.common;
+    if (floor >= 15) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.rare);
+    if (floor >= 30) tierTemplates = tierTemplates.concat(PUZZLE_TEMPLATES.legendary);
 
-// 2. Use saved layout if we have one (reset case), otherwise pick random
-const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+    const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+    puzzleCurrentLayout = layoutStr;                 // remember for resets
 
-// 3. SAVE it as the current one (so future resets keep the exact same puzzle)
-puzzleCurrentLayout = layoutStr;
+    const layout = layoutStr.trim().split('\n');
 
-// 4. Now parse it
-const layout = layoutStr.trim().split('\n');
-
-    // Always use lava.png as hazard visual (looks best)
-    const hazardVisual = 'lava';
-
-    // Parse the ASCII layout
+    // ───── Parse the ASCII layout ─────
     for (let y = 0; y < layout.length; y++) {
         for (let x = 0; x < layout[y].length; x++) {
             const cx = PX + x;
@@ -7802,7 +7800,7 @@ const layout = layoutStr.trim().split('\n');
             if (ch === 'B') { puzzleBoulders.push({x:cx,y:cy}); map[cy][cx] = 26; }
             if (ch === 'H') puzzleHeartFramers.push({x:cx,y:cy});
             if (ch === 'C') puzzleChest = {x:cx,y:cy};
-            if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:hazardVisual}); map[cy][cx] = 6; }
+            if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:'lava'}); map[cy][cx] = 6; }
             if (ch === '>') puzzleArrows.push({x:cx,y:cy,dir:'right'});
             if (ch === '<') puzzleArrows.push({x:cx,y:cy,dir:'left'});
             if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
@@ -7811,13 +7809,23 @@ const layout = layoutStr.trim().split('\n');
         }
     }
 
-    const originalHeartCount = puzzleHeartFramers.length;
+// ───── PRE-RENDER THE ENTIRE DUNGEON BACKGROUND ONCE (the fix!) ─────
+    puzzleBgCtx.clearRect(0, 0, 320, 320);
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] === 0) {
+                puzzleBgCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
+            } else if (map[y][x] === 1) {
+                puzzleBgCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
+            }
+        }
+    }
 
-document.getElementById('floor-indicator').textContent =
-    floor >= 30 ? 'LEGENDARY TRIAL' :
-    floor >= 15 ? 'Rare Trial' : 'Trial of Wisdom';
+    // UI / log
+    document.getElementById('floor-indicator').textContent =
+        floor >= 30 ? 'LEGENDARY TRIAL' :
+        floor >= 15 ? 'Rare Trial' : 'Trial of Wisdom';
 
-    musicManager.play('hideout');
     logBattleEvent("A sacred trial of wisdom begins...");
     needsRedraw = true;
 }
@@ -8556,17 +8564,11 @@ if (map[y][x] === 25) { // Puzzle portal tile
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
         }
         
-        // === PUZZLE ROOM ELEMENTS — FINAL & PERFECT ===
         if (inPuzzleRoom) {
-            // 1. Dungeon floor & walls (clean look)
-            for (let y = 0; y < H; y++) {
-                for (let x = 0; x < W; x++) {
-                    if (map[y][x] === 0) c.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
-                    if (map[y][x] === 1) c.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
-                }
-            }
+            // One single blit of the pre-rendered dungeon background
+            c.drawImage(puzzleBgCanvas, 0, 0);
 
-            // 2. Hazards (always lava.png — looks amazing)
+            // Hazards (lava visual)
             puzzleHazards.forEach(h => {
                 c.drawImage(assets.themes.hell.special, h.x*S, h.y*S, S, S);
             });
@@ -8586,11 +8588,13 @@ if (map[y][x] === 25) { // Puzzle portal tile
                 c.drawImage(assets.boulder, b.x*S, b.y*S, S, S);
             });
 
-            // === MULTIPLE HEART FRAMERS ===
-            // Draw heart framers — NO PULSATING (mobile performance fix!)
-            puzzleHeartFramers.forEach(h => {
+            // === MULTIPLE HEART FRAMERS (pulsing wave) ===
+            puzzleHeartFramers.forEach((h, i) => {
+                const pulse = 0.9 + 0.1 * Math.sin(performance.now() / 250 + i * 0.3);
+                c.globalAlpha = pulse;
                 c.drawImage(assets.heartFramer, h.x * S, h.y * S, S, S);
             });
+            c.globalAlpha = 1; // Reset once
 
             // === CHEST — OPENS ONLY WHEN ALL HEARTS COLLECTED ===
             if (puzzleChest) {
