@@ -4983,6 +4983,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     p.atk = p.hasDiamondHand ? 3 : 2;
    
     initMap();
+    puzzleCurrentLayout = null;  // ← NEW: clear after any floor change
     isFetchingTxs = false;   // ← THIS IS THE FIX – clears the stuck flag!
     nextApiCallTime = null;
     deadWispCorpse = null; // Clear wisp corpse on floor transition
@@ -6596,8 +6597,8 @@ if (enemy.type.name === 'Cursed Trader') {
 if (hit.hp <= 0) {
     kills[hit.type.name]++;
     
-// ——— SCROLL DROP — 4% chance on any enemy kill ———
-if (!scrollDroppedThisFloor && Math.random() < 0.04) {
+// ——— SCROLL DROP — 5% chance on any enemy kill ———
+if (!scrollDroppedThisFloor && Math.random() < 0.05) {
     scrollDroppedThisFloor = true;
     let placed = false;
 
@@ -7697,7 +7698,6 @@ const PUZZLE_TEMPLATES = {
 #............#
 #.S...@......#
 ##############`,
-
 `##############
 #..L.....BBB.#
 #.BHB....BHB.#
@@ -7711,7 +7711,6 @@ const PUZZLE_TEMPLATES = {
 #............#
 ##############`
     ],
-
     rare: [
 `##############
 #..#..#..#...#
@@ -7739,7 +7738,6 @@ const PUZZLE_TEMPLATES = {
 #S....##.....#
 ##############`
     ],
-
     legendary: [
 `##############
 #LHLLLLLLLLLL#
@@ -7753,7 +7751,6 @@ const PUZZLE_TEMPLATES = {
 #.S>>>@....B.#
 #............#
 ##############`,
-
 `##############
 #BC.B.###....#
 #B.BB.LHL....#
@@ -7818,32 +7815,27 @@ function startPuzzleRoom() {
     puzzleChest = null;
     soulStashPos = null;
 
-// ───── Choose layout correctly by tier (common / rare / legendary) ─────
-let tierTemplates;
+        // Re-parse the exact same layout (respecting the correct tier for this floor)
+        let tierTemplates;
 
-if (floor >= 30) {
-    // Legendary floors: common + rare + legendary
-    tierTemplates = [
-        ...PUZZLE_TEMPLATES.common,
-        ...PUZZLE_TEMPLATES.rare,
-        ...PUZZLE_TEMPLATES.legendary
-    ];
-} else if (floor >= 15) {
-    // Rare floors: common + rare only
-    tierTemplates = [
-        ...PUZZLE_TEMPLATES.common,
-        ...PUZZLE_TEMPLATES.rare
-    ];
-} else {
-    // Common floors: common only
-    tierTemplates = PUZZLE_TEMPLATES.common;
-}
+        if (floor >= 30) {
+            tierTemplates = [
+                ...PUZZLE_TEMPLATES.common,
+                ...PUZZLE_TEMPLATES.rare,
+                ...PUZZLE_TEMPLATES.legendary
+            ];
+        } else if (floor >= 15) {
+            tierTemplates = [
+                ...PUZZLE_TEMPLATES.common,
+                ...PUZZLE_TEMPLATES.rare
+            ];
+        } else {
+            tierTemplates = PUZZLE_TEMPLATES.common;
+        }
 
-// Use saved layout on reset, otherwise pick a random one from the correct tier
-const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
-puzzleCurrentLayout = layoutStr;  // remember exact layout for future resets
-
-    const layout = layoutStr.trim().split('\n');
+        // Use the saved layout if we have one (reset case), otherwise fall back to a random one from the correct tier
+        const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+        const layout = layoutStr.trim().split('\n');
 
     // ───── Parse the ASCII layout ─────
     for (let y = 0; y < layout.length; y++) {
@@ -7941,6 +7933,7 @@ updateSnowState();  // ensures snowflakes + snowy tiles match the theme
     puzzleChest = null;
     soulStashPos = null;
     puzzleReturnPos = null;
+    puzzleCurrentLayout = null;  // ← NEW: prevents reusing old layout on next floor
 
     // Stairs appear under player
     exit = { x: p.x, y: p.y };
