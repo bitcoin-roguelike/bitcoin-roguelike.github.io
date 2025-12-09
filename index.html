@@ -1770,7 +1770,9 @@ types.forEach(t => {
         assets.diamond_hand = new Image(); // Add diamond hand asset
         assets.diamond_hand.src = 'diamond_hand.png';
         assets.pickaxe_sword.src = 'pickaxe-sword.png';
-        assets.shoot_sword.src = 'shoot_sword.png';
+        assets.shoot_sword.src = 'shoot_sword.png';        
+        assets.bit_spear = new Image();
+        assets.bit_spear.src = 'bit_spear.png';       
         assets.soul_sword = new Image();
         assets.soul_sword.src = 'soul_sword.png';      
         assets.runes.on_floor.src = 'rune_on_floor.png';
@@ -2277,6 +2279,45 @@ function wispSpeak(type) {
         // For danger: music stays ducked until player heals above 8 HP
         wispIsSpeaking = false;
     };
+}
+
+function playPigSnort() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const duration = 0.45;
+    const sampleRate = ctx.sampleRate;
+
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < data.length; i++) {
+        const t = i / sampleRate;
+
+        // Base low growl with wobble
+        const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
+        let wave = Math.sin(2 * Math.PI * freq1 * t);
+
+        // Higher piggy harmonic
+        const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
+        wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
+
+        // Add some roughness/noise
+        wave += 0.2 * (Math.random() - 0.5);
+
+        // Punchy envelope: fast attack, long decay
+        const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
+        data[i] = wave * envelope;
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = soundVolume;  // uses the global soundVolume set by terminal
+    source.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    source.start(0);
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -3750,7 +3791,7 @@ async function fetchTxs() {
                   attempts--;
               } while (attempts > 0 && !validPosition);
               
-const newEnemy = { 
+              const newEnemy = {
                  x,
                  y,
                   currentX: x * S,
@@ -3768,7 +3809,12 @@ const newEnemy = {
                  anim: {
                      frameIndex: Math.floor(Math.random() * type.anim.frames.length),
                      lastFrameTime: performance.now()
-                 }
+                 },
+                 // Bit ammo (normal enemies always have 2)
+                 bits: 2,
+                 bitAmmo: 2,
+                 lastBitShot: 0,
+                 shieldFlash: { active: false, startTime: 0 } // for bit shield visual
               };
     
 // I am starting to think 10% chance to spawn an unique monster actually means per regular enemy spawned (10%,10%,10%,10%,10%,10%,10%,10%,10%,10% instead of just 10%)
@@ -3781,6 +3827,7 @@ if (floor > 1 && Math.random() < 0.10) {
         (type.name === 'Shrimp' && e.type.name === 'Shrimp'));
     
     if (!hasUniqueSpawned && uniqueMonstersSpawnedThisFloor < 1) {
+        const isUnique = true; // ← THIS WAS MISSING
         newEnemy.uniqueName = randomUniqueName;
         // Make unique monster stronger
         newEnemy.atk = type.atk * 2;
@@ -3795,13 +3842,28 @@ if (floor > 1 && Math.random() < 0.10) {
         // Harbinger message handled in draw() for fog visibility only
 logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); // Generic spawn log
         uniqueMonstersSpawnedThisFloor++;
+        
+// Add bit ammo for uniques
+        newEnemy.bits = 4;
+        newEnemy.bitAmmo = 4;
+        newEnemy.lastBitShot = 0;
     } else {
+        const isUnique = false; // ← normal enemy
         const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
         logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+// Add bit ammo for normal enemies
+        newEnemy.bits = 2;
+        newEnemy.bitAmmo = 2;
+        newEnemy.lastBitShot = 0;
     }
 } else {
+    const isUnique = false; // ← normal enemy
     const [amount, unit] = btc < 1 ? [Math.round(btc * 1e8), 'sats'] : [btc.toFixed(2), 'BTC'];
     logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${amount} ${unit}`);
+// Add bit ammo for normal enemies
+        newEnemy.bits = 2;
+        newEnemy.bitAmmo = 2;
+        newEnemy.lastBitShot = 0;
 }
           
               if (!validPosition) {
@@ -3917,8 +3979,13 @@ logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); //
                    anim: {
                        frameIndex: Math.floor(Math.random() * type.anim.frames.length),
                        lastFrameTime: performance.now()
-                   }
+                   },
+                   bits: 2,
+                   bitAmmo: 2,
+                   lastBitShot: 0,
+                   shieldFlash: { active: false, startTime: 0 } // for bit shield visual
                  };
+
               enemies.push(newEnemy);
               
               if (type.name === 'Whale') {
@@ -5468,6 +5535,10 @@ enemies.forEach(e => {
     }
     let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
         if (dist <= 5) {
+// Mark first time they see the player this turn
+            if (!e.justSawPlayer && fogMap[e.y][e.x] === 1) {
+                e.justSawPlayer = true;
+            }
             let moves = e.type.move, steps = 0;
 let startX = e.x, startY = e.y;
 let finalX = e.x, finalY = e.y;
@@ -5591,8 +5662,88 @@ if (p.hp <= 0 && p.immortal) {
 
 updatePlayerState(); // Check HP and armor state after damage
             }
+            
+            // —— BIT SHOOTING (ranged attack) ——
+            if (e.bitAmmo > 0 && fogMap[e.y][e.x] === 1) {
+                const dx = p.x - e.x;
+                const dy = p.y - e.y;
+                const dist = Math.abs(dx) + Math.abs(dy);
+
+                if (dist >= 2 && dist <= 7) {
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+
+                            // Zelda-ish aiming: only fire when clearly aligned horizontally or vertically
+                            let dirX = 0, dirY = 0;
+                            if (absDx >= 2 * absDy && absDx > 0) {
+                                dirX = dx > 0 ? 1 : -1;
+                            } else if (absDy >= 2 * absDx && absDy > 0) {
+                                dirY = dy > 0 ? 1 : -1;
+                            } else {
+                                // Not aligned enough – no shot
+                                // Mark that enemy can see player this turn (for immediate shooting next time)
+                                if (fogMap[e.y][e.x] === 1 && !e.justSawPlayer) {
+                                    e.justSawPlayer = true;
+                                }
+                                return; // safe inside forEach – skips rest of this enemy's turn
+                            }
+
+                    // Strict tile-by-tile LOS along the chosen cardinal direction
+                    let hasLOS = true;
+                    let testX = e.x + dirX;
+                    let testY = e.y + dirY;
+                    while (testX !== p.x || testY !== p.y) {
+                        if (map[testY][testX] === 1) {
+                            hasLOS = false;
+                            break;
+                        }
+                        testX += dirX;
+                        testY += dirY;
+                    }
+
+                    if (hasLOS) {
+                        const now = Date.now();
+                        if (now - e.lastBitShot > 1200) {
+                            e.lastBitShot = now;
+
+                            if (e.justSawPlayer) {
+                                e.justSawPlayer = false;
+                                logBattleEvent(`Floor ${floor} - ${e.uniqueName || e.type.name} spots you!`);
+                                playPigSnort();
+                            }
+
+                            // Fire the spear
+                            e.bitAmmo--;
+                            e.bits = e.bitAmmo;
+
+                            projectiles.push({
+                                x: e.x, y: e.y,
+                                currentX: e.x * S, currentY: e.y * S,
+                                dirX: dirX, dirY: dirY,
+                                value: 1,
+                                moveStartTime: now,
+                                moving: true
+                            });
+                            const proj = projectiles[projectiles.length - 1];
+                            proj.targetTileX = e.x + dirX;
+                            proj.targetTileY = e.y + dirY;
+                            proj.targetX = proj.targetTileX * S;
+                            proj.targetY = proj.targetTileY * S;
+
+                            logBattleEvent(`Floor ${floor} - ${e.uniqueName || e.type.name} fires a bit spear!`);
+                            needsRedraw = true;
+                        }
+                    }
+                }
+
+                // Mark that enemy can see player this turn (for immediate shooting next time)
+                if (fogMap[e.y][e.x] === 1 && !e.justSawPlayer) {
+                    e.justSawPlayer = true;
+                }
+            }
+            
     });
-    
+        
     // Single death/surge check after all enemy actions
     updatePlayerState();
     
@@ -5786,176 +5937,345 @@ function applySpellDamage(x, y) {
     }
 }
 
-// Modified updateProjectiles function with Hell Shrimp rune drop rate changed to 20%
+// Fixed updateProjectiles – pure cardinal movement, spears always destroy on player hit, no laying on ground
 function updateProjectiles() {
     if (gameOver || splashActive) return;
-    projectiles = projectiles.filter(proj => {
-        // Only move every 50ms
-        if (Date.now() - proj.lastMoveTime < 50) return true;
-        
-        // Calculate next position
-        let nx = proj.x, ny = proj.y;
-        if (proj.dir === 'up') ny--;
-        if (proj.dir === 'down') ny++;
-        if (proj.dir === 'left') nx--;
-        if (proj.dir === 'right') nx++;
-        
-        // Check bounds
-        if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
-            needsRedraw = true;
-            return false;
-        }
-        
-        // Check for wall hit before moving
-        if (map[ny][nx] === 1) {
-            needsRedraw = true;
-            return false;
-        }
-        
-// Check for first enemy hit and deal damage
-let hit = enemies.find(e => e.x === nx && e.y === ny);
-if (hit) {
-    const damage = Math.floor(p.atk * 0.5); // Half the damage output for shooting sword
-    hit.hp -= damage;
-    logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (HP: ${hit.hp})`);
-    playWebAudioSound(sounds.hit);
-    if (hit.hp <= 0) {
-        kills[hit.type.name]++;
-        let dropPlaced = false;
-        
-// Handle unique monster rewards using new function
-handleUniqueMonsterReward(hit);
 
-if (hit.type.name === 'Cursed Trader') {
-        dropSoulStone(hit.x, hit.y);
-    }        
-        // Remove enemy immediately to prevent further hits
-        enemies = enemies.filter(e => e !== hit);
-        
-        // No sats drop for Cursed Trader
-        if (hit.type.name !== 'Cursed Trader') {
-                if (!hit.uniqueName) { // Skip normal drop for unique monsters like Cursed Trader
-                    if (map[hit.y][hit.x] === 0) {
-                        map[hit.y][hit.x] = 3;
-                        satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                        dropPlaced = true;
-                    } else {
-                        const adjacent = [
-                            {x: hit.x, y: hit.y - 1},
-                            {x: hit.x, y: hit.y + 1},
-                            {x: hit.x - 1, y: hit.y},
-                            {x: hit.x + 1, y: hit.y}
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny)
-                            ) {
-                                map[ny][nx] = 3;
-                                satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                                dropPlaced = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (!dropPlaced) {
-                    // No space for satoshi drop
-                }
-                }
-              
-                // Cursed Ring drop (50% for Cursed Trader only)
-                if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5) {
-                    let ringPlaced = false;
-                    if (map[hit.y][hit.x] === 0 && !p.hasCursedRing) {
-                        map[hit.y][hit.x] = 23; // Cursed ring tile
-                        ringPlaced = true;
-                    } else {
-                        const adjacent = [
-                            { x: hit.x, y: hit.y - 1 },
-                            { x: hit.x, y: hit.y + 1 },
-                            { x: hit.x - 1, y: hit.y },
-                            { x: hit.x + 1, y: hit.y }
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny) &&
-                                !p.hasCursedRing
-                            ) {
-                                map[ny][nx] = 23; // Cursed ring tile
-                                ringPlaced = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (ringPlaced) {
-                        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
-                        playWebAudioSound(sounds.pickup);
-                    }
-                }                
-                // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
-                if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
-                    let runeLetter;
-                    if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
-                        // Hell Shrimp: Use specific rune letters
-                        const hellShrimpRunes = ['r', 'i', 'p', 'h', 'o', 'd', 'l'];
-                        runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
-                    } else {
-                        // Regular rune drop
-                        const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
-                        runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
-                    }
-                    let runePlaced = false;
-                    if (map[hit.y][hit.x] === 0) {
-                        map[hit.y][hit.x] = 8; // Generic rune on floor
-                        runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
-                        runePlaced = true;
-                    } else {
-                        const adjacent = [
-                            { x: hit.x, y: hit.y - 1 },
-                            { x: hit.x, y: hit.y + 1 },
-                            { x: hit.x - 1, y: hit.y },
-                            { x: hit.x + 1, y: hit.y }
-                        ];
-                        for (const pos of adjacent) {
-                            const nx = pos.x, ny = pos.y;
-                            if (
-                                nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                map[ny][nx] === 0 &&
-                                !enemies.some(e => e.x === nx && e.y === ny)
-                            ) {
-                                map[ny][nx] = 8; // Generic rune on floor
-                                runeDrops.push({ x: nx, y: ny, letter: runeLetter });
-                                runePlaced = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (runePlaced) {
-                        logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
-                        playWebAudioSound(sounds.rune_drop);
-                    }
-                }
-                
-                enemies = enemies.filter(e => e !== hit);
+    projectiles = projectiles.filter(proj => {
+        const now = Date.now();
+
+        // --------------------------------------------------------------
+        // 1. Smooth interpolation to current target tile (200ms per tile)
+        // --------------------------------------------------------------
+        if (proj.moving && proj.moveStartTime) {
+            const elapsed = now - proj.moveStartTime;
+            const playerSpeed = (proj.value === undefined) ? 67 : 200; // Player swords 3x faster (67ms/tile)
+            const progress = Math.min(elapsed / playerSpeed, 1);
+            const eased = 0.5 + 0.5 * Math.sin(Math.PI * progress - Math.PI / 2);
+
+            proj.currentX = proj.x * S + eased * (proj.targetX - proj.x * S);
+            proj.currentY = proj.y * S + eased * (proj.targetY - proj.y * S);
+
+            if (progress >= 1) {
+                // Arrived → snap position and stop moving this step
+                proj.currentX = proj.targetX;
+                proj.currentY = proj.targetY;
+                proj.x = proj.targetTileX;
+                proj.y = proj.targetTileY;
+                proj.moving = false;
             }
-            needsRedraw = true;
-            return false; // Destroy projectile on enemy hit
         }
-        
-        // Update projectile position and move time
-        proj.x = nx;
-        proj.y = ny;
-        proj.lastMoveTime = Date.now();
+
+        // --------------------------------------------------------------
+        // 2. When not moving (or just arrived), advance to next tile
+        // --------------------------------------------------------------
+        if (!proj.moving) {
+            const nx = proj.x + (proj.dirX || 0);
+            const ny = proj.y + (proj.dirY || 0);
+
+            // Out of bounds → destroy
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
+                needsRedraw = true;
+                return false;
+            }
+
+            // Wall → destroy
+            if (map[ny][nx] === 1) {
+                needsRedraw = true;
+                return false;
+            }
+
+            // --------------------- Player sword hits enemy ---------------------
+            if (proj.value === undefined) { // player shooting sword
+                const hit = enemies.find(e => e.x === nx && e.y === ny);
+                if (hit) {
+                    // Bit shield: absorb 1 melee hit if any bits left
+                    if (hit.bitAmmo > 0) {
+                        hit.bitAmmo--;
+                        hit.bits = hit.bitAmmo;
+                        hit.shieldFlash = { active: true, startTime: Date.now() };
+                        logBattleEvent(`Floor ${floor} - ${hit.type.name} blocks with bit shield!`);
+                        playWebAudioSound(sounds.hit);
+                    } else {
+                    // Bit shield works on any melee hit (close or far)
+                    // Soul Sword / Diamond Hand ignore bit shield on shooting sword too
+                    // Pickaxe sword does NOT ignore it
+                    const ignoreShield = (p.soulStormCharges >= 4 || p.hasDiamondHand) && !usePickaxeSword;
+
+                    if (ignoreShield) {
+                        const damage = Math.floor(p.atk * 0.5);
+                        hit.hp -= damage;
+                        logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (shield ignored)`);
+                        playWebAudioSound(sounds.hit);
+                    } else if (hit.bitAmmo > 0) {
+                        hit.bitAmmo--;
+                        hit.bits = hit.bitAmmo;
+                        hit.shieldFlash = { active: true, startTime: Date.now() };
+                        logBattleEvent(`Floor ${floor} - ${hit.type.name} blocks shooting sword with bit shield!`);
+                        playWebAudioSound(sounds.hit);
+                    } else {
+                        const damage = Math.floor(p.atk * 0.5);
+                        hit.hp -= damage;
+                        logBattleEvent(`Floor ${floor} - Shooting Sword hits ${hit.type.name}! ${damage} DMG (HP: ${hit.hp})`);
+                        playWebAudioSound(sounds.hit);
+                    }
+                    }
+
+                    if (hit.hp <= 0) {
+                        kills[hit.type.name]++;
+                        let dropPlaced = false;
+
+                        handleUniqueMonsterReward(hit);
+                        if (hit.type.name === 'Cursed Trader') {
+                            dropSoulStone(hit.x, hit.y);
+                        }
+
+                        enemies = enemies.filter(e => e !== hit);
+
+                        // Normal sats drop (skip uniques & Cursed Trader)
+                        if (hit.type.name !== 'Cursed Trader') {
+                            if (!hit.uniqueName) {
+                                if (map[hit.y][hit.x] === 0) {
+                                    map[hit.y][hit.x] = 3;
+                                    satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                                    dropPlaced = true;
+                                } else {
+                                    const adjacent = [
+                                        {x: hit.x, y: hit.y - 1},
+                                        {x: hit.x, y: hit.y + 1},
+                                        {x: hit.x - 1, y: hit.y},
+                                        {x: hit.x + 1, y: hit.y}
+                                    ];
+                                    for (const pos of adjacent) {
+                                        const ax = pos.x, ay = pos.y;
+                                        if (ax >= 0 && ax < W && ay >= 0 && ay < H && map[ay][ax] === 0 && !enemies.some(e => e.x === ax && e.y === ay)) {
+                                            map[ay][ax] = 3;
+                                            satoshiDrops.push({x: ax, y: ay, sats: hit.sats, type: hit.type.name});
+                                            dropPlaced = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Cursed Ring drop (50% for Cursed Trader only)
+                        if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5) {
+                            let ringPlaced = false;
+                            if (map[hit.y][hit.x] === 0 && !p.hasCursedRing) {
+                                map[hit.y][hit.x] = 23;
+                                ringPlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: hit.x, y: hit.y - 1},
+                                    {x: hit.x, y: hit.y + 1},
+                                    {x: hit.x - 1, y: hit.y},
+                                    {x: hit.x + 1, y: hit.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const ax = pos.x, ay = pos.y;
+                                    if (ax >= 0 && ax < W && ay >= 0 && ay < H && map[ay][ax] === 0 && !enemies.some(e => e.x === ax && e.y === ay) && !p.hasCursedRing) {
+                                        map[ay][ax] = 23;
+                                        ringPlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (ringPlaced) {
+                                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                                playWebAudioSound(sounds.pickup);
+                            }
+                        }
+
+                        // Rune drop (20% Hell Shrimp, 10% others)
+                        if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                            let runeLetter;
+                            if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
+                                const hellShrimpRunes = ['r', 'i', 'p', 'h', 'o', 'd', 'l'];
+                                runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                            } else {
+                                const runeLetters = ['a','b','c','d','e','f','g','h','i','k','l','m','n','o','p','q','r','s','t','u','v','y','z','æ','ø'];
+                                runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                            }
+                            let runePlaced = false;
+                            if (map[hit.y][hit.x] === 0) {
+                                map[hit.y][hit.x] = 8;
+                                runeDrops.push({x: hit.x, y: hit.y, letter: runeLetter});
+                                runePlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: hit.x, y: hit.y - 1},
+                                    {x: hit.x, y: hit.y + 1},
+                                    {x: hit.x - 1, y: hit.y},
+                                    {x: hit.x + 1, y: hit.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const ax = pos.x, ay = pos.y;
+                                    if (ax >= 0 && ax < W && ay >= 0 && ay < H && map[ay][ax] === 0 && !enemies.some(e => e.x === ax && e.y === ay)) {
+                                        map[ay][ax] = 8;
+                                        runeDrops.push({x: ax, y: ay, letter: runeLetter});
+                                        runePlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (runePlaced) {
+                                logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+                                playWebAudioSound(sounds.rune_drop);
+                            }
+                        }
+
+                        enemies = enemies.filter(e => e !== hit);
+                    }
+                    needsRedraw = true;
+                    return false; // sword stops on hit
+                }
+            }
+
+            // --------------------- Bit spear hits player ---------------------
+            if (nx === p.x && ny === p.y) {
+                const dmg = proj.value === 1 ? 2 : 0;
+                p.hp -= dmg;
+
+                // Decrement shooter ammo
+                const shooter = enemies.find(e => 
+                    e.x === proj.x - (proj.dirX || 0) && 
+                    e.y === proj.y - (proj.dirY || 0)
+                );
+                if (shooter && shooter.bitAmmo > 0) {
+                    shooter.bitAmmo--;
+                    shooter.bits = shooter.bitAmmo;
+                }
+
+                if (dmg > 0) {
+                    logBattleEvent(`Floor ${floor} - Bit spear hits! ${dmg} DMG`);
+                } else {
+                    logBattleEvent(`Floor ${floor} - Blank spear flies by!`);
+                }
+                playWebAudioSound(sounds.hit);
+                updatePlayerState();
+                needsRedraw = true;
+                return false; // spear destroyed
+            }
+
+            // --------------------- Continue flying ---------------------
+            proj.targetTileX = nx;
+            proj.targetTileY = ny;
+            proj.targetX = nx * S;
+            proj.targetY = ny * S;
+            proj.moveStartTime = now;
+            proj.moving = true;
+        }
+
         needsRedraw = true;
-        return true;
+        return true; // keep alive
     });
 }
+
+function updateAndDrawMatrix() {
+    const now = performance.now();
+
+    // === ENEMY AURA RINGS + FLOATING BITS (makes dull emojis feel alive & powerful) ===
+    enemies.forEach(e => {
+        // Skip effects if enemy is in fog of war
+        if (fogMap[e.y][e.x] === 0) return;
+
+        const dist = Math.sqrt((e.x - p.x)**2 + (e.y - p.y)**2);
+        if (dist > 7) return; // only nearby enemies
+
+        const isUnique = !!e.uniqueName;
+        // Individual per-enemy sync + more flamboyant energy
+        const phaseOffset = e.x * 123.45 + e.y * 678.9; // unique phase per enemy position
+        const baseSpeed = isUnique ? 280 : 450;
+        const flamboyant = Math.sin(now / 180 + phaseOffset * 0.01) * 0.3; // quick flashy bursts
+        const pulse = 0.5 + 0.5 * Math.sin(now / baseSpeed + phaseOffset * 0.02) + flamboyant;
+
+        // === DRAW EFFECTS IN FRONT OF THE ENEMY (cleaner, no composite issues) ===
+        c.save();
+
+        // 2. Clean, performant floating bits (visible but mobile-friendly)
+        const bitCount = e.bits;
+        if (bitCount > 0) {
+            const angleIncrement = Math.PI * 2 / bitCount;
+            const baseRadius = S / 2 + 5;        // nicely spaced
+            const bitSize = 3;                   // 3x3 – clear but tiny
+
+            for (let i = 0; i < bitCount; i++) {
+                // Simple smooth orbit – no extra Math.sin wobble (saves CPU)
+                const angle = now * 0.001 + i * angleIncrement;
+                const bx = e.currentX + S / 2 + Math.cos(angle) * baseRadius;
+                const by = e.currentY + S / 2 + Math.sin(angle) * baseRadius;
+
+                c.fillStyle = isUnique ? '#ff3366' : '#f7931a';
+                c.fillRect(bx - bitSize/2, by - bitSize/2, bitSize, bitSize);
+            }
+        }
+
+        // 3. Matrix rain – 5 pillars, stepped random length 4/8/12/16, custom chars
+        const matrixText = "0B1"; // your requested characters
+        const textSize = 8;
+        const textColor = isUnique ? '#ff3366' : '#f7931a';
+        const baseR = parseInt(textColor.slice(1,3),16);
+        const baseG = parseInt(textColor.slice(3,5),16);
+        const baseB = parseInt(textColor.slice(5,7),16);
+
+        c.font = `${textSize}px 'VT323', monospace`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+
+        const pillarCount = 4;
+        const pillarWidth = S / pillarCount;
+        const speedBase = 0.001;
+
+        for (let i = 0; i < pillarCount; i++) {
+            const pillarX = e.currentX + (i + 0.5) * pillarWidth;
+            const speed = speedBase + (i + Math.floor(phaseOffset * 10)) * 0.004; // extra enemy-specific variation
+
+            // Unique stepped random length per pillar & per enemy (4,8,12,16)
+            // Uses phaseOffset heavily so enemies don't look identical
+            const enemySeed = Math.floor(phaseOffset * 1000); // unique per enemy
+            const pillarSeed = enemySeed + i * 7919;         // large prime offset per pillar
+            const stepIndex = Math.abs(pillarSeed + Math.floor(now / 1200)) % 4; // changes ~every 1.2s
+            const length = [4, 8, 12, 16][stepIndex];
+
+            for (let j = 0; j < length; j++) {
+                const yPos = e.currentY - j * textSize;
+                const charIdx = Math.floor((now * speed + j * 1.8) % matrixText.length);
+                const alpha = 0.7 * (1 - j / length);
+                c.fillStyle = `rgba(${baseR},${baseG},${baseB},${alpha})`;
+                c.fillText(matrixText[charIdx], pillarX, yPos);
+            }
+        }
+
+        // 4. Subtle screen distortion ripple (using canvas drawing methods)
+        if (Math.random() < 0.3) {
+            c.globalAlpha = 0.15;
+            const rippleX = e.currentX - 2 + Math.random() * 4;
+            const rippleY = e.currentY - 2 + Math.random() * 4;
+            const rippleSize = S + 4;
+
+            c.beginPath();
+            c.arc(rippleX + rippleSize / 2, rippleY + rippleSize / 2, rippleSize / 2, 0, Math.PI * 2);
+            c.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            c.fill();
+        }
+
+        // 5. Aery and offset effect
+        const offsetX = Math.sin(now * 0.01 + phaseOffset) * 2; // Slight horizontal offset
+        const offsetY = Math.cos(now * 0.01 + phaseOffset) * 2; // Slight vertical offset
+        const offsetAlpha = 0.3; // More transparent offset
+
+        c.globalAlpha = offsetAlpha;
+        c.beginPath();
+        c.arc(e.currentX + S / 2 + offsetX, e.currentY + S / 2 + offsetY, S / 2, 0, Math.PI * 2);
+        c.fillStyle = isUnique ? 'rgba(255, 51, 102, 0.5)' : 'rgba(247, 147, 26, 0.5)';
+        c.fill();
+        c.globalAlpha = 1;
+
+        c.restore();
+    });
+}
+
 
 let usePickaxeSword = false; // Global flag for draw
 let ripBlastActive = false; // Flag for RIP blast gradient overlay effect
@@ -6584,9 +6904,23 @@ if (enemy.type.name === 'Cursed Trader') {
     } else {
         // Regular sword attack
         const damage = p.atk; // Remove armor bonus
-        hit.hp -= damage;
-        logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (HP: ${hit.hp})`);
-        playWebAudioSound(sounds.hit);
+                // Soul Sword / Diamond Hand ignore bit shield
+                // Pickaxe sword does NOT ignore it
+                const ignoreShield = (p.soulStormCharges >= 4 || p.hasDiamondHand) && !usePickaxeSword;
+
+                if (ignoreShield) {
+                    hit.hp -= damage;
+                    logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG (shield ignored)!`);
+                } else if (hit.bitAmmo > 0) {
+                    hit.bitAmmo--;
+                    hit.bits = hit.bitAmmo;
+                    hit.shieldFlash = { active: true, startTime: Date.now() };
+                    logBattleEvent(`Floor ${floor} - ${hit.type.name} blocks with bit shield!`);
+                } else {
+                    hit.hp -= damage;
+                    logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG`);
+                }
+                playWebAudioSound(sounds.hit);
         
         // Wisp sync attack: Assist player's target
         if (wisps.length > 0) {
@@ -6779,10 +7113,16 @@ if (hit.type.name === 'Cursed Trader') {
         }
     }
 } else if (initialPickaxes > 0 && isWallNearby) {
-    p.pickaxes--;
-    sounds.secret.play().catch(e => console.error('Secret sound error:', e));
-    logBattleEvent(`Floor ${floor} - Wall Broken!`);
-    createSecretRoom(sx, sy, p.x, p.y, swordDir);
+    if (inPuzzleRoom) {
+        logBattleEvent("The trial forbids breaking walls – complete it first!");
+        // optional short sound feedback
+        playWebAudioSound(sounds.buzz || sounds.hit);
+    } else {
+        p.pickaxes--;
+        sounds.secret.play().catch(e => console.error('Secret sound error:', e));
+        logBattleEvent(`Floor ${floor} - Wall Broken!`);
+        createSecretRoom(sx, sy, p.x, p.y, swordDir);
+    }
 }
 
     }
@@ -6826,54 +7166,30 @@ if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && 
     }
     
     // Only shoot projectiles if not standing adjacent to an enemy
-    // This prevents projectile shooting when player is within 1 tile of enemy (snugging)
     if (!isAdjacentToEnemy && !isNearEnemy) {
-        let startSx = p.x, startSy = p.y; // Start at player's position
+        let startSx = p.x, startSy = p.y;
         if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
-            projectiles.push({ x: startSx, y: startSy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
-            sounds.shoot_sword.pause();
-            sounds.shoot_sword.currentTime = 0;
-            sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
-        }
-    }
-} else if (!p.hasDiamondHand && p.hp >= 24 && projectiles.length === 0 && !usePickaxeSword) {
-    // Check if player is standing adjacent to an enemy - prevent projectiles when adjacent
-    let isAdjacentToEnemy = false;
-    let sx = p.x, sy = p.y;
-    if (swordDir === 'up') sy--;
-    if (swordDir === 'down') sy++;
-    if (swordDir === 'left') sx--;
-    if (swordDir === 'right') sx++;
-    
-    // Check if there's an enemy one tile away in the sword direction
-    if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
-        isAdjacentToEnemy = enemies.some(e => e.x === sx && e.y === sy);
-    }
-    
-    // Also check if player is standing directly adjacent to ANY enemy
-    let isNearEnemy = false;
-    const adjacentPositions = [
-        {x: p.x, y: p.y - 1}, // Up
-        {x: p.x, y: p.y + 1}, // Down
-        {x: p.x - 1, y: p.y}, // Left
-        {x: p.x + 1, y: p.y}  // Right
-    ];
-    
-    for (const pos of adjacentPositions) {
-        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
-            if (enemies.some(e => e.x === pos.x && e.y === pos.y)) {
-                isNearEnemy = true;
-                break;
-            }
-        }
-    }
-    
-    // Only shoot projectiles if not standing adjacent to an enemy
-    // This prevents projectile shooting when player is within 1 tile of enemy (snugging)
-    if (!isAdjacentToEnemy && !isNearEnemy) {
-        let startSx = p.x, startSy = p.y; // Start at player's position
-        if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
-            projectiles.push({ x: startSx, y: startSy, dir: swordDir, startTime: Date.now(), lastMoveTime: Date.now() });
+            // Compute dirX/dirY from swordDir (unified with enemy spears)
+            let pDirX = 0, pDirY = 0;
+            if (swordDir === 'right') pDirX = 1;
+            else if (swordDir === 'left') pDirX = -1;
+            else if (swordDir === 'down') pDirY = 1;
+            else if (swordDir === 'up') pDirY = -1;
+
+            projectiles.push({
+                x: p.x, y: p.y,
+                currentX: p.x * S, currentY: p.y * S,
+                dirX: pDirX, dirY: pDirY,
+                // value undefined = player sword (hits enemies)
+                moveStartTime: Date.now(),
+                moving: true
+            });
+            // Set first target tile
+            const newProj = projectiles[projectiles.length - 1];
+            newProj.targetTileX = p.x + pDirX;
+            newProj.targetTileY = p.y + pDirY;
+            newProj.targetX = newProj.targetTileX * S;
+            newProj.targetY = newProj.targetTileY * S;
             sounds.shoot_sword.pause();
             sounds.shoot_sword.currentTime = 0;
             sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
@@ -7485,10 +7801,23 @@ function activateSoulStorm() {
             // Check if there's an enemy at this tile
             const enemy = enemies.find(e => e.x === x && e.y === y);
             
-            if (enemy) {
-                // Apply damage to enemy
-                enemy.hp -= damage;
-                logBattleEvent(`Soul Storm hits ${enemy.type.name} for ${damage} DMG`);
+                    if (enemy) {
+                        // Soul Sword / Diamond Hand ignore bit shield
+                        const ignoreShield = (p.soulStormCharges >= 4 || p.hasDiamondHand) && !usePickaxeSword;
+
+                        if (ignoreShield) {
+                            enemy.hp -= damage;
+                            logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${damage} DMG (shield ignored)!`);
+                        } else if (enemy.bitAmmo > 0) {
+                            enemy.bitAmmo--;
+                            enemy.bits = enemy.bitAmmo;
+                            enemy.shieldFlash = { active: true, startTime: Date.now() };
+                            logBattleEvent(`Floor ${floor} - Diamond Hand blocked by ${enemy.type.name}'s bit shield!`);
+                        } else {
+                            enemy.hp -= damage;
+                            logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${damage} DMG (HP: ${enemy.hp})`);
+                        }
+                        playWebAudioSound(sounds.hit);
                 
                 if (enemy.hp <= 0) {
                     kills[enemy.type.name]++;
@@ -8723,16 +9052,41 @@ for (let y = 0; y < H; y++) {
     }
 }
 
-// Draw projectiles, skipping player's position
+    // Draw projectiles – enemy bits use bit_spear.png, player sword uses shoot_sword.png
     projectiles.forEach(proj => {
-        if (proj.x >= 0 && proj.x < W && proj.y >= 0 && proj.y < H && 
+        if (proj.x >= 0 && proj.x < W && proj.y >= 0 && proj.y < H &&
             (proj.x !== p.x || proj.y !== p.y)) {
             c.save();
-            c.translate(proj.x * S + S / 2, proj.y * S + S / 2);
-            if (proj.dir === 'up') c.rotate(-Math.PI / 2);
-            if (proj.dir === 'down') c.rotate(Math.PI / 2);
-            if (proj.dir === 'left') c.rotate(Math.PI);
-            c.drawImage(assets.shoot_sword, -S / 2, -S / 2, S, S);
+
+                        const drawX = proj.currentX !== undefined ? proj.currentX : proj.x * S;
+            const drawY = proj.currentY !== undefined ? proj.currentY : proj.y * S;
+            c.translate(drawX + S / 2, drawY + S / 2);
+
+            let angle = 0;
+            if (proj.dirX !== undefined) {
+                // Enemy bit spear – pure cardinal
+                if (proj.dirX > 0) angle = 0;          // right →
+                else if (proj.dirX < 0) angle = Math.PI; // left ←
+                else if (proj.dirY > 0) angle = Math.PI / 2;   // down ↓
+                else if (proj.dirY < 0) angle = -Math.PI / 2;  // up ↑
+            } else if (proj.dir) {
+                // Legacy player sword projectile
+                if (proj.dir === 'right') angle = 0;
+                if (proj.dir === 'left')  angle = Math.PI;
+                if (proj.dir === 'down')  angle = Math.PI / 2;
+                if (proj.dir === 'up')    angle = -Math.PI / 2;
+            }
+            c.rotate(angle);
+
+            // Choose the correct sprite
+            if (proj.value !== undefined) {
+                // enemy bit projectile
+                c.drawImage(assets.bit_spear, -S / 2, -S / 2, S, S);
+            } else {
+                // player's shooting sword
+                c.drawImage(assets.shoot_sword, -S / 2, -S / 2, S, S);
+            }
+
             c.restore();
         }
     });
@@ -9235,8 +9589,24 @@ enemies.forEach(e => {
             enemyTempCtx.putImageData(imageData, 0, 0);
         }
         
-        // Draw the processed sprite to the main canvas
-c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
+                        // Draw the processed sprite to the main canvas
+                        c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
+
+                        // Draw bit shield flash when active (transparent-ish blue circle)
+                        if (e.shieldFlash && e.shieldFlash.active) {
+                            const elapsed = Date.now() - e.shieldFlash.startTime;
+                            if (elapsed < 300) { // flash for 300ms
+                                const alpha = 0.6 * (1 - elapsed / 300);
+                                c.fillStyle = `rgba(0, 200, 255, ${alpha})`; // bright cyan
+                                c.beginPath();
+                                c.arc(e.currentX + S/2, e.currentY + S/2, S/2 + 4, 0, Math.PI * 2);
+                                c.fill();
+                                needsRedraw = true;
+                            } else {
+                                e.shieldFlash.active = false;
+                            }
+                        }
+
 c.restore();
 
 // Wisp hit flash on enemies (inside loop)
@@ -9336,7 +9706,8 @@ if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMon
     uniqueMonsterRevealStartTime = now;
     uniqueMonsterRevealedThisFloor = true; // Mark as revealed this floor
 }
-    
+
+    updateAndDrawMatrix();  // ← PERFECT SPOT! Magical flames + red balls
     needsRedraw = false;
     
         // ───── SNOW (only in snowy hell) ─────
