@@ -3630,6 +3630,17 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
             // Normal death
             p.hp = 0;
             diamonds = 0;
+
+            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+            // NEW: Lose the farm forever when you die
+            if (p.farmLocked) {
+                logBattleEvent(`Floor ${floor} - Your farm withered... all planted SATS lost forever.`);
+                p.farmLocked = false;
+                p.farmLockedFloor = 0;
+                p.farmLockedSats = 0;
+            }
+            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
+
             logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
             gameOver = true; // Centralized set
             updatePlayerState(); // Run death/resonance check
@@ -5223,25 +5234,50 @@ if (map[ny][nx] === 22 && !inHideout) { // Shrine tile
 
 if (map[ny][nx] === 27 && inPuzzleRoom && farmSpot && farmSpot.x === nx && farmSpot.y === ny) {
     const rawSats = Object.values(satsEarned).reduce((sum, v) => sum + v, 0);
+
     if (!p.farmLocked) {
+        // PLANT: First time stepping on it
+        p.farmLockedSats = rawSats;
+        // ZERO OUT ALL CURRENT SATS
+        Object.keys(satsEarned).forEach(key => satsEarned[key] = 0);
+        updateSatsDisplay();
+
         p.farmLocked = true;
         p.farmLockedFloor = floor;
-        p.farmLockedSats = rawSats;
-        logBattleEvent(`Floor ${floor} - SATS locked in farm soil! Harvest in 50 floors for 2X gains.`);
+
+        logBattleEvent(`Floor ${floor} - SATS planted! 2× in 50 floors.`);
         playWebAudioSound(sounds.pickup);
-    } else if (floor >= p.farmLockedFloor + 50) {
+    }
+    else if (floor >= p.farmLockedFloor + 50) {
+        // HARVEST: Ready after 50 floors
         const harvest = p.farmLockedSats * 2;
         satsEarned.Farm = (satsEarned.Farm || 0) + harvest;
-        logBattleEvent(`Floor ${floor} - Farm harvest! +${harvest} sats (2X gains)`);
+
+        const floorIndicator = document.getElementById('floor-indicator');
+        floorIndicator.textContent = `Farm: HARVEST!`;
+        setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 2000);
+
+        logBattleEvent(`Floor ${floor} - HARVEST! +${harvest} sats (2×)`);
         playWebAudioSound(sounds.pickup);
         updateSatsDisplay();
+
+        // Reset farm
         p.farmLocked = false;
         p.farmLockedFloor = 0;
         p.farmLockedSats = 0;
-    } else {
-        logBattleEvent(`Floor ${floor} - Farm maturing... ${p.farmLockedFloor + 50 - floor} floors left.`);
     }
-    // Allow standing on it
+    else {
+        // GROWING: Still waiting
+        const floorsLeft = p.farmLockedFloor + 50 - floor;
+        const floorIndicator = document.getElementById('floor-indicator');
+        floorIndicator.textContent = `Farm: ${floorsLeft} floors left`;
+        setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 2000);
+
+        logBattleEvent(`Floor ${floor} - Growing... ${floorsLeft} floors left.`);
+    }
+
+    // Allow player to stand on the tile
+    return;
 }
 
 // Add soul orb statue interaction
@@ -5802,7 +5838,7 @@ if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast 
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+    if (!scrollDroppedThisFloor && Math.random() < 1) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
