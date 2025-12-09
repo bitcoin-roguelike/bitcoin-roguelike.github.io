@@ -5761,6 +5761,30 @@ if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast 
 }
 }
 
+// ——— SCROLL DROP — 5% chance on any enemy kill ———
+function tryDropScroll(deadX, deadY) {
+    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+        scrollDroppedThisFloor = true;
+        let placed = false;
+        const positions = [{ x: deadX, y: deadY }];
+        const adj = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+        for (const d of adj) positions.push({ x: deadX + d.dx, y: deadY + d.dy });
+        for (const pos of positions) {
+            if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 0) {
+                map[pos.y][pos.x] = 11; // SCROLL TILE
+                scrollDrops.push({ x: pos.x, y: pos.y });
+                logBattleEvent(`Floor ${floor} - A mysterious scroll drops from the enemy!`);
+                playWebAudioSound(sounds.pickup);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            console.warn("No space for scroll drop");
+        }
+    }
+}
+
 function updateWisps() {
     if (wisps.length === 0 || gameOver || splashActive) return;
     const wisp = wisps[0]; // Only 1 wisp
@@ -6780,8 +6804,8 @@ if (hit) {
                         kills[enemy.type.name]++;
                         let dropPlaced = false;
 
-// Handle unique monster rewards using new function
-handleUniqueMonsterReward(hit);
+handleUniqueMonsterReward(enemy);
+tryDropScroll(enemy.x, enemy.y);
                         
                         // Drop satoshi
                         if (map[enemy.y][enemy.x] === 0) {
@@ -6930,33 +6954,7 @@ if (enemy.type.name === 'Cursed Trader') {
 if (hit.hp <= 0) {
     kills[hit.type.name]++;
     
-// ——— SCROLL DROP — 5% chance on any enemy kill ———
-if (!scrollDroppedThisFloor && Math.random() < 0.05) {
-    scrollDroppedThisFloor = true;
-    let placed = false;
-
-    const dead = typeof enemy !== 'undefined' ? enemy : hit;
-    if (!dead) return;
-
-    const positions = [{ x: dead.x, y: dead.y }];
-    const adj = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
-    for (const d of adj) positions.push({ x: dead.x + d.dx, y: dead.y + d.dy });
-
-    for (const pos of positions) {
-        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 0) {
-            map[pos.y][pos.x] = 11; // SCROLL TILE
-            scrollDrops.push({ x: pos.x, y: pos.y });
-            logBattleEvent(`Floor ${floor} - A mysterious scroll drops from the enemy!`);
-            playWebAudioSound(sounds.pickup);
-            placed = true;
-            break;
-        }
-    }
-
-    if (!placed) {
-        console.warn("No space for scroll drop");
-    }
-}
+tryDropScroll(hit.x, hit.y);
     
     let dropPlaced = false;
     
@@ -8023,6 +8021,8 @@ function removeDangerousAreas(monster) {
 // ———————————————————————————————————————————————————————
 
 // Puzzle designs
+// NOTICE!
+// parsing REQUIRE no spaces or empty lines here to work
 const PUZZLE_TEMPLATES = {
     common: [
 `##############
@@ -8063,7 +8063,6 @@ const PUZZLE_TEMPLATES = {
 #..#.BL..#.H.#
 #S.#..#..#...#
 ##############`,
-
 `##############
 #....BLLL....#
 #...B.##..H..#
