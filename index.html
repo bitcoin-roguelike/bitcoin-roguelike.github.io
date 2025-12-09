@@ -1488,6 +1488,11 @@ soulStones: 0,
 soulShards: 0,
 soulOrbs: 0,
 soulStormCharges: 256, // Track how many charges we have (max 256)
+
+farmLocked: false,
+farmLockedFloor: 0,
+farmLockedSats: 0,
+
 inSoulTerminal: false, // Track if player is in soul terminal
 soulTerminalCommand: '', // Current command input
 soulTerminalCursorPos: 0, // Cursor position in command
@@ -1582,6 +1587,9 @@ let puzzleArrows = [];       // {x,y,dir} — 'up','down','left','right'
 let puzzleBoulders = [];     // {x,y}
 let puzzleHeartFramers = []; // array of {x,y} — collect ALL to open chest
 let puzzleChest = null;      // {x,y}
+
+let farmSpot = null;
+
 let puzzleReturnPos = null;
 let puzzleTheme = 'hell';    // hell, desert, paradise
 
@@ -1839,6 +1847,14 @@ assets.arrowTile.src = 'arrow_tile.png'; // will rotate based on direction
 	assets.hooded_heirloom.src = 'hooded_heirloom.png';
 assets.cursed_ring = new Image(),
 assets.cursed_ring.src = 'cursed_ring.png';
+
+assets.farmSpot1 = new Image();
+assets.farmSpot1.src = 'farmSpot1.png';
+assets.farmSpot2 = new Image();
+assets.farmSpot2.src = 'farmSpot2.png';
+assets.farmSpot1.onerror = () => console.error('Failed to load farmSpot1.png');
+assets.farmSpot2.onerror = () => console.error('Failed to load farmSpot2.png');
+
 assets.echo_warden = new Image();
 assets.echo_warden.src = 'ἀρχάγγελος.png';
 assets.echo_warden.onerror = () => console.error('Failed to load echo_warden.png');
@@ -5205,6 +5221,29 @@ if (map[ny][nx] === 22 && !inHideout) { // Shrine tile
     }
 }
 
+if (map[ny][nx] === 27 && inPuzzleRoom && farmSpot && farmSpot.x === nx && farmSpot.y === ny) {
+    const rawSats = Object.values(satsEarned).reduce((sum, v) => sum + v, 0);
+    if (!p.farmLocked) {
+        p.farmLocked = true;
+        p.farmLockedFloor = floor;
+        p.farmLockedSats = rawSats;
+        logBattleEvent(`Floor ${floor} - SATS locked in farm soil! Harvest in 50 floors for 2X gains.`);
+        playWebAudioSound(sounds.pickup);
+    } else if (floor >= p.farmLockedFloor + 50) {
+        const harvest = p.farmLockedSats * 2;
+        satsEarned.Farm = (satsEarned.Farm || 0) + harvest;
+        logBattleEvent(`Floor ${floor} - Farm harvest! +${harvest} sats (2X gains)`);
+        playWebAudioSound(sounds.pickup);
+        updateSatsDisplay();
+        p.farmLocked = false;
+        p.farmLockedFloor = 0;
+        p.farmLockedSats = 0;
+    } else {
+        logBattleEvent(`Floor ${floor} - Farm maturing... ${p.farmLockedFloor + 50 - floor} floors left.`);
+    }
+    // Allow standing on it
+}
+
 // Add soul orb statue interaction
 if (map[ny][nx] === 21 && !inHideout) { // Soul orb statue tile
 	// Check if player already collected from this statue on current floor
@@ -7554,6 +7593,7 @@ case 'reset':
                 }
             }
         }
+                
         fogMap = Array(H).fill().map(() => Array(W).fill(1));
 
         // Re-parse the exact same layout (respecting the correct tier for this floor)
@@ -7594,6 +7634,7 @@ case 'reset':
                 if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
                 if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
                 if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
+                if (ch === 'F') { map[cy][cx] = 27; farmSpot = {x:cx, y:cy}; }
             }
         }
 
@@ -8034,8 +8075,8 @@ const PUZZLE_TEMPLATES = {
 #.vLLBCBLLL^.#
 #.vLLBBBLLL^.#
 #.v>>>>>>>>^.#
-#............#
-#.S...@......#
+S............#
+F....@.......#
 ##############`,
 `##############
 #..L.....BBB.#
@@ -8046,8 +8087,8 @@ const PUZZLE_TEMPLATES = {
 #.....C......#
 #......B.....#
 #...@........#
-#.S..........#
-#............#
+S............#
+F............#
 ##############`
     ],
     rare: [
@@ -8060,8 +8101,8 @@ const PUZZLE_TEMPLATES = {
 #..#..#..#LLL#
 #..#..#..#LLL#
 #@.#..#..#...#
-#..#.BL..#.H.#
-#S.#..#..#...#
+S..#.BL..#.H.#
+F..#..#..#...#
 ##############`,
 `##############
 #....BLLL....#
@@ -8072,8 +8113,8 @@ const PUZZLE_TEMPLATES = {
 #.....##..L..#
 #.....##.....#
 #.@...##.....#
-#.....##..C..#
-#S....##.....#
+S.....##..C..#
+F.....##.....#
 ##############`
     ],
     legendary: [
@@ -8086,8 +8127,8 @@ const PUZZLE_TEMPLATES = {
 #..LLLLLLL.B.#
 #..LLLLLLL...#
 #..v<<<>>#<<<#
-#.S>>>@....B.#
-#............#
+S..>>>@....B.#
+F............#
 ##############`,
 `##############
 #BC.B.###....#
@@ -8098,8 +8139,8 @@ const PUZZLE_TEMPLATES = {
 #.....B....#.#
 #.....##...#.#
 #.....##...#.#
-#.S.@...B..#.#
-#.....##H###H#
+S...@...B..#.#
+F.....##H###H#
 ##############`
     ]
 };
@@ -8193,6 +8234,7 @@ function startPuzzleRoom() {
             if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
             if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
             if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
+            if (ch === 'F') { map[cy][cx] = 27; farmSpot = {x:cx, y:cy}; }
         }
     }
 
@@ -8270,6 +8312,7 @@ updateSnowState();  // ensures snowflakes + snowy tiles match the theme
     puzzleHeartFramers = [];
     puzzleChest = null;
     soulStashPos = null;
+
     puzzleReturnPos = null;
     puzzleCurrentLayout = null;  // ← NEW: prevents reusing old layout on next floor
 
@@ -8553,6 +8596,12 @@ p.auraMoveCounter = 0; // Reset aura move counter
     p.soulShards = 0;
     p.soulOrbs = 0;
     p.soulStormCharges = 256;
+  
+farmSpot = null;  
+p.farmLocked = false;
+p.farmLockedFloor = 0;
+p.farmLockedSats = 0;
+    
     // Reset shrine tracking
     p.shrineCharges = 0;
     p.shrineUsedThisFloor = false;
@@ -9057,6 +9106,11 @@ for (let y = 0; y < H; y++) {
         if (map[y][x] === 22 && isVisible) { // Shrine tile
             c.drawImage(assets.shrine, x * S, y * S, S, S);
             needsRedraw = true; // Add this to ensure proper redraw after shrine drawing
+        }
+        
+        if (map[y][x] === 27 && farmSpot && farmSpot.x === x && farmSpot.y === y && isVisible) {
+            const mature = p.farmLocked && floor >= p.farmLockedFloor + 50;
+            c.drawImage(mature ? assets.farmSpot2 : assets.farmSpot1, x * S, y * S, S, S);
         }
     }
 }
