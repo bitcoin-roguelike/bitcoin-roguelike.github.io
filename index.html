@@ -6213,7 +6213,7 @@ function updateAndDrawMatrix() {
 
         // 3. Matrix rain – 4 pillars, stepped random length 2/4/6/8, custom chars
         const matrixText = "0B1";
-        const textSize = 8;
+        const textSize = 6;
         const textColor = isUnique ? '#ff3366' : '#f7931a';
         const baseR = parseInt(textColor.slice(1,3),16);
         const baseG = parseInt(textColor.slice(3,5),16);
@@ -6235,7 +6235,7 @@ function updateAndDrawMatrix() {
             const enemySeed = Math.floor(phaseOffset * 1000);
             const pillarSeed = enemySeed + i * 7919;
             const stepIndex = Math.abs(pillarSeed + Math.floor(now / 1200)) % 4;
-            const length = [2, 4, 6, 8][stepIndex]; // ← now shorter and cleaner
+            const length = [2, 4, 6][stepIndex]; // ← now shorter and cleaner
 
             for (let j = 0; j < length; j++) {
                 const yPos = e.currentY - j * textSize;
@@ -7800,23 +7800,34 @@ function activateSoulStorm() {
             // Check if there's an enemy at this tile
             const enemy = enemies.find(e => e.x === x && e.y === y);
             
-                    if (enemy) {
-                        // Soul Sword / Diamond Hand ignore bit shield
-                        const ignoreShield = (p.soulStormCharges >= 4 || p.hasDiamondHand) && !usePickaxeSword;
+                        if (enemy) {
+                            const isSoulSword = p.soulStormCharges >= 4;
+                            const isDiamondHand = p.hasDiamondHand && !usePickaxeSword;
 
-                        if (ignoreShield) {
-                            enemy.hp -= damage;
-                            logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${damage} DMG (shield ignored)!`);
-                        } else if (enemy.bitAmmo > 0) {
-                            enemy.bitAmmo--;
-                            enemy.bits = enemy.bitAmmo;
-                            enemy.shieldFlash = { active: true, startTime: Date.now() };
-                            logBattleEvent(`Floor ${floor} - Diamond Hand blocked by ${enemy.type.name}'s bit shield!`);
-                        } else {
-                            enemy.hp -= damage;
-                            logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${damage} DMG (HP: ${enemy.hp})`);
-                        }
-                        playWebAudioSound(sounds.hit);
+                            if (isSoulSword) {
+                                // Soul Sword AOE – normal damage, ignores shield
+                                enemy.hp -= damage;
+                                logBattleEvent(`Floor ${floor} - Soul Sword AOE hits ${enemy.type.name} for ${damage} DMG (shield ignored)!`);
+                            }
+                            else if (isDiamondHand) {
+                                // Diamond Hand AOE – high damage, ignores shield
+                                const diamondDamage = 3; // or whatever your intended Diamond Hand AOE damage is
+                                enemy.hp -= diamondDamage;
+                                logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${diamondDamage} DMG (shield ignored)!`);
+                            }
+                            else if (enemy.bitAmmo > 0) {
+                                // Normal attack – blocked by shield
+                                enemy.bitAmmo--;
+                                enemy.bits = enemy.bitAmmo;
+                                enemy.shieldFlash = { active: true, startTime: Date.now() };
+                                logBattleEvent(`Floor ${floor} - ${enemy.type.name} blocks with bit shield!`);
+                            }
+                            else {
+                                // Normal attack – no shield
+                                enemy.hp -= damage;
+                                logBattleEvent(`Floor ${floor} - Hit ${enemy.type.name} for ${damage} DMG (HP: ${enemy.hp})`);
+                            }
+                            playWebAudioSound(sounds.hit);
                 
                 if (enemy.hp <= 0) {
                     kills[enemy.type.name]++;
