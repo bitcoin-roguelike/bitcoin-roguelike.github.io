@@ -6211,8 +6211,8 @@ function updateAndDrawMatrix() {
             }
         }
 
-        // 3. Matrix rain – 5 pillars, stepped random length 4/8/12/16, custom chars
-        const matrixText = "0B1"; // your requested characters
+        // 3. Matrix rain – 4 pillars, stepped random length 2/4/6/8, custom chars
+        const matrixText = "0B1";
         const textSize = 8;
         const textColor = isUnique ? '#ff3366' : '#f7931a';
         const baseR = parseInt(textColor.slice(1,3),16);
@@ -6229,14 +6229,13 @@ function updateAndDrawMatrix() {
 
         for (let i = 0; i < pillarCount; i++) {
             const pillarX = e.currentX + (i + 0.5) * pillarWidth;
-            const speed = speedBase + (i + Math.floor(phaseOffset * 10)) * 0.004; // extra enemy-specific variation
+            const speed = speedBase + (i + Math.floor(phaseOffset * 10)) * 0.004;
 
-            // Unique stepped random length per pillar & per enemy (4,8,12,16)
-            // Uses phaseOffset heavily so enemies don't look identical
-            const enemySeed = Math.floor(phaseOffset * 1000); // unique per enemy
-            const pillarSeed = enemySeed + i * 7919;         // large prime offset per pillar
-            const stepIndex = Math.abs(pillarSeed + Math.floor(now / 1200)) % 4; // changes ~every 1.2s
-            const length = [4, 8, 12, 16][stepIndex];
+            // Stepped random length: 2, 4, 6, or 8 characters
+            const enemySeed = Math.floor(phaseOffset * 1000);
+            const pillarSeed = enemySeed + i * 7919;
+            const stepIndex = Math.abs(pillarSeed + Math.floor(now / 1200)) % 4;
+            const length = [2, 4, 6, 8][stepIndex]; // ← now shorter and cleaner
 
             for (let j = 0; j < length; j++) {
                 const yPos = e.currentY - j * textSize;
