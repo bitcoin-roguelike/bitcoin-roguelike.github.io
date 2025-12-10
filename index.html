@@ -6016,102 +6016,124 @@ function updateWisps() {
     needsRedraw = true;
 }
 
-function applyWispAttack(wisp, target) {
-    const dmg = wisp.type.damage;
-    let effectMsg = '';
-    let visibleEffect = '';
-    let actualDmg = 0;
+function applyWispAttack(wisp, primaryTarget) {
+    const now = Date.now();
+    let hitEnemies = new Set(); // Track all affected enemies for flash
 
-    // ——— MAIN TARGET ATTACK ———
-    if (dmg > 0) {
-        // Fire / Earth / Chain wisps respect bit shields (freeze ignores)
-        if (target.bitAmmo > 0 && wisp.type.effect !== 'freeze') {
-            target.bitAmmo--;
-            target.bits = target.bitAmmo;
-            target.shieldFlash = { active: true, startTime: Date.now() };
-
-            effectMsg = `Wisp ${wisp.type.name.toUpperCase()} blocked by shield!`;
-            visibleEffect = '[SHIELD BLOCK]';
+    // ——— MAIN TARGET (always hits first) ———
+    if (wisp.type.damage > 0) {
+        // Fire / Earth / Chain respect bit shield — Cold (freeze) ignores it
+        if (primaryTarget.bitAmmo > 0 && wisp.type.effect !== 'freeze') {
+            primaryTarget.bitAmmo--;
+            primaryTarget.bits = primaryTarget.bitAmmo;
+            primaryTarget.shieldFlash = { active: true, startTime: now };
+            logBattleEvent(`Wisp ${wisp.type.name.toUpperCase()} blocked by shield!`);
         } else {
-            actualDmg = Math.min(dmg, target.hp);
-            target.hp -= actualDmg;
-            target.hp = Math.max(actualDmg > 0 ? 1 : 0, target.hp); // Mercy rule
-
-            let verb = '';
-            switch (wisp.type.name) {
-                case 'fire':  verb = 'scorches';     visibleEffect = '[FIRE BOLT]';      break;
-                case 'chain': verb = 'zaps';        visibleEffect = '[CHAIN LIGHTNING]'; break;
-                case 'earth': verb = 'smashes';     visibleEffect = '[EARTHQUAKE]';     break;
+            const dmg = wisp.type.damage;
+            const actualDmg = Math.min(dmg, primaryTarget.hp - 1); // ← MERCY: never below 1
+            if (actualDmg > 0) {
+                primaryTarget.hp -= actualDmg;
+                let verb = '';
+                let effect = '';
+                switch (wisp.type.name) {
+                    case 'fire': verb = 'scorches'; effect = '[FIRE BOLT]'; break;
+                    case 'chain': verb = 'zaps'; effect = '[CHAIN LIGHTNING]'; break;
+                    case 'earth': verb = 'smashes'; effect = '[EARTHQUAKE]'; break;
+                }
+                logBattleEvent(`Wisp ${verb} ${primaryTarget.type.name} for ${actualDmg} damage! ${effect}`);
+                playWebAudioSound(sounds.attack);
             }
-
-            effectMsg = actualDmg > 0
-                ? `Wisp ${verb} ${target.type.name} for ${actualDmg} damage!`
-                : `Wisp ${verb} ${target.type.name}!`;
+            if (primaryTarget.hp === 1) {
+                logBattleEvent(`Wisp spares ${primaryTarget.type.name}!`);
+            }
         }
+        hitEnemies.add(primaryTarget);
     }
     else if (wisp.type.effect === 'freeze') {
-        // Freeze ignores shield and can kill
-        target.frozen = true;
-        target.frozenTurns = 1;
-        effectMsg = `Wisp freezes ${target.type.name}!`;
-        visibleEffect = '[FROST LOCK]';
-        actualDmg = 0;
+        // Cold = freeze (ignores shield, no damage, no mercy needed)
+        primaryTarget.frozen = true;
+        primaryTarget.frozenTurns = 2;
+        logBattleEvent(`Wisp freezes ${primaryTarget.type.name}! [FROST LOCK]`);
+        playWebAudioSound(sounds.attack);
+        hitEnemies.add(primaryTarget);
     }
 
-    // Log + feedback
-    if (actualDmg > 0 || wisp.type.effect === 'freeze') {
-        logBattleEvent(`Floor ${floor} - ${effectMsg} ${visibleEffect}`);
-        target.wispHitFlash = { time: Date.now(), type: wisp.type.name };
-        sounds.attack.currentTime = 0;
-        sounds.attack.play().catch(() => {});
-    }
+    // ——— AOE EFFECTS (only apply to nearby enemies) ———
+    const range = wisp.type.range;
 
-    // ——— ONLY CHAIN LIGHTNING WISP CHAINS ———
-    if (wisp.type.name === 'chain' && wisp.type.aoe !== 'single') {
-        enemies.forEach(e => {
-            if (e === target) return;
+    enemies.forEach(enemy => {
+        if (enemy === primaryTarget) return;
+        const dist = Math.abs(enemy.x - wisp.x) + Math.abs(enemy.y - wisp.y);
+        if (dist > range) return;
 
-            const dist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-            if (dist > wisp.type.range * 2) return;
+        let affected = false;
 
-            if (e.bitAmmo > 0) {
-                e.bitAmmo--;
-                e.bits = e.bitAmmo;
-                e.shieldFlash = { active: true, startTime: Date.now() };
-                logBattleEvent(`[CHAIN LIGHTNING] jumps to ${e.type.name} — blocked by shield!`);
+        if (wisp.type.name === 'cold' && wisp.type.aoe === 'medium') {
+            // Medium AOE freeze
+            const dx = Math.abs(enemy.x - primaryTarget.x);
+            const dy = Math.abs(enemy.y - primaryTarget.y);
+            if (dx <= 1 && dy <= 1) {
+                enemy.frozen = true;
+                enemy.frozenTurns = 2;
+                logBattleEvent(`Wisp freezes ${enemy.type.name} in cold nova!`);
+                affected = true;
+            }
+        }
+        else if (wisp.type.name === 'chain' && wisp.type.aoe === 'large') {
+            // Large chain: 1 damage to all in range
+            if (enemy.bitAmmo > 0) {
+                enemy.bitAmmo--;
+                enemy.bits = enemy.bitAmmo;
+                enemy.shieldFlash = { active: true, startTime: now };
+                logBattleEvent(`[CHAIN LIGHTNING] jumps to ${enemy.type.name} — blocked!`);
             } else {
-                const chainDmg = Math.min(1, e.hp - 1);
+                const chainDmg = Math.min(1, enemy.hp - 1);
                 if (chainDmg > 0) {
-                    e.hp -= 1;
-                    logBattleEvent(`[CHAIN LIGHTNING] jumps to ${e.type.name} for 1 dmg! (HP: ${e.hp})`);
+                    enemy.hp -= 1;
+                    logBattleEvent(`[CHAIN LIGHTNING] jumps to ${enemy.type.name} for 1 dmg!`);
                 } else {
-                    logBattleEvent(`[CHAIN LIGHTNING] jumps to ${e.type.name} — left at 1 HP!`);
+                    logBattleEvent(`[CHAIN LIGHTNING] jumps to ${enemy.type.name} — spared!`);
                 }
             }
-        });
-    }
+            affected = true;
+        }
+        else if (wisp.type.name === 'earth' && wisp.type.aoe === 'small') {
+            // Small cross quake around primary target
+            const dx = Math.abs(enemy.x - primaryTarget.x);
+            const dy = Math.abs(enemy.y - primaryTarget.y);
+            if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                const quakeDmg = Math.min(2, enemy.hp - 1);
+                if (quakeDmg > 0) {
+                    enemy.hp -= quakeDmg;
+                    logBattleEvent(`Earthquake hits ${enemy.type.name} for ${quakeDmg} dmg!`);
+                } else {
+                    logBattleEvent(`Earthquake shakes ${enemy.type.name} — spared!`);
+                }
+                affected = true;
+            }
+        }
 
-    // ——— DEATH & SPARE ———
-    if (target.hp <= 0) {
-        kills[target.type.name]++;
-        handleUniqueMonsterReward(target);
-        enemies = enemies.filter(en => en !== target);
-        logBattleEvent(`Floor ${floor} - Wisp slays ${target.type.name}!`);
-    } else if (actualDmg > 0 && target.hp === 1) {
-        logBattleEvent(`Floor ${floor} - Wisp spares ${target.type.name}!`);
-    }
+        if (affected) {
+            hitEnemies.add(enemy);
+            enemy.wispHitFlash = { time: now, type: wisp.type.name };
+        }
+    });
 
-    // ——— WISP DEATH ———
+    // ——— FINAL FLASH ON ALL HIT ENEMIES ———
+    hitEnemies.forEach(e => {
+        e.wispHitFlash = { time: now, type: wisp.type.name };
+    });
+
+    // ——— WISP DEATH CHECK (player can still lose wisp) ———
     if (wisp.hp <= 0) {
         wisps = [];
         logBattleEvent(`Floor ${floor} - Wisp slain!`);
         sounds.gameover.currentTime = 0;
         sounds.gameover.play().catch(() => {});
         deadWispCorpse = {
-            x: wisp.x,
-            y: wisp.y,
+            x: wisp.x, y: wisp.y,
             frameIndex: wisp.anim.frameIndex,
-            fadeStart: Date.now()
+            fadeStart: now
         };
     }
 
@@ -7316,73 +7338,92 @@ if (hit.type.name === 'Cursed Trader') {
 
     }
     
-// Add soul storm charge consumption for each attack
-if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
-    // Consume 4 charges for this attack
-    p.soulStormCharges -= 4;
-    activateSoulStorm();
-    
-    // Continue with regular projectile logic only for normal sword attacks (not diamond hand or pickaxe sword)
-    // Check if player is standing adjacent to an enemy - prevent projectiles when adjacent
-    let isAdjacentToEnemy = false;
-    let sx = p.x, sy = p.y;
-    if (swordDir === 'up') sy--;
-    if (swordDir === 'down') sy++;
-    if (swordDir === 'left') sx--;
-    if (swordDir === 'right') sx++;
-    
-    // Check if there's an enemy one tile away in the sword direction
-    if (sx >= 0 && sx < W && sy >= 0 && sy < H) {
-        isAdjacentToEnemy = enemies.some(e => e.x === sx && e.y === sy);
-    }
-    
-    // Also check if player is standing directly adjacent to ANY enemy
-    let isNearEnemy = false;
-    const adjacentPositions = [
-        {x: p.x, y: p.y - 1}, // Up
-        {x: p.x, y: p.y + 1}, // Down
-        {x: p.x - 1, y: p.y}, // Left
-        {x: p.x + 1, y: p.y}  // Right
-    ];
-    
-    for (const pos of adjacentPositions) {
-        if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
-            if (enemies.some(e => e.x === pos.x && e.y === pos.y)) {
-                isNearEnemy = true;
-                break;
+// ——— PROJECTILE SPAWNING: SOUL SWORD & NORMAL FULL HP ———
+// Only allowed if NO enemy is touching the player (8 surrounding tiles)
+function canShootProjectile() {
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue; // Skip player tile
+            const nx = p.x + dx;
+            const ny = p.y + dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                if (enemies.some(e => e.x === nx && e.y === ny)) {
+                    return false; // Enemy touching → NO projectile
+                }
             }
         }
     }
-    
-    // Only shoot projectiles if not standing adjacent to an enemy
-    if (!isAdjacentToEnemy && !isNearEnemy) {
-        let startSx = p.x, startSy = p.y;
-        if (startSx >= 0 && startSx < W && startSy >= 0 && startSy < H) {
-            // Compute dirX/dirY from swordDir (unified with enemy spears)
-            let pDirX = 0, pDirY = 0;
-            if (swordDir === 'right') pDirX = 1;
-            else if (swordDir === 'left') pDirX = -1;
-            else if (swordDir === 'down') pDirY = 1;
-            else if (swordDir === 'up') pDirY = -1;
+    return true; // All clear → can shoot
+}
 
-            projectiles.push({
-                x: p.x, y: p.y,
-                currentX: p.x * S, currentY: p.y * S,
-                dirX: pDirX, dirY: pDirY,
-                // value undefined = player sword (hits enemies)
-                moveStartTime: Date.now(),
-                moving: true
-            });
-            // Set first target tile
-            const newProj = projectiles[projectiles.length - 1];
-            newProj.targetTileX = p.x + pDirX;
-            newProj.targetTileY = p.y + pDirY;
-            newProj.targetX = newProj.targetTileX * S;
-            newProj.targetY = newProj.targetTileY * S;
-            sounds.shoot_sword.pause();
-            sounds.shoot_sword.currentTime = 0;
-            sounds.shoot_sword.play().catch(e => console.error('Shoot sword sound error:', e));
-        }
+// ——— SOUL SWORD: 4+ charges → AOE wave + ranged projectile ———
+if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
+    if (!canShootProjectile()) {
+        // Still consume charges and do AOE, but NO projectile
+        p.soulStormCharges -= 4;
+        activateSoulStorm();
+        //logBattleEvent(`Soul Sword AOE unleashed — too close for ranged strike!`);
+    } else {
+        p.soulStormCharges -= 4;
+        activateSoulStorm();
+
+        // Fire projectile
+        let dirX = 0, dirY = 0;
+        if (swordDir === 'right') dirX = 1;
+        else if (swordDir === 'left') dirX = -1;
+        else if (swordDir === 'down') dirY = 1;
+        else if (swordDir === 'up') dirY = -1;
+
+        projectiles.push({
+            x: p.x, y: p.y,
+            currentX: p.x * S, currentY: p.y * S,
+            dirX, dirY,
+            moveStartTime: Date.now(),
+            moving: true
+        });
+
+        const proj = projectiles[projectiles.length - 1];
+        proj.targetTileX = p.x + dirX;
+        proj.targetTileY = p.y + dirY;
+        proj.targetX = proj.targetTileX * S;
+        proj.targetY = proj.targetTileY * S;
+
+        sounds.shoot_sword.currentTime = 0;
+        sounds.shoot_sword.play().catch(() => {});
+
+        logBattleEvent(`Soul Sword (${p.soulStormCharges} charges left)`);
+    }
+}
+
+// ——— NORMAL FULL HP PROJECTILE (HP ≥ 24 + not using special swords) ———
+else if (p.hp >= 24 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
+    if (!canShootProjectile()) {
+        // Do nothing — no free ranged attack when snugging
+        // (Optional: add a subtle "clank" sound or log?)
+        // logBattleEvent(`Too close — sword strike only!`);
+    } else {
+        let dirX = 0, dirY = 0;
+        if (swordDir === 'right') dirX = 1;
+        else if (swordDir === 'left') dirX = -1;
+        else if (swordDir === 'down') dirY = 1;
+        else if (swordDir === 'up') dirY = -1;
+
+        projectiles.push({
+            x: p.x, y: p.y,
+            currentX: p.x * S, currentY: p.y * S,
+            dirX, dirY,
+            moveStartTime: Date.now(),
+            moving: true
+        });
+
+        const proj = projectiles[projectiles.length - 1];
+        proj.targetTileX = p.x + dirX;
+        proj.targetTileY = p.y + dirY;
+        proj.targetX = proj.targetTileX * S;
+        proj.targetY = proj.targetTileY * S;
+
+        sounds.shoot_sword.currentTime = 0;
+        sounds.shoot_sword.play().catch(() => {});
     }
 }
     
