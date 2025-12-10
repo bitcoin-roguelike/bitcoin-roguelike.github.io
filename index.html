@@ -1488,6 +1488,7 @@ soulStones: 0,
 soulShards: 0,
 soulOrbs: 0,
 soulStormCharges: 256, // Track how many charges we have (max 256)
+echoWardenBlessingGiven: false,
 
 farmLocked: false,
 farmLockedFloor: 0,
@@ -3254,8 +3255,7 @@ exit = null;
 
         // Check runewords at floor start
         checkRunewordsAtFloorStart();
-        // Update rune display
-        //checkRunewords();
+
 if (!musicMuted && !inPuzzleRoom) {
     musicManager.play(currentTheme);
 }
@@ -3625,14 +3625,14 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
             // Trigger 500ms invert flash on warden entry
             wardenFlashStart = Date.now();
                     gameOver = false; // Force reset if spell/attack overrode
-        console.log('DEBUG: Post-surge force - HP:', p.hp, 'gameOver:', gameOver); // Remove after test
+        //console.log('DEBUG: Post-surge force - HP:', p.hp, 'gameOver:', gameOver); // Remove after test
         } else {
             // Normal death
             p.hp = 0;
             diamonds = 0;
 
             // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-            // NEW: Lose the farm forever when you die
+            // NEW: Lose the farm when you die
             if (p.farmLocked) {
                 logBattleEvent(`Floor ${floor} - Your farm withered... all planted SATS lost forever.`);
                 p.farmLocked = false;
@@ -4433,6 +4433,45 @@ p.startX = p.x; // Track actual start for lerp
 p.startY = p.y;
 p.x = nx;
 p.y = ny;
+
+        // ——— ECHO WARDEN MIRROR MOVEMENT: Safe, clean, temporary ———
+        if (floor === 1 && echoWardenPos && p.echoWardenBlessingGiven) {
+            const oldWX = echoWardenPos.x;
+            const oldWY = echoWardenPos.y;
+
+            // Calculate opposite movement
+            const dx = nx - oldX;
+            const dy = ny - oldY;
+            let newWX = echoWardenPos.x - dx;
+            let newWY = echoWardenPos.y - dy;
+
+            // Clamp to map bounds
+            newWX = Math.max(0, Math.min(W - 1, newWX));
+            newWY = Math.max(0, Math.min(H - 1, newWY));
+
+            // Only move if target tile is walkable (floor or player tile)
+            if (map[newWY][newWX] === 0 || (newWX === p.x && newWY === p.y)) {
+                // Clear old position
+                map[oldWY][oldWX] = 0;
+
+                // Set new position
+                echoWardenPos.x = newWX;
+                echoWardenPos.y = newWY;
+                map[newWY][newWX] = 24;
+
+                needsRedraw = true;
+            }
+            // If blocked (wall), Warden just stays put — no destruction
+
+            // ——— AUTO-REMOVE WHEN FULLY FADED ———
+            const age = Date.now() - echoWardenPos.spawnTime;
+            if (age > 4500) { // 3s visible + 1.5s fade = 4.5s total
+                map[echoWardenPos.y][echoWardenPos.x] = 0;
+                echoWardenPos = null;
+                needsRedraw = true;
+            }
+        }
+
 p.targetTileX = nx;
 p.targetTileY = ny;
 p.deltaX = (nx - oldX) * 2;
@@ -5547,6 +5586,66 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
         }
 
         updateFogMap(p.x, p.y);
+        
+    // ——— ECHO WARDEN AWAKENS: First step on Floor 1 only ———
+    if (floor === 1 && !p.echoWardenBlessingGiven) {
+        p.hp += 100;
+        p.maxHP += 100;
+        p.echoWardenBlessingGiven = true;
+
+        // 1. FLASH FIRST
+        wardenFlashStart = Date.now();
+
+        // 2. AXIS-PRIORITY SPAWN: Right → Left → Down → Up → Diagonals → Safety
+        setTimeout(() => {
+            const candidates = [
+                // Cardinal directions (closest first)
+                { x: p.x + 1, y: p.y },   // right
+                { x: p.x - 1, y: p.y },   // left
+                { x: p.x,     y: p.y + 1 }, // down
+                { x: p.x,     y: p.y - 1 }, // up
+
+                // Diagonals (next closest)
+                { x: p.x + 1, y: p.y + 1 },
+                { x: p.x + 1, y: p.y - 1 },
+                { x: p.x - 1, y: p.y + 1 },
+                { x: p.x - 1, y: p.y - 1 },
+
+                // 2-step cardinals (if really cramped)
+                { x: p.x + 2, y: p.y },
+                { x: p.x - 2, y: p.y },
+                { x: p.x,     y: p.y + 2 },
+                { x: p.x,     y: p.y - 2 },
+            ];
+
+            let placed = false;
+            for (const pos of candidates) {
+                if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 0) {
+                    echoWardenPos = { x: pos.x, y: pos.y, spawnTime: Date.now() };
+                    map[pos.y][pos.x] = 24;
+                    placed = true;
+                    break;
+                }
+            }
+
+            // Final emergency fallback (should never trigger)
+            if (!placed) {
+                echoWardenPos = { x: p.x, y: p.y, spawnTime: Date.now() };
+                map[p.y][p.x] = 24; // spawn on player if no space (dramatic!)
+            }
+
+            logBattleEvent(`Floor 1 - You take your first step...`);
+        }, 0);
+
+        // 3. Message + sound
+        setTimeout(() => {
+            logBattleEvent(`The Echo Warden awakens from the void! +100 HP granted forever!`);
+            playWebAudioSound(sounds.pickup);
+        }, 600);
+
+        needsRedraw = true;
+    }
+        
     }
     
     moveEnemies();
@@ -5863,54 +5962,52 @@ function tryDropScroll(deadX, deadY) {
 function updateWisps() {
     if (wisps.length === 0 || gameOver || splashActive) return;
     const wisp = wisps[0]; // Only 1 wisp
-    wisp.attackCounter++; // Increment per enemy turn (every call)
-   
+
+    wisp.attackCounter++;
+
     // Move close to player (realtime, random bob within 1-2 tiles)
     let dx = p.x - wisp.x, dy = p.y - wisp.y;
     let dist = Math.abs(dx) + Math.abs(dy);
-    if (dist > 2 || Math.random() < 0.3) { // Chase if far, or random wander
+    if (dist > 2 || Math.random() < 0.3) {
         let nx = wisp.x, ny = wisp.y;
         if (dist > 2) {
             nx += dx > 0 ? 1 : (dx < 0 ? -1 : 0);
             ny += dy > 0 ? 1 : (dy < 0 ? -1 : 0);
         } else {
-            // Random close move
             const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
             const randDir = dirs[Math.floor(Math.random() * dirs.length)];
             nx += randDir.dx; ny += randDir.dy;
         }
-        if (nx >= 0 && nx < W && ny >= 0 && ny < H && 
-            map[ny][nx] === 0 && 
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H &&
+            map[ny][nx] === 0 &&
             !(nx === p.x && ny === p.y) &&
-            // Avoid all item/special tiles so player always sees drops
-            ![7,23].includes(map[ny][nx])) {  // only avoid Gnome (7) and Cursed Ring (23)
+            ![7,23].includes(map[ny][nx])) {
             const oldX = wisp.x, oldY = wisp.y;
             wisp.x = nx; wisp.y = ny;
             wisp.targetTileX = nx; wisp.targetTileY = ny;
-            wisp.deltaX = (nx - oldX) * 2; // Pixel step
+            wisp.deltaX = (nx - oldX) * 2;
             wisp.deltaY = (ny - oldY) * 2;
-            wisp.stepsLeft = 8; // 8 sub-steps per tile
+            wisp.stepsLeft = 8;
             wisp.moving = true;
-            // Keep current at start for interp
         }
     }
-   
+
     // Attack every 2nd enemy turn if enemy in range
     if (wisp.attackCounter % 2 === 0) {
         const inRangeEnemies = enemies.filter(e => {
             let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-            return edist <= wisp.type.range && e.hp > 1;  // ← ignore 1-HP enemies
+            return edist <= wisp.type.range && e.hp > 1; // ignore 1-HP enemies
         });
         if (inRangeEnemies.length > 0) {
-            const target = inRangeEnemies[0]; // Nearest/simple
+            const target = inRangeEnemies[0];
             applyWispAttack(wisp, target);
         }
     }
-   
+
     // Animate idle bob
     const now = performance.now();
     if (now - wisp.anim.lastFrameTime >= 400) {
-        wisp.anim.frameIndex = (wisp.anim.frameIndex + 1) % 3; // Cycle 3 frames
+        wisp.anim.frameIndex = (wisp.anim.frameIndex + 1) % 3;
         wisp.anim.lastFrameTime = now;
     }
     needsRedraw = true;
@@ -5919,61 +6016,79 @@ function updateWisps() {
 function applyWispAttack(wisp, target) {
     const dmg = wisp.type.damage;
     let effectMsg = '';
-    let visibleEffect = ''; // For log visibility
+    let visibleEffect = '';
     let actualDmg = 0;
-  
+
+    // ——— MAIN TARGET ATTACK ———
     if (dmg > 0) {
-        actualDmg = Math.min(dmg, target.hp); // Clamp to prevent over-log
-        target.hp -= actualDmg;
-        target.hp = Math.max(actualDmg > 0 ? 1 : 0, target.hp); // Mercy: 1 HP min if dmg>0 (freeze skips)
-        let verb = '';
-        switch (wisp.type.name) {
-            case 'fire':   verb = 'scorches'; visibleEffect = '[FIRE BOLT]'; break;
-            case 'cold':   verb = 'freezes';  visibleEffect = '[FROST NOVA]'; break;
-            case 'chain':  verb = 'zaps';     visibleEffect = '[CHAIN LIGHTNING]'; break;
-            case 'earth':  verb = 'smashes';  visibleEffect = '[EARTHQUAKE]'; break;
-            default:       verb = 'hits';     visibleEffect = `[${wisp.type.name.toUpperCase()}]`;
+        // Fire / Earth / Chain wisps respect bit shields (freeze ignores)
+        if (target.bitAmmo > 0 && wisp.type.effect !== 'freeze') {
+            target.bitAmmo--;
+            target.bits = target.bitAmmo;
+            target.shieldFlash = { active: true, startTime: Date.now() };
+
+            effectMsg = `Wisp ${wisp.type.name.toUpperCase()} blocked by shield!`;
+            visibleEffect = '[SHIELD BLOCK]';
+        } else {
+            actualDmg = Math.min(dmg, target.hp);
+            target.hp -= actualDmg;
+            target.hp = Math.max(actualDmg > 0 ? 1 : 0, target.hp); // Mercy rule
+
+            let verb = '';
+            switch (wisp.type.name) {
+                case 'fire':  verb = 'scorches';     visibleEffect = '[FIRE BOLT]';      break;
+                case 'chain': verb = 'zaps';        visibleEffect = '[CHAIN LIGHTNING]'; break;
+                case 'earth': verb = 'smashes';     visibleEffect = '[EARTHQUAKE]';     break;
+            }
+
+            effectMsg = actualDmg > 0
+                ? `Wisp ${verb} ${target.type.name} for ${actualDmg} damage!`
+                : `Wisp ${verb} ${target.type.name}!`;
         }
-        effectMsg = actualDmg > 0 
-            ? `Wisp ${verb} ${target.type.name} for ${actualDmg} damage!`
-            : `Wisp ${verb} ${target.type.name}!`;
-    } else if (wisp.type.effect === 'freeze') {
-        // Simple freeze: skip enemy turn (set flag)
+    }
+    else if (wisp.type.effect === 'freeze') {
+        // Freeze ignores shield and can kill
         target.frozen = true;
         target.frozenTurns = 1;
         effectMsg = `Wisp freezes ${target.type.name}!`;
         visibleEffect = '[FROST LOCK]';
-        actualDmg = 0; // No dmg
+        actualDmg = 0;
     }
-   
-    // Only log if effect applied (dmg>0 or freeze)
+
+    // Log + feedback
     if (actualDmg > 0 || wisp.type.effect === 'freeze') {
-        logBattleEvent(`Floor ${floor} - ${effectMsg} (${target.type.name} HP: ${target.hp}) ${visibleEffect}`);
-        // Flash target + sound for feedback
-        target.wispHitFlash = { time: Date.now(), type: wisp.type.name }; // Flag + type for colored flash
-        sounds.attack.currentTime = 0; // Reset for quick replay
-        sounds.attack.play().catch(e => console.error('Wisp attack sound error:', e));
+        logBattleEvent(`Floor ${floor} - ${effectMsg} ${visibleEffect}`);
+        target.wispHitFlash = { time: Date.now(), type: wisp.type.name };
+        sounds.attack.currentTime = 0;
+        sounds.attack.play().catch(() => {});
     }
-   
-    // AOE simulation (simple: damage nearby if aoe)
-    if (wisp.type.aoe !== 'single') {
+
+    // ——— ONLY CHAIN LIGHTNING WISP CHAINS ———
+    if (wisp.type.name === 'chain' && wisp.type.aoe !== 'single') {
         enemies.forEach(e => {
-            if (e !== target) {
-                let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-                if (edist <= Math.floor(wisp.type.range * (wisp.type.aoe === 'medium' ? 1.5 : 2))) {
-                    let chainDmg = Math.floor(dmg / 2);
-                    if (chainDmg > 0) {
-                        let actualChain = Math.min(chainDmg, e.hp);
-                        e.hp -= actualChain;
-                        e.hp = Math.max(0, e.hp);
-                        logBattleEvent(`${visibleEffect} chains to ${e.type.name} for ${actualChain} dmg! (HP: ${e.hp})`);
-                    }
+            if (e === target) return;
+
+            const dist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
+            if (dist > wisp.type.range * 2) return;
+
+            if (e.bitAmmo > 0) {
+                e.bitAmmo--;
+                e.bits = e.bitAmmo;
+                e.shieldFlash = { active: true, startTime: Date.now() };
+                logBattleEvent(`[CHAIN LIGHTNING] jumps to ${e.type.name} — blocked by shield!`);
+            } else {
+                const chainDmg = Math.min(1, e.hp - 1);
+                if (chainDmg > 0) {
+                    e.hp -= 1;
+                    logBattleEvent(`[CHAIN LIGHTNING] jumps to ${e.type.name} for 1 dmg! (HP: ${e.hp})`);
+                } else {
+                    logBattleEvent(`[CHAIN LIGHTNING] jumps to ${e.type.name} — left at 1 HP!`);
                 }
             }
         });
     }
-   
-    // Handle target death if hp<=0
+
+    // ——— DEATH & SPARE ———
     if (target.hp <= 0) {
         kills[target.type.name]++;
         handleUniqueMonsterReward(target);
@@ -5982,22 +6097,21 @@ function applyWispAttack(wisp, target) {
     } else if (actualDmg > 0 && target.hp === 1) {
         logBattleEvent(`Floor ${floor} - Wisp spares ${target.type.name}!`);
     }
-    // No message when skipping 1-HP enemies – keeps log clean
-   
-    // Stub for wisp death (called separately in enemy attacks, not here)
+
+    // ——— WISP DEATH ———
     if (wisp.hp <= 0) {
-        wisps = []; // Remove from active array
+        wisps = [];
         logBattleEvent(`Floor ${floor} - Wisp slain!`);
         sounds.gameover.currentTime = 0;
-        sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
-        // Place dead wisp on ground
+        sounds.gameover.play().catch(() => {});
         deadWispCorpse = {
-            x: wisp.x, y: wisp.y,
+            x: wisp.x,
+            y: wisp.y,
             frameIndex: wisp.anim.frameIndex,
             fadeStart: Date.now()
         };
     }
-   
+
     needsRedraw = true;
 }
 
@@ -7875,116 +7989,123 @@ function activateSoulStorm() {
             // Check if there's an enemy at this tile
             const enemy = enemies.find(e => e.x === x && e.y === y);
             
-                        if (enemy) {
-                            const isSoulSword = p.soulStormCharges >= 4;
-                            const isDiamondHand = p.hasDiamondHand && !usePickaxeSword;
+if (enemy) {
+    const isSoulSword = p.soulStormCharges >= 4;
+    const isDiamondHand = p.hasDiamondHand && !usePickaxeSword;
 
-                            if (isSoulSword) {
-                                // Soul Sword AOE – normal damage, ignores shield
-                                enemy.hp -= damage;
-                                logBattleEvent(`Floor ${floor} - Soul Sword AOE hits ${enemy.type.name} for ${damage} DMG (shield ignored)!`);
-                            }
-                            else if (isDiamondHand) {
-                                // Diamond Hand AOE – high damage, ignores shield
-                                const diamondDamage = 3; // or whatever your intended Diamond Hand AOE damage is
-                                enemy.hp -= diamondDamage;
-                                logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${diamondDamage} DMG (shield ignored)!`);
-                            }
-                            else if (enemy.bitAmmo > 0) {
-                                // Normal attack – blocked by shield
-                                enemy.bitAmmo--;
-                                enemy.bits = enemy.bitAmmo;
-                                enemy.shieldFlash = { active: true, startTime: Date.now() };
-                                logBattleEvent(`Floor ${floor} - ${enemy.type.name} blocks with bit shield!`);
-                            }
-                            else {
-                                // Normal attack – no shield
-                                enemy.hp -= damage;
-                                logBattleEvent(`Floor ${floor} - Hit ${enemy.type.name} for ${damage} DMG (HP: ${enemy.hp})`);
-                            }
-                            playWebAudioSound(sounds.hit);
-                
-                if (enemy.hp <= 0) {
-                    kills[enemy.type.name]++;
-                    handleUniqueMonsterReward(enemy);
-                        let dropPlaced = false;
+    let actualDamage = 0;
+    let message = "";
 
-                        // Drop satoshi (skip for uniques/Cursed Trader)
-                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
-                            if (map[enemy.y][enemy.x] === 0) {
-                                map[enemy.y][enemy.x] = 3;
-                                satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                                dropPlaced = true;
-                            } else {
-                                const adjacent = [
-                                    {x: enemy.x, y: enemy.y - 1},
-                                    {x: enemy.x, y: enemy.y + 1},
-                                    {x: enemy.x - 1, y: enemy.y},
-                                    {x: enemy.x + 1, y: enemy.y}
-                                ];
-                                for (const pos of adjacent) {
-                                    const nx = pos.x, ny = pos.y;
-                                    if (
-                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                        map[ny][nx] === 0 &&
-                                        !enemies.some(e => e.x === nx && e.y === ny)
-                                    ) {
-                                        map[ny][nx] = 3;
-                                        satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
-                                        dropPlaced = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+    if (isDiamondHand) {
+        // Diamond Hand = 3 damage, ignores shield completely
+        actualDamage = 3;
+        enemy.hp -= 3;
+        message = `Diamond Hand wave hits ${enemy.type.name} for 3 DMG!`;
+    }
+    else if (isSoulSword) {
+        // Soul Sword AOE wave = only 1 damage, ignores shield
+        actualDamage = 1;
+        enemy.hp -= 1;
+        message = `Soul Sword wave hits ${enemy.type.name} for 1 DMG!`;
+    }
+    else if (enemy.bitAmmo > 0) {
+        // Normal attack blocked by bit shield
+        enemy.bitAmmo--;
+        enemy.bits = enemy.bitAmmo;
+        enemy.shieldFlash = { active: true, startTime: Date.now() };
+        message = `${enemy.type.name} blocks with bit shield!`;
+        playWebAudioSound(sounds.hit);
+    }
+    else {
+        // Normal melee attack = 2 damage
+        actualDamage = 2;
+        enemy.hp -= 2;
+        message = `Hit ${enemy.type.name} for 2 DMG!`;
+    }
 
-                        // Cursed Ring drop (50% for Cursed Trader only)
-                        if (enemy.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
-                            let ringPlaced = false;
-                            if (map[enemy.y][enemy.x] === 0) {
-                                map[enemy.y][enemy.x] = 23; // Cursed ring tile
-                                ringPlaced = true;
-                            } else {
-                                const adjacent = [
-                                    { x: enemy.x, y: enemy.y - 1 },
-                                    { x: enemy.x, y: enemy.y + 1 },
-                                    { x: enemy.x - 1, y: enemy.y },
-                                    { x: enemy.x + 1, y: enemy.y }
-                                ];
-                                for (const pos of adjacent) {
-                                    const nx = pos.x, ny = pos.y;
-                                    if (
-                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                        map[ny][nx] === 0 &&
-                                        !enemies.some(e => e.x === nx && e.y === ny)
-                                    ) {
-                                        map[ny][nx] = 23; // Cursed ring tile
-                                        ringPlaced = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (ringPlaced) {
-                                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
-                                playWebAudioSound(sounds.pickup);
-                            }
-                        }
+    // Only log and play sound if damage was actually dealt
+    if (actualDamage > 0) {
+        logBattleEvent(`Floor ${floor} - ${message}`);
+        playWebAudioSound(sounds.hit);
+    }
 
-if (enemy.type.name === 'Cursed Trader') {
-        dropSoulStone(enemy.x, enemy.y);
-    }                    
-                    enemies = enemies.filter(en => en !== enemy);
-                    enemiesHit++;
+    // FULL DEATH — no mercy rule, no 1 HP leftovers
+    if (enemy.hp <= 0) {
+        kills[enemy.type.name]++;
+        handleUniqueMonsterReward(enemy);
+        tryDropScroll(enemy.x, enemy.y);
+
+        // Drop satoshi (skip uniques & Cursed Trader)
+        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
+            let dropPlaced = false;
+            if (map[enemy.y][enemy.x] === 0) {
+                map[enemy.y][enemy.x] = 3;
+                satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                dropPlaced = true;
+            } else {
+                const adjacent = [
+                    {x: enemy.x, y: enemy.y - 1},
+                    {x: enemy.x, y: enemy.y + 1},
+                    {x: enemy.x - 1, y: enemy.y},
+                    {x: enemy + 1, y: enemy.y}
+                ];
+                for (const pos of adjacent) {
+                    const {x: nx, y: ny} = pos;
+                    if (nx >= 0 && nx < W && ny >= 0 && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                        map[ny][nx] = 3;
+                        satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                        dropPlaced = true;
+                        break;
+                    }
                 }
-                totalDamage += damage;
             }
+        }
+
+        // Cursed Ring drop (50% chance for Cursed Trader only)
+        if (enemy.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
+            let ringPlaced = false;
+            if (map[enemy.y][enemy.x] === 0) {
+                map[enemy.y][enemy.x] = 23;
+                ringPlaced = true;
+            } else {
+                const adjacent = [
+                    {x: enemy.x, y: enemy.y - 1},
+                    {x: enemy.x, y: enemy.y + 1},
+                    {x: enemy.x - 1, y: enemy.y},
+                    {x: enemy.x + 1, y: enemy.y}
+                ];
+                for (const pos of adjacent) {
+                    const {x: nx, y: ny} = pos;
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                        map[ny][nx] = 23;
+                        ringPlaced = true;
+                        break;
+                    }
+                }
+            }
+            if (ringPlaced) {
+                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                playWebAudioSound(sounds.pickup);
+            }
+        }
+
+        // Cursed Trader soul stone drop
+        if (enemy.type.name === 'Cursed Trader') {
+            dropSoulStone(enemy.x, enemy.y);
+        }
+
+        // Remove the dead enemy
+        enemies = enemies.filter(en => en !== enemy);
+        enemiesHit++;
+    }
+
+    totalDamage += actualDamage;
+}
         }
     }
     
     if (enemiesHit > 0) {
         logBattleEvent(`Soul Storm hit ${enemiesHit} enemies for ${totalDamage} total damage!`);
-    } else {
-        logBattleEvent('Soul Storm hits empty space!');
     }
 }
 
@@ -8347,8 +8468,16 @@ updateSnowState();  // ensures snowflakes + snowy tiles match the theme
     puzzleBoulders = [];
     puzzleHeartFramers = [];
     puzzleChest = null;
+    // ——— CLEAR ALL PUZZLE TILES FROM THE MAP ———
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if ([19, 27].includes(map[y][x])) {  // 19 = soul stash, 27 = farm spot
+                map[y][x] = 0;
+            }
+        }
+    }
     soulStashPos = null;
-
+    farmSpot = null;
     puzzleReturnPos = null;
     puzzleCurrentLayout = null;  // ← NEW: prevents reusing old layout on next floor
 
@@ -8618,6 +8747,7 @@ function restart() {
     p.hasDiamondArmor = false;
     p.hasDiamondHand = false;
     p.hasCursedRing = false;
+    p.echoWardenBlessingGiven = false;
 p.curseActive = false;  // Lift lingering curse
 // Restore a random immunity on restart
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
@@ -8864,14 +8994,34 @@ if (p.moving) {
     }
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
-    // Warden entry flash: Invert colors for 500ms
+    // Warden entry flash:
+// ——— ECHO WARDEN FLASH: Divine ἀρχάγγελος ———
 if (wardenFlashStart > 0) {
     const elapsed = Date.now() - wardenFlashStart;
-    if (elapsed < 500) {
-        c.filter = 'invert(1)'; // Quick dramatic invert
+    const duration = 700; // total flash duration
+
+    if (elapsed < duration) {
+        // Smooth pulse: 0 → 1 → 0
+        const progress = elapsed / duration;
+        const intensity = Math.sin(progress * Math.PI); // 0 to 1 to 0
+
+        // Bitcoin orange (easy on eyes, but made it black instead)
+        c.fillStyle = `rgba(247, 147, 26, 1})`;
+        c.fillRect(0, 0, W * S, H * S);
+
+        // Optional: subtle screen shake during peak
+        if (intensity > 0.5) {
+            const shake = (intensity - 0.5) * 2;
+            c.translate(
+                Math.random() * shake * 2 - shake,
+                Math.random() * shake * 2 - shake
+            );
+        }
+    c.restore();
     } else {
-        c.filter = 'none'; // Reset
         wardenFlashStart = 0;
+        // Reset any translation if shake was active
+        c.setTransform(1, 0, 0, 1, 0, 0);
     }
 }
     if (gameOver) {
@@ -9088,8 +9238,29 @@ if (map[y][x] === 25) { // Puzzle portal tile
         }
         
         if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
-            c.drawImage(assets.echo_warden, x * S, y * S, S, S);
+            const age = Date.now() - echoWardenPos.spawnTime;
+            const fadeStart = 3000;    // start fading after 3 seconds
+            const fadeDuration = 1500; // 1.5s to fully disappear
+
+            // Auto-remove Warden completely after full fade
+            if (age >= fadeStart + fadeDuration) {
+                map[y][x] = 0;
+                echoWardenPos = null;
+                // Skip drawing — he's gone forever
+            } else {
+                // Fade out smoothly
+                if (age < fadeStart) {
+                    c.globalAlpha = 1.0;
+                } else {
+                    const fadeProgress = Math.min((age - fadeStart) / fadeDuration, 1);
+                    c.globalAlpha = 1.0 - fadeProgress;
+                }
+
+                c.drawImage(assets.echo_warden, x * S, y * S, S, S);
+                c.globalAlpha = 1.0; // reset
+            }
         }
+        
         // Draw stairs after portals to ensure proper visibility
         if (exit && exit.x === x && exit.y === y) {
             c.drawImage(assets.stairs, x * S, y * S, S, S);
