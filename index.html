@@ -4434,42 +4434,39 @@ p.startY = p.y;
 p.x = nx;
 p.y = ny;
 
-        // ——— ECHO WARDEN MIRROR MOVEMENT: Safe, clean, temporary ———
+        // ——— SMOOTH WARDEN MIRROR: Interpolates between tiles ———
         if (floor === 1 && echoWardenPos && p.echoWardenBlessingGiven) {
             const oldWX = echoWardenPos.x;
             const oldWY = echoWardenPos.y;
 
-            // Calculate opposite movement
-            const dx = nx - oldX;
-            const dy = ny - oldY;
-            let newWX = echoWardenPos.x - dx;
-            let newWY = echoWardenPos.y - dy;
+            // Opposite direction
+            let newWX = echoWardenPos.x - (nx - oldX);
+            let newWY = echoWardenPos.y - (ny - oldY);
 
-            // Clamp to map bounds
+            // Clamp bounds
             newWX = Math.max(0, Math.min(W - 1, newWX));
             newWY = Math.max(0, Math.min(H - 1, newWY));
 
-            // Only move if target tile is walkable (floor or player tile)
+            // Valid target?
             if (map[newWY][newWX] === 0 || (newWX === p.x && newWY === p.y)) {
-                // Clear old position
+                // Clear old tile
                 map[oldWY][oldWX] = 0;
 
-                // Set new position
+                // Start smooth move (8 steps, 2px/step like enemies)
+                echoWardenPos.targetX = newWX * S;
+                echoWardenPos.targetY = newWY * S;
+                echoWardenPos.deltaX = (newWX - oldWX) * 2;
+                echoWardenPos.deltaY = (newWY - oldWY) * 2;
+                echoWardenPos.stepsLeft = 8;
+                echoWardenPos.moving = true;
                 echoWardenPos.x = newWX;
                 echoWardenPos.y = newWY;
+
+                // Set new tile
                 map[newWY][newWX] = 24;
-
-                needsRedraw = true;
             }
-            // If blocked (wall), Warden just stays put — no destruction
 
-            // ——— AUTO-REMOVE WHEN FULLY FADED ———
-            const age = Date.now() - echoWardenPos.spawnTime;
-            if (age > 4500) { // 3s visible + 1.5s fade = 4.5s total
-                map[echoWardenPos.y][echoWardenPos.x] = 0;
-                echoWardenPos = null;
-                needsRedraw = true;
-            }
+            needsRedraw = true;
         }
 
 p.targetTileX = nx;
@@ -5622,6 +5619,12 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
             for (const pos of candidates) {
                 if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H && map[pos.y][pos.x] === 0) {
                     echoWardenPos = { x: pos.x, y: pos.y, spawnTime: Date.now() };
+echoWardenPos.currentX = echoWardenPos.x * S;
+echoWardenPos.currentY = echoWardenPos.y * S;
+echoWardenPos.moving = false;
+echoWardenPos.stepsLeft = 0;
+echoWardenPos.deltaX = 0;
+echoWardenPos.deltaY = 0;
                     map[pos.y][pos.x] = 24;
                     placed = true;
                     break;
@@ -9256,7 +9259,9 @@ if (map[y][x] === 25) { // Puzzle portal tile
                     c.globalAlpha = 1.0 - fadeProgress;
                 }
 
-                c.drawImage(assets.echo_warden, x * S, y * S, S, S);
+            const drawX = echoWardenPos.moving ? echoWardenPos.currentX : x * S;
+            const drawY = echoWardenPos.moving ? echoWardenPos.currentY : y * S;
+            c.drawImage(assets.echo_warden, drawX, drawY, S, S);
                 c.globalAlpha = 1.0; // reset
             }
         }
@@ -10091,6 +10096,20 @@ enemies.forEach(e => {
         needsRedraw = true;
     }
 });
+
+        // Warden interpolation (smooth pixel steps)
+        if (echoWardenPos && echoWardenPos.moving) {
+            echoWardenPos.currentX += echoWardenPos.deltaX;
+            echoWardenPos.currentY += echoWardenPos.deltaY;
+            echoWardenPos.stepsLeft--;
+
+            if (echoWardenPos.stepsLeft <= 0) {
+                echoWardenPos.moving = false;
+                echoWardenPos.currentX = echoWardenPos.x * S;
+                echoWardenPos.currentY = echoWardenPos.y * S;
+            }
+            needsRedraw = true;
+        }
 
 // Interp wisp movement
 wisps.forEach(wisp => {
