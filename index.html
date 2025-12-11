@@ -1435,6 +1435,9 @@ let puzzlePreviousTheme = null;  // remembers theme before entering puzzle porta
 let currentThemeBlock = null;  // 'hell_normal' or 'hell_snowy' for the current 3-floor block
 let puzzleCurrentLayout = null;  // ← ADD THIS
 
+let spearHitShakeStart = 0;     // ← ADD THIS LINE
+let spearHitShakeIntensity = 0;
+
 let map = [],
 p = {
 x: 2,
@@ -1488,6 +1491,8 @@ soulStones: 0,
 soulShards: 0,
 soulOrbs: 0,
 soulStormCharges: 256, // Track how many charges we have (max 256)
+soulStormCharges: 256,
+currentWeapon: 'sword', // 'sword | soul_sword | satoshi_scourge | etc ..
 echoWardenBlessingGiven: false,
 
 farmLocked: false,
@@ -1577,6 +1582,11 @@ let snowyHellToggleFloor = 0;       // for slow random toggles
 let autoSubmitTriggered = false;
 let inputBlocked = false;
 let soulStashPos = null; // Position of soul stash on current floor
+
+let catPos = null; // {x, y}
+let catVisible = false; // Fade in/out
+let catAnimStart = 0; // Timestamp for fade cycle
+
 let soulTerminalActive = false; // Whether soul terminal is currently open
 let soulTerminalCommand = ''; // Current command input
 let soulTerminalCursorPos = 0; // Cursor position in command
@@ -1890,6 +1900,14 @@ assets.enemyBg[2].src = 'red-bg3.png';
 	p.anim.frames.diamond_armor_right = [new Image(), new Image()];
 	p.anim.frames.diamond_armor_right[0].src = 'player_diamond_armor-right1.png';
 	p.anim.frames.diamond_armor_right[1].src = 'player_diamond_armor-right2.png';
+
+assets.satoshi_scourge = new Image();
+assets.satoshi_scourge.src = 'satoshi_scourge.png';
+assets.satoshi_scourge.onerror = () => console.error('Failed to load satoshi_scourge.png');
+
+assets.cat = new Image();
+assets.cat.src = 'black_cat.png';
+assets.cat.onerror = () => console.error('Failed to load black_cat.png');
 	
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
@@ -2335,6 +2353,133 @@ function playPigSnort() {
     gainNode.connect(ctx.destination);
 
     source.start(0);
+}
+
+/* ---------- AUDIO ---------- */
+function playScourgeSpin() {
+    if (musicMuted || soundVolume === 0) return;
+
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    // Master gain – louder epic
+    const master = ctx.createGain();
+    master.gain.value = 0.9 * soundVolume;
+    master.connect(ctx.destination);
+
+    // 1. Angelic WHOOSH sweep
+    const whoosh = ctx.createOscillator();
+    whoosh.type = 'triangle';
+    whoosh.frequency.setValueAtTime(300, now);
+    whoosh.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+
+    const whooshFilter = ctx.createBiquadFilter();
+    whooshFilter.type = 'highpass';
+    whooshFilter.frequency.setValueAtTime(200, now);
+    whooshFilter.frequency.exponentialRampToValueAtTime(800, now + 0.5);
+
+    const whooshGain = ctx.createGain();
+    whooshGain.gain.setValueAtTime(0, now);
+    whooshGain.gain.linearRampToValueAtTime(1.2, now + 0.03);
+    whooshGain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
+
+    whoosh.connect(whooshFilter).connect(whooshGain).connect(master);
+    whoosh.start(now);
+    whoosh.stop(now + 0.55);
+
+    // 2. Four heavy THUNK impacts (cleaner)
+    for (let i = 0; i < 4; i++) {
+        const t = now + i * 0.09;
+
+        // Deep punch – sine
+        const thud = ctx.createOscillator();
+        thud.type = 'sine';
+        thud.frequency.setValueAtTime(120, t);
+        thud.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+
+        const thudGain = ctx.createGain();
+        thudGain.gain.setValueAtTime(1.0, t);
+        thudGain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
+
+        thud.connect(thudGain).connect(master);
+        thud.start(t);
+        thud.stop(t + 0.18);
+
+        // Metallic CLANG – layered
+        const clang = ctx.createOscillator();
+        clang.type = 'square';
+        clang.frequency.setValueAtTime(380 + i * 90, t);
+        clang.frequency.exponentialRampToValueAtTime(120, t + 0.08);
+
+        const clang2 = ctx.createOscillator();
+        clang2.type = 'square';
+        clang2.frequency.setValueAtTime((380 + i * 90) * 1.5 + 5, t);
+        clang2.frequency.exponentialRampToValueAtTime(180, t + 0.08);
+
+        const clangGain = ctx.createGain();
+        clangGain.gain.setValueAtTime(0.45, t);
+        clangGain.gain.exponentialRampToValueAtTime(0.02, t + 0.12);
+
+        const clangFilter = ctx.createBiquadFilter();
+        clangFilter.type = 'bandpass';
+        clangFilter.frequency.value = 900;
+        clangFilter.Q.value = 10;
+
+        clang.connect(clangFilter);
+        clang2.connect(clangFilter);
+        clangFilter.connect(clangGain).connect(master);
+
+        clang.start(t);
+        clang2.start(t);
+        clang.stop(t + 0.12);
+        clang2.stop(t + 0.12);
+    }
+
+    // Longer, smoother reverb tail
+    const convolver = ctx.createConvolver();
+    const impulse = ctx.createBuffer(2, ctx.sampleRate * 0.4, ctx.sampleRate);
+    const left = impulse.getChannelData(0);
+    const right = impulse.getChannelData(1);
+    for (let i = 0; i < impulse.length; i++) {
+        const decay = Math.exp(-i / (ctx.sampleRate * 0.3));
+        left[i] = (Math.random() * 2 - 1) * decay;
+        right[i] = (Math.random() * 2 - 1) * decay;
+    }
+    convolver.buffer = impulse;
+    master.connect(convolver).connect(ctx.destination);
+}
+
+// CAT TRACKER v16
+function playCatPurr() {
+  if (typeof musicMuted !== 'undefined' && musicMuted) return;
+  if (typeof soundVolume === 'undefined') soundVolume = 1;
+  if (soundVolume === 0) return;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator(); osc.type = 'sawtooth';
+  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(3000, now);
+  filter.frequency.exponentialRampToValueAtTime(1500, now + 1.0);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.linearRampToValueAtTime(0.7 * soundVolume, now + 0.08);
+
+  let t = now;
+
+  osc.frequency.setValueAtTime(20 + (Math.random()*20-10), t);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.130);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.430);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.52);
+  t += 0.4056;
+  osc.frequency.setValueAtTime(20 + (Math.random()*20-10), t);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.130);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.430);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.52);
+  t += 0.4056;
+  gain.gain.setValueAtTime(0.7 * soundVolume, t - 0.25);
+  gain.gain.exponentialRampToValueAtTime(0.001, t);
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(now); osc.stop(t + 0.3);
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -3212,6 +3357,26 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
+// 5% chance black cat spawn (once per floor) — NEVER in puzzle rooms
+if (!inHideout && !inPuzzleRoom && Math.random() < 0.05) {
+    let attempts = 50;
+    do {
+        const x = Math.floor(Math.random() * W);
+        const y = Math.floor(Math.random() * H);
+        if (map[y][x] === 0 && 
+            !(x === p.x && y === p.y) && 
+            Math.abs(x - p.x) > 3 && 
+            Math.abs(y - p.y) > 3) {
+            map[y][x] = 28; // Cat tile
+            catPos = {x, y};
+            catVisible = false; // Start invisible, fade in
+            catAnimStart = performance.now();
+            break;
+        }
+        attempts--;
+    } while (attempts > 0);
+}
+
 // Initialize dangerous areas array for spells
 dangerousAreas = [];
 
@@ -3478,16 +3643,22 @@ if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
             p.elementImmunity = null;
         }
         logBattleEvent(`Floor ${floor} - Armor boost lost!`);
-        document.getElementById('armorStatus').textContent = 'Cloth';
-    } else if (p.hasDiamondArmor) {
-        document.getElementById('armorStatus').textContent = 'Diamond';
-    } else if (p.hasCursedRing) {
-        document.getElementById('armorStatus').textContent = 'Cursed Aura';
-    } else if (p.hasArmor) {
-        document.getElementById('armorStatus').textContent = 'Leather';
-    } else {
-        document.getElementById('armorStatus').textContent = 'Cloth';
-    }
+        document.getElementById('armorStatus').textContent = 'Cloth'; // Essential line
+}
+
+// ——— UI DISPLAY: ARMOR ———
+if (p.hasDiamondArmor) {
+    document.getElementById('armorStatus').textContent = 'Diamond';
+}
+else if (p.hasCursedRing) {
+    document.getElementById('armorStatus').textContent = 'Cursed Aura';
+}
+else if (p.hasArmor) {
+    document.getElementById('armorStatus').textContent = 'Leather';
+}
+else {
+    document.getElementById('armorStatus').textContent = 'Cloth';
+}
 
     // HODL immortality protection
     if (p.immortal && p.hp <= 0) {
@@ -5103,6 +5274,10 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
    
     // Reset runewords to allow reactivation on new floor
     p.runewords = [];
+    
+catPos = null;
+catVisible = false;
+    
     // Clear runeDrops specific runes to prevent stale entries
     runeDrops = runeDrops.filter(r => !r.specific);
    
@@ -5485,6 +5660,15 @@ if (map[ny][nx] === 23) { // Cursed ring
         logBattleEvent(`Floor ${floor} - Cursed Ring equipped! HP ${p.hp}, Aura Shield: ${p.auraShield}`);
         updatePlayerState();
     }
+}
+
+if (map[ny][nx] === 28 && catPos) { // Cat pickup
+    p.soulStormCharges = 256; // Full refill
+    map[ny][nx] = 0;
+    catPos = null;
+    playCatPurr();
+    logBattleEvent(`Floor ${floor} - Black cat blesses you! Soul charges maxed.`);
+    updatePlayerState();
 }
 
 // Check for unique monster in fog of war
@@ -5938,6 +6122,36 @@ if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast 
 }
 }
 
+function doScourgeSpinAttack() {
+    const dirs = [
+        {dx:-1,dy:-1},{dx:0,dy:-1},{dx:1,dy:-1},
+        {dx:-1,dy:0},             {dx:1,dy:0},
+        {dx:-1,dy:1}, {dx:0,dy:1},{dx:1,dy:1}
+    ];
+
+    dirs.forEach(d => {
+        const x = p.x + d.dx;
+        const y = p.y + d.dy;
+        if (x < 0 || x >= W || y < 0 || y >= H || map[y][x] === 1) return;
+
+        const enemy = enemies.find(e => e.x === x && e.y === y);
+        if (enemy) {
+            enemy.hp -= 2;
+            enemy.scourgeHit = Date.now();
+            if (enemy.hp <= 0) {
+                kills[enemy.type.name]++;
+                handleUniqueMonsterReward(enemy);
+                tryDropScroll(enemy.x, enemy.y);
+                if (!enemy.uniqueName && map[y][x] === 0) {
+                    map[y][x] = 3;
+                    satoshiDrops.push({x, y, sats: enemy.sats, type: enemy.type.name});
+                }
+                enemies = enemies.filter(e => e !== enemy);
+            }
+        }
+    });
+}
+
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
     if (!scrollDroppedThisFloor && Math.random() < 0.05) {
@@ -6371,30 +6585,43 @@ function updateProjectiles() {
             }
 
             // --------------------- Bit spear hits player ---------------------
-            if (nx === p.x && ny === p.y) {
-                const dmg = proj.value === 1 ? 2 : 0;
-                p.hp -= dmg;
+if (nx === p.targetTileX && ny === p.targetTileY) {
+    const dmg = proj.value === 1 ? 2 : 0;
+    p.hp -= dmg;
 
-                // Decrement shooter ammo
-                const shooter = enemies.find(e => 
-                    e.x === proj.x - (proj.dirX || 0) && 
-                    e.y === proj.y - (proj.dirY || 0)
-                );
-                if (shooter && shooter.bitAmmo > 0) {
-                    shooter.bitAmmo--;
-                    shooter.bits = shooter.bitAmmo;
-                }
+    // ←←←←←←←←←←←  SPEAR HIT SHAKE  ←←←←←←←←←←←
+    if (dmg > 0) {
+        spearHitShakeIntensity = 1.0;              // full intensity for real hit
+        spearHitShakeStart = Date.now();
+    } else {
+        spearHitShakeIntensity = 0.4;              // lighter shake for blank spear
+        spearHitShakeStart = Date.now();
+    }
+    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
-                if (dmg > 0) {
-                    logBattleEvent(`Floor ${floor} - Bit spear hits! ${dmg} DMG`);
-                } else {
-                    logBattleEvent(`Floor ${floor} - Blank spear flies by!`);
-                }
-                playWebAudioSound(sounds.hit);
-                updatePlayerState();
-                needsRedraw = true;
-                return false; // spear destroyed
-            }
+    // Decrement shooter ammo
+    const shooter = enemies.find(e =>
+        e.x === proj.x - (proj.dirX || 0) &&
+        e.y === proj.y - (proj.dirY || 0)
+    );
+    if (shooter && shooter.bitAmmo > 0) {
+        shooter.bitAmmo--;
+        shooter.bits = shooter.bitAmmo;
+    }
+    const shooterName = shooter ? (shooter.uniqueName || shooter.type.name) : 'Enemy';
+    
+    if (dmg > 0) {
+        logBattleEvent(`Floor ${floor} - ${shooterName} spear hits! ${dmg} DMG`);
+        spearHitShakeIntensity = 1.0;  // strong shake
+    } else {
+        logBattleEvent(`Floor ${floor} - ${shooterName} spear flies by!`);
+        spearHitShakeIntensity = 0.6;  // ↑ slightly stronger miss shake (noticeable!)
+    }
+    playWebAudioSound(sounds.hit);
+    updatePlayerState();
+    needsRedraw = true;
+    return false; // spear destroyed
+}
 
             // --------------------- Continue flying ---------------------
             proj.targetTileX = nx;
@@ -7356,6 +7583,27 @@ function canShootProjectile() {
     return true; // All clear → can shoot
 }
 
+// ——— SATOSHI'S SCOURGE: Full 360° spin attack ———
+if (p.currentWeapon === 'satoshi_scourge' && !usePickaxeSword) {
+    // Prevent spam + cost
+    if (p.scourgeCooldown > Date.now()) return;
+    if (p.soulStormCharges < 8) {
+        return;
+    }
+
+    p.soulStormCharges -= 8;
+    p.scourgeSpin = { start: Date.now() };
+    p.scourgeCooldown = Date.now() + 600; // 600ms cooldown
+
+    doScourgeSpinAttack();
+    playScourgeSpin();
+    
+    moveEnemies();
+    updateWisps();
+    needsRedraw = true;
+    return; // Exit early — no other attack
+}
+
 // ——— SOUL SWORD: 4+ charges → AOE wave + ranged projectile ———
 if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && !usePickaxeSword) {
     if (!canShootProjectile()) {
@@ -7390,8 +7638,6 @@ if (p.soulStormCharges >= 4 && !p.hasDiamondHand && projectiles.length === 0 && 
 
         sounds.shoot_sword.currentTime = 0;
         sounds.shoot_sword.play().catch(() => {});
-
-        logBattleEvent(`Soul Sword (${p.soulStormCharges} charges left)`);
     }
 }
 
@@ -7625,6 +7871,7 @@ case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
     addTerminalLineToContent('  convert ----- Convert soul stones, shards, wisp');
+    addTerminalLineToContent('  swap -------- Swap weapons');
     addTerminalLineToContent('  reset ------- Restart current puzzle trial');
     addTerminalLineToContent('  set --------- Settings');
     addTerminalLineToContent('  clear ------- Clear screen');
@@ -7838,6 +8085,39 @@ case 'reset':
 musicManager.current = 'hideout';  // Force pure hideout music
 
 closeSoulTerminal();
+    addTerminalLineToContent('_____________________');
+    addTerminalLineToContent('Type "help" for help.');
+    break;
+case 'swap':
+    // Split command and ignore anything after "swap"
+    const cmdParts = command.trim().split(' ');
+    const baseCmd = cmdParts[0].toLowerCase();
+
+    if (baseCmd !== 'swap') break; // safety (should never happen)
+
+    // If player typed extra garbage like "swap balloon" → show usage
+    if (cmdParts.length > 1) {
+        addTerminalLineToContent('Usage: swap');
+        addTerminalLineToContent('No arguments needed.');
+        addTerminalLineToContent('_____________________');
+        addTerminalLineToContent('Type "help" for help.');
+        break;
+    }
+
+    // Normal swap behavior
+    if (p.currentWeapon === 'sword') {
+        p.currentWeapon = 'satoshi_scourge';
+        addTerminalLineToContent('Satoshi\'s Scourge equipped');
+    } 
+    else if (p.currentWeapon === 'satoshi_scourge') {
+        p.currentWeapon = 'sword';
+        addTerminalLineToContent('Returned to sword');
+    } 
+    else if (p.currentWeapon === 'soul_sword') {
+        p.currentWeapon = 'sword';
+        addTerminalLineToContent('Soul Sword dismissed');
+    }
+
     addTerminalLineToContent('_____________________');
     addTerminalLineToContent('Type "help" for help.');
     break;
@@ -9053,20 +9333,9 @@ if (wardenFlashStart > 0) {
         c.fillStyle = `rgba(247, 147, 26, 1})`;
         c.fillRect(0, 0, W * S, H * S);
 
-        // Optional: subtle screen shake during peak
-        if (intensity > 0.5) {
-            const shake = (intensity - 0.5) * 2;
-            c.translate(
-                Math.random() * shake * 2 - shake,
-                Math.random() * shake * 2 - shake
-            );
-        }
-    c.restore();
     } else {
-        wardenFlashStart = 0;
-        // Reset any translation if shake was active
-        c.setTransform(1, 0, 0, 1, 0, 0);
-    }
+        wardenFlashStart = 0;    
+    }    
 }
     if (gameOver) {
         const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
@@ -9283,29 +9552,98 @@ if (map[y][x] === 25) { // Puzzle portal tile
         
         if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
             const age = Date.now() - echoWardenPos.spawnTime;
-            const fadeStart = 3000;    // start fading after 3 seconds
-            const fadeDuration = 1500; // 1.5s to fully disappear
+            const spawnDuration = 1200;   // 1.2s dramatic fade-in + grow
+            const holdDuration = 3800;    // 3.8s perfectly still at full size
+            const fadeOutDuration = 1500; // 1.5s gentle fade-out
 
-            // Auto-remove Warden completely after full fade
-            if (age >= fadeStart + fadeDuration) {
+            // Auto-remove when fully gone
+            if (age >= spawnDuration + holdDuration + fadeOutDuration) {
                 map[y][x] = 0;
                 echoWardenPos = null;
-                // Skip drawing — he's gone forever
-            } else {
-                // Fade out smoothly
-                if (age < fadeStart) {
-                    c.globalAlpha = 1.0;
-                } else {
-                    const fadeProgress = Math.min((age - fadeStart) / fadeDuration, 1);
-                    c.globalAlpha = 1.0 - fadeProgress;
-                }
+                return;
+            }
+
+            let alpha = 1.0;
+            let scale = 1.0;
+
+            if (age < spawnDuration) {
+                // Phase 1: Grow + fade in
+                const t = age / spawnDuration;
+                alpha = t * t;           // Smooth ease-in
+                scale = 0.2 + 0.8 * t;   // From 20% → 100%
+            }
+            else if (age < spawnDuration + holdDuration) {
+                // Phase 2: FULL SIZE & FULL OPACITY — COMPLETELY STILL
+                alpha = 1.0;
+                scale = 1.0;
+            }
+            else {
+                // Phase 3: Fade out only (no shrinking, no bounce)
+                const fadeT = (age - spawnDuration - holdDuration) / fadeOutDuration;
+                alpha = 1.0 - fadeT;
+                scale = 1.0; // stays 1:1 until gone
+            }
 
             const drawX = echoWardenPos.moving ? echoWardenPos.currentX : x * S;
             const drawY = echoWardenPos.moving ? echoWardenPos.currentY : y * S;
-            c.drawImage(assets.echo_warden, drawX, drawY, S, S);
-                c.globalAlpha = 1.0; // reset
-            }
+
+            c.save();
+            c.globalAlpha = alpha;
+            c.translate(drawX + S/2, drawY + S/2);
+            c.scale(scale, scale);
+            c.translate(-S/2, -S/2);
+            c.drawImage(assets.echo_warden, 0, 0, S, S);
+            c.restore();
         }
+
+// Black cat — MATRIX GLITCH (mega digital rain + distortion)
+if (catPos && catPos.x === x && catPos.y === y) {
+    const now = performance.now();
+    const glitchTime = now * 0.01;
+    
+    c.save();
+    
+    // 1. BASE CAT with green glow + flicker
+    const flicker = 0.6 + 0.4 * Math.sin(glitchTime * 17);
+    c.globalAlpha = flicker;
+    c.shadowColor = 'lime';
+    c.shadowBlur = 4 + Math.sin(glitchTime * 9) * 2;
+    c.drawImage(assets.cat, x * S, y * S, S, S);
+    c.shadowBlur = 0;
+    
+    // 2. HORIZONTAL SCANLINES (Matrix TV static)
+    for (let i = 0; i < 4; i++) {
+        const scanY = y * S + (i * 4) + (Math.sin(now * 0.02 + i) * 2);
+        c.strokeStyle = `rgba(0,255,0,${0.3 * flicker})`;
+        c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(x * S, scanY);
+        c.lineTo(x * S + S, scanY);
+        c.stroke();
+    }
+    
+    // 3. PIXEL SHIFT DISTORTION (left/right shake)
+    const shiftX = Math.sin(glitchTime * 23) * 1;
+    c.globalAlpha = 0.4 * flicker;
+    c.drawImage(assets.cat, (x * S) + shiftX, y * S, S, S);
+    
+    // 4. MATRIX RAIN — 6 falling chars behind cat
+    c.font = '8px VT323';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const chars = '01ABTC₿';
+    for (let i = 0; i < 6; i++) {
+        const rainY = (y * S + S/2) + (i * 3) - (now * 0.03 * (i + 1));
+        const rainX = (x * S + S/2) + (Math.sin(now * 0.05 + i) * 3);
+        const char = chars[Math.floor(now * 0.1 + i) % chars.length];
+        c.globalAlpha = 0.7 * (1 - i/6) * flicker;
+        c.fillStyle = 'lime';
+        c.fillText(char, rainX, rainY);
+    }
+    
+    c.restore();
+    needsRedraw = true;
+}
         
         // Draw stairs after portals to ensure proper visibility
         if (exit && exit.x === x && exit.y === y) {
@@ -9493,6 +9831,45 @@ if (swordActive && Date.now() - swordStart < 200) {
         }
         c.restore();
     }
+}
+
+// SATOSHI'S SCOURGE — TRUE 360° MACE SPIN (mace orbits)
+if (p.scourgeSpin && Date.now() - p.scourgeSpin.start < 520) {
+    c.imageSmoothingEnabled = false;
+
+    const elapsed = Date.now() - p.scourgeSpin.start;
+    const angle = (elapsed / 520) * Math.PI * 2;
+    const radius = S * 1.4;
+    const cx = p.currentX + S/2;
+    const cy = p.currentY + S/2;
+
+    // 1. MACE HEAD — orbits and points outward
+    const mx = cx + Math.cos(angle) * radius;
+    const my = cy + Math.sin(angle) * radius;
+
+    c.save();
+    c.translate(mx, my);
+    c.rotate(angle + Math.PI/2);  // +90° so right-pointing sprite faces away
+    c.drawImage(assets.satoshi_scourge, -S/2, -S/2, S, S);
+    c.restore();
+
+    // 2. Crisp trail (4 ghosts)
+    for (let i = 1; i <= 4; i++) {
+        const trailAngle = angle - i * 0.35;
+        const tx = cx + Math.cos(trailAngle) * radius;
+        const ty = cy + Math.sin(trailAngle) * radius;
+        c.save();
+        c.globalAlpha = 0.8 / i;
+        c.translate(tx, ty);
+        c.rotate(trailAngle + Math.PI/2);
+        c.drawImage(assets.satoshi_scourge, -S/2, -S/2, S, S);
+        c.restore();
+    }
+
+    c.imageSmoothingEnabled = true;
+    needsRedraw = true;
+} else if (p.scourgeSpin) {
+    p.scourgeSpin = null;
 }
     
 // Add rune tile indicator when player is on a rune tile
@@ -9908,6 +10285,14 @@ enemies.forEach(e => {
                         // Draw the processed sprite to the main canvas
                         c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
 
+                        // SCOURGE HIT FLASH (bright orange-red)
+                        if (e.scourgeHit && Date.now() - e.scourgeHit < 200) {
+                            c.save();
+                            c.fillStyle = 'rgba(255,100,0,0.7)';
+                            c.fillRect(e.currentX, e.currentY, S, S);
+                            c.restore();
+                        }
+
                         // Draw bit shield flash when active (transparent-ish blue circle)
                         if (e.shieldFlash && e.shieldFlash.active) {
                             const elapsed = Date.now() - e.shieldFlash.startTime;
@@ -10024,6 +10409,35 @@ if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMon
 }
 
     updateAndDrawMatrix();  // ← PERFECT SPOT! Magical flames + red balls
+
+// —————————————————————————————
+    // BIT SPEAR HIT SHAKE — FINAL & FLAWLESS
+    // —————————————————————————————
+    if (spearHitShakeStart > 0) {
+        const elapsed = Date.now() - spearHitShakeStart;
+
+        if (elapsed >= 200) {
+            // Shake finished → clean reset once
+            spearHitShakeStart = 0;
+            spearHitShakeIntensity = 0;
+            c.setTransform(1, 0, 0, 1, 0, 0); // Reset any translation if shake was active
+        } else {
+            // Apply shake every frame while active
+            const decay = 1 - (elapsed / 200);
+            let intensity = spearHitShakeIntensity * decay;
+
+            if (intensity > 0.5) {
+                const shake = (intensity - 0.5) * 2; // extra punchy
+                c.translate(
+                    (Math.random() * 2 - 1) * shake * 8,
+                    (Math.random() * 2 - 1) * shake * 6
+                );
+            }
+        }
+    }
+
+    
+    // THIS IS THE MAIN DRAW, MADE TO CREATE EFFECTS BEFORE "needsRedraw = false"
     needsRedraw = false;
     
         // ───── SNOW (only in snowy hell) ─────
