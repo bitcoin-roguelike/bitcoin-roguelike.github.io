@@ -3011,6 +3011,9 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
+camera.x = 0;
+camera.y = 0;
+needsRedraw = true;
 updateFogMap(p.x, p.y);
             needsRedraw = true;
             logBattleEvent(`Hideout - Entered the secret hideout!`);
@@ -3163,6 +3166,9 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
+camera.x = 0;
+camera.y = 0;
+needsRedraw = true;
 if (!map[p.y]?.[p.x] || map[p.y][p.x] !== 0) {
    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === 0) {
        p.x = x; p.y = y;
@@ -5175,6 +5181,9 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
+camera.x = 0;
+camera.y = 0;
+needsRedraw = true;
                     } else {
                         // Fallback: keep player at original position if no valid move
 p.currentX = p.x * S;
@@ -5185,6 +5194,9 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
+camera.x = 0;
+camera.y = 0;
+needsRedraw = true;
 return;
                     }
 
@@ -5403,6 +5415,10 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
+camera.x = 0;
+camera.y = 0;
+needsRedraw = true;
+
 inHideout = false;
 document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
 updateFogMap(p.x, p.y);
@@ -10045,8 +10061,6 @@ wisps.forEach(wisp => {
         c.moveTo(wisp.currentX, drawY - 3);
         c.lineTo(wisp.currentX + barWidth, drawY - 3);
         c.stroke();
-        c.restore();
-     
         c.restore();
     }
 });
