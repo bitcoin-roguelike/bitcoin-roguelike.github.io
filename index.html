@@ -1587,6 +1587,8 @@ let catPos = null; // {x, y}
 let catVisible = false; // Fade in/out
 let catAnimStart = 0; // Timestamp for fade cycle
 
+let zoomEnabled = localStorage.getItem('zoomEnabled') === 'true';
+
 let soulTerminalActive = false; // Whether soul terminal is currently open
 let soulTerminalCommand = ''; // Current command input
 let soulTerminalCursorPos = 0; // Cursor position in command
@@ -8124,63 +8126,65 @@ case 'swap':
 case 'set':
     if (args.length === 0) {
         addTerminalLineToContent('Settings:');
-        addTerminalLineToContent('  set sound ------ Control sound volume');
-        addTerminalLineToContent('  set music ------ Control music volume');
+        addTerminalLineToContent('  set sound [0-100]  – Control sound volume');
+        addTerminalLineToContent('  set music [0-100]  – Control music volume');
+        addTerminalLineToContent('  set zoom [on/off]  – 2× zoom on playfield');
         addTerminalLineToContent('_____________________');
         addTerminalLineToContent('Type "help" for help.');
     } else {
         const subCmd = args[0].toLowerCase();
-        switch (subCmd) {
-            case 'sound':
-                if (args.length < 2) {
-                    addTerminalLineToContent('Usage: set sound [volume]');
-                    addTerminalLineToContent('Example: set sound 50');
+
+        if (subCmd === 'sound') {
+            if (args.length < 2) {
+                addTerminalLineToContent('Usage: set sound [volume]');
+                addTerminalLineToContent('Example: set sound 50');
+            } else {
+                const volume = parseFloat(args[1]);
+                if (isNaN(volume) || volume < 0 || volume > 100) {
+                    addTerminalLineToContent('ERROR! Volume must be 0–100');
                 } else {
-                    const volume = parseFloat(args[1]);
-                    if (isNaN(volume) || volume < 0 || volume > 100) {
-                        addTerminalLineToContent('ERROR!');
-                        addTerminalLineToContent('Usage: set sound [volume]');
-                        addTerminalLineToContent('Example: set sound 50');
-                        addTerminalLineToContent('_____________________');
-                        addTerminalLineToContent('Type "help" for help.');
-                    } else {
-                        setSoundVolume(volume / 100);
-                        addTerminalLineToContent(`Sound volume set to ${(soundVolume * 100).toFixed(0)}%`);
-                        addTerminalLineToContent('_____________________');
-                        addTerminalLineToContent('Type "help" for help.');
-                    }
+                    setSoundVolume(volume / 100);
+                    addTerminalLineToContent(`Sound volume set to ${volume}%`);
                 }
-                break;
-            case 'music':
-                if (args.length < 2) {
-                    addTerminalLineToContent('Usage: set music [volume]');
-                    addTerminalLineToContent('Example: set music 75');
+            }
+        }
+        else if (subCmd === 'music') {
+            if (args.length < 2) {
+                addTerminalLineToContent('Usage: set music [volume]');
+                addTerminalLineToContent('Example: set music 75');
+            } else {
+                const volume = parseFloat(args[1]);
+                if (isNaN(volume) || volume < 0 || volume > 100) {
+                    addTerminalLineToContent('ERROR! Volume must be 0–100');
                 } else {
-                    const volume = parseFloat(args[1]);
-                    if (isNaN(volume) || volume < 0 || volume > 100) {
-                        addTerminalLineToContent('ERROR!');
-                        addTerminalLineToContent('Usage: set music [volume]');
-                        addTerminalLineToContent('Example: set music 75');
-                        addTerminalLineToContent('_____________________');
-                        addTerminalLineToContent('Type "help" for help.');
-                    } else {
-                        setMusicVolume(volume / 100);
-                        addTerminalLineToContent(`Music volume set to ${(musicVolume * 100).toFixed(0)}%`);
-                        addTerminalLineToContent('_____________________');
-                        addTerminalLineToContent('Type "help" for help.');
-                    }
+                    setMusicVolume(volume / 100);
+                    addTerminalLineToContent(`Music volume set to ${volume}%`);
                 }
-                break;
-            default:
-                addTerminalLineToContent('ERROR!');
-                addTerminalLineToContent('Available commands:');
-                addTerminalLineToContent('  Usage: set sound       - Control sound volume');
-                addTerminalLineToContent('  Usage: set music       - Control music volume');
-                addTerminalLineToContent('_____________________');
-                addTerminalLineToContent('Type "help" for help.');
+            }
+        }
+        else if (subCmd === 'zoom') {
+            if (args.length < 2) {
+                addTerminalLineToContent('Usage: set zoom [on/off]');
+            } else {
+                const state = args[1].toLowerCase();
+                if (state === 'on' || state === 'true') {
+                    zoomEnabled = true;
+                    localStorage.setItem('zoomEnabled', 'true');
+                    addTerminalLineToContent('2× zoom ENABLED (playfield only)');
+                } else if (state === 'off' || state === 'false') {
+                    zoomEnabled = false;
+                    localStorage.setItem('zoomEnabled', 'false');
+                    addTerminalLineToContent('2× zoom disabled');
+                } else {
+                    addTerminalLineToContent('Invalid argument – set zoom on or off');
+                }
+            }
+        }
+        else {
+            addTerminalLineToContent('Unknown setting. Available: sound, music, zoom');
         }
     }
-        break;
+    break;
 case 'leaderboard':
     if (!cachedLeaderboard || cachedLeaderboard.length === 0) {
         addTerminalLineToContent('No cached leaderboard available. Play more to fetch!');
@@ -9318,6 +9322,17 @@ if (p.moving) {
     }
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
+    
+    // 2× ZOOM (centered on player, playfield only)
+    if (zoomEnabled && !splashActive && !gameOver) {
+        const ZOOM = 2;
+        c.save();
+        c.imageSmoothingEnabled = false;  // Pixel-perfect zoom
+        c.translate(160, 160);                    // centre of 320×320 canvas
+        c.scale(ZOOM, ZOOM);
+        c.translate(-(p.currentX + S/2), -(p.currentY + S/2)); // centre player
+    }
+    
     // Warden entry flash:
 // ——— ECHO WARDEN FLASH: Divine ἀρχάγγελος ———
 if (wardenFlashStart > 0) {
@@ -9550,51 +9565,66 @@ if (map[y][x] === 25) { // Puzzle portal tile
             }
         }
         
-        if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
-            const age = Date.now() - echoWardenPos.spawnTime;
-            const spawnDuration = 1200;   // 1.2s dramatic fade-in + grow
-            const holdDuration = 3800;    // 3.8s perfectly still at full size
-            const fadeOutDuration = 1500; // 1.5s gentle fade-out
+// keep a flag that tells the main render loop “the warden is done”
+let wardenFinished = false;
 
-            // Auto-remove when fully gone
-            if (age >= spawnDuration + holdDuration + fadeOutDuration) {
-                map[y][x] = 0;
-                echoWardenPos = null;
-                return;
-            }
+if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
+    const age = Date.now() - echoWardenPos.spawnTime;
+    const spawnDuration = 1200;
+    const holdDuration   = 3800;
+    const fadeOutDuration = 1500;
 
-            let alpha = 1.0;
-            let scale = 1.0;
+    // -------------------------------------------------
+    // 1️⃣  End‑of‑life handling – *do not* touch the map yet
+    // -------------------------------------------------
+    if (age >= spawnDuration + holdDuration + fadeOutDuration) {
+        wardenFinished = true;          // mark it for later cleanup
+        echoWardenPos = null;
+        // still draw the last (fully transparent) frame so the
+        // background tile isn’t swapped out mid‑frame
+    } else {
+        // -------------------------------------------------
+        // 2️⃣  Normal drawing logic (unchanged)
+        // -------------------------------------------------
+        let alpha = 1.0;
+        let scale = 1.0;
 
-            if (age < spawnDuration) {
-                // Phase 1: Grow + fade in
-                const t = age / spawnDuration;
-                alpha = t * t;           // Smooth ease-in
-                scale = 0.2 + 0.8 * t;   // From 20% → 100%
-            }
-            else if (age < spawnDuration + holdDuration) {
-                // Phase 2: FULL SIZE & FULL OPACITY — COMPLETELY STILL
-                alpha = 1.0;
-                scale = 1.0;
-            }
-            else {
-                // Phase 3: Fade out only (no shrinking, no bounce)
-                const fadeT = (age - spawnDuration - holdDuration) / fadeOutDuration;
-                alpha = 1.0 - fadeT;
-                scale = 1.0; // stays 1:1 until gone
-            }
-
-            const drawX = echoWardenPos.moving ? echoWardenPos.currentX : x * S;
-            const drawY = echoWardenPos.moving ? echoWardenPos.currentY : y * S;
-
-            c.save();
-            c.globalAlpha = alpha;
-            c.translate(drawX + S/2, drawY + S/2);
-            c.scale(scale, scale);
-            c.translate(-S/2, -S/2);
-            c.drawImage(assets.echo_warden, 0, 0, S, S);
-            c.restore();
+        if (age < spawnDuration) {
+            const t = age / spawnDuration;
+            alpha = t * t;               // ease‑in
+            scale = 0.2 + 0.8 * t;
+        } else if (age < spawnDuration + holdDuration) {
+            alpha = 1.0;
+            scale = 1.0;
+        } else {
+            const fadeT = (age - spawnDuration - holdDuration) / fadeOutDuration;
+            alpha = 1.0 - fadeT;
+            scale = 1.0;
         }
+
+        const drawX = echoWardenPos.moving ? echoWardenPos.currentX : x * S;
+        const drawY = echoWardenPos.moving ? echoWardenPos.currentY : y * S;
+
+        c.save();
+        c.globalAlpha = alpha;
+        c.translate(drawX + S / 2, drawY + S / 2);
+        c.scale(scale, scale);
+        c.translate(-S / 2, -S / 2);
+        c.drawImage(assets.echo_warden, 0, 0, S, S);
+        c.restore();
+    }
+}
+
+// -------------------------------------------------
+// 3️⃣  After the whole frame has been rendered, clean up
+// -------------------------------------------------
+if (wardenFinished) {
+    // now it’s safe to replace the tile – the frame that showed the
+    // fully‑transparent warden has already been presented.
+    map[y][x] = 0;
+    wardenFinished = false;
+}
+
 
 // Black cat — MATRIX GLITCH (mega digital rain + distortion)
 if (catPos && catPos.x === x && catPos.y === y) {
@@ -9866,7 +9896,6 @@ if (p.scourgeSpin && Date.now() - p.scourgeSpin.start < 520) {
         c.restore();
     }
 
-    c.imageSmoothingEnabled = true;
     needsRedraw = true;
 } else if (p.scourgeSpin) {
     p.scourgeSpin = null;
@@ -9986,8 +10015,6 @@ wisps.forEach(wisp => {
         c.lineTo(wisp.currentX + barWidth, drawY - 3);
         c.stroke();
         c.restore();
-     
-        c.restore();
     }
 });
 
@@ -10022,7 +10049,6 @@ if (!inPuzzleRoom) {
             const offsetY = (320 - scaledH) / 2;
             c.drawImage(assets.unique_monster_img, offsetX, offsetY, scaledW, scaledH);
             c.restore();
-            c.imageSmoothingEnabled = true; // Re-enable for rest of draw()
         }
     }
     
@@ -10436,6 +10462,59 @@ if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMon
         }
     }
 
+    // Restore canvas after zoom
+    if (zoomEnabled && !splashActive && !gameOver) {
+    
+// Bitcoin orange stairs arrow (world‑plane, floats above player)
+if (exit) {
+    const now   = performance.now();
+    const angle = Math.atan2(exit.y - p.y, exit.x - p.x);
+    const pulse = 1 + 0.15 * Math.sin(now / 600);
+    const bob   = 0.08 * Math.sin(now / 300);
+
+    const arrowX = p.currentX + S / 2;
+    const arrowY = p.currentY - S * 1.5 + bob * S;
+
+    c.save();
+    c.translate(arrowX, arrowY);
+    c.rotate(angle);
+    c.scale(pulse, pulse);
+
+    // ---- RETRO PIXEL ARROW (mid size) ----
+    c.font = 'bold 14px "Courier New", monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle   = '#F7931A';
+    c.strokeStyle = '#FF4400';
+    c.lineWidth   = 1.5;
+    c.shadowColor = '#F7931A';
+    c.shadowBlur  = 6;
+
+    // Size choice: 9 px total height (≈ 75 % of original)
+    const size      = 9;   // overall height
+    const tipHeight = 3;   // tip length (half of total height)
+    // shaft height is implicit: size - tipHeight
+
+    c.beginPath();
+    // tip
+    c.moveTo( tipHeight, -size/2 );
+    c.lineTo( size,      0 );
+    c.lineTo( tipHeight,  size/2 );
+    // shaft
+    c.lineTo( tipHeight,  size/4 );
+    c.lineTo( 0,          size/4 );
+    c.lineTo( 0,         -size/4 );
+    c.lineTo( tipHeight, -size/4 );
+    c.closePath();
+
+    c.stroke();   // outline
+    c.fill();     // fill
+
+    c.restore();
+}
+    
+        c.restore();
+    }
     
     // THIS IS THE MAIN DRAW, MADE TO CREATE EFFECTS BEFORE "needsRedraw = false"
     needsRedraw = false;
@@ -10467,6 +10546,7 @@ function gameLoop(timestamp) {
     }
     
 if (gameOver) {
+    zoomEnabled = false; // force zoom off on death
     musicManager.mute(true);
     musicManager.play(currentTheme);
     if (!gameOverSoundPlayed) {
