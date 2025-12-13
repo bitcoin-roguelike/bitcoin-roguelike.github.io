@@ -1428,9 +1428,6 @@ let lastDrawTime = null;
 let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
-let uniqueMonsterRevealActive = false;
-let uniqueMonsterRevealStartTime = 0;
-let uniqueMonsterRevealedThisFloor = false; // New: Per-floor limit
 let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
@@ -1900,9 +1897,6 @@ assets.farmSpot2.onerror = () => console.error('Failed to load farmSpot2.png');
 assets.echo_warden = new Image();
 assets.echo_warden.src = 'ἀρχάγγελος.png';
 assets.echo_warden.onerror = () => console.error('Failed to load echo_warden.png');
-// Unique monster reveal image
-assets.unique_monster_img = new Image();
-assets.unique_monster_img.src = 'unique_monster.png';
 
 // Wisp animation frames
 assets.wispFrames = [
@@ -1914,8 +1908,6 @@ assets.wispFrames[2].src = 'wisp3.png';
 assets.wispFrames.forEach((frame, i) => {
     frame.onerror = () => console.error(`Failed to load wisp frame ${i}: wisp${i+1}.png`);
 });
-
-assets.unique_monster_img.onerror = () => console.error('Failed to load unique_monster.png');	
 
 // Enemy background circles (16x16px animated)
 assets.enemyBg = [new Image(), new Image(), new Image()];
@@ -2904,7 +2896,6 @@ function initMap() {
             whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
             initialSpawnDoneThisFloor = false;
             initialWaveSpawned = false;
-	    uniqueMonsterRevealedThisFloor = false; // Reset animation limit for new floor
             map = Array(H).fill().map(() => Array(W).fill(1));
             fogMap = Array(H).fill().map(() => Array(W).fill(0));
             rooms = [];
@@ -5297,7 +5288,6 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     waveActive = false;
     exit = null;
     killsLog = [];
-    uniqueMonsterRevealedThisFloor = false; // Explicit reset before new floor
     battleLog = []; // Clear battleLog to prevent memory buildup
    
     // Reset special sound tracking for the new floor
@@ -6196,7 +6186,7 @@ function doScourgeSpinAttack() {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 1) {
+    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
@@ -9239,9 +9229,6 @@ waveActive = false;
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('pickaxes').textContent = p.pickaxes;
     document.getElementById('sats').textContent = '0';
-    // Reset unique monster animation
-    uniqueMonsterRevealActive = false;
-    uniqueMonsterRevealedThisFloor = false;
     window.currentFloorText = `Floor ${floor}`;
     window.lastUniqueSetTime = 0;
     document.getElementById('game-over').style.display = 'none';
@@ -10095,28 +10082,6 @@ if (!inPuzzleRoom) {
         }
     }
 }
-
-    // Draw unique monster reveal animation (centered 64x64 overlay)
-    if (uniqueMonsterRevealActive) {
-        const elapsed = now - uniqueMonsterRevealStartTime;
-        if (elapsed > 1000) {
-            uniqueMonsterRevealActive = false;
-        } else {
-            // Smooth linear ramp: scale 1x (64px) → 5x (320px), alpha 1.0 → 0.0 over 0.5s
-            const normalized = elapsed / 1000; // 0 to 1 over full 1s
-            let scale = 1 + normalized * 4; // Linear: 1x → 5x
-            let alpha = 1 - normalized; // Linear fade to 0
-            c.save();
-            c.imageSmoothingEnabled = false; // Pixel-perfect, no anti-aliasing
-            c.globalAlpha = alpha;
-            const scaledW = 64 * scale;
-            const scaledH = 64 * scale;
-            const offsetX = (320 - scaledW) / 2;
-            const offsetY = (320 - scaledH) / 2;
-            c.drawImage(assets.unique_monster_img, offsetX, offsetY, scaledW, scaledH);
-            c.restore();
-        }
-    }
        
 /**
  * Makes pure‑red pixels transparent (α = 0).  
@@ -10426,31 +10391,6 @@ c.restore();
 // Draw fading dangerous spell areas after enemies
 drawFadingDangerousAreas();
 
-// Draw low-health warning border with smooth transition
-if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
-    // Use a smooth, consistent pulse instead of frame-rate dependent flashing
-    const pulse = Math.sin(Date.now() / 100); // Slower, smoother pulse
-    let alpha, color;
-    
-    if (p.hp <= 4) {
-        alpha = 0.5 + 0.1 * pulse; // Smooth red transition (0.7 to 1.0)
-        color = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
-    } else {
-        alpha = 0.5 + 0.1 * pulse; // Smooth orange transition (0.5 to 0.8)
-        color = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 9
-    }
-    
-    c.strokeStyle = color;
-    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
-    c.beginPath();
-    // Draw the border around the entire canvas
-    c.moveTo(0, 0);
-    c.lineTo(W * S, 0);
-    c.lineTo(W * S, H * S);
-    c.lineTo(0, H * S);
-    c.closePath();
-    c.stroke();
-}
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
 
@@ -10492,12 +10432,6 @@ if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUn
     floorIndicator.textContent = `Floor ${floor}`;
     window.currentFloorText = `Floor ${floor}`;
     activeUniqueMonsterName = null;
-}
-// Trigger animation ONLY on visible (non-harbinger) uniques
-if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMonsterRevealedThisFloor) {
-    uniqueMonsterRevealActive = true;
-    uniqueMonsterRevealStartTime = now;
-    uniqueMonsterRevealedThisFloor = true; // Mark as revealed this floor
 }
 
     updateAndDrawMatrix();  // ← PERFECT SPOT! Magical flames + red balls
@@ -10625,7 +10559,7 @@ if (minimapVisible && zoomEnabled) {
         const mx = e.x * MINI_S;
         const my = e.y * MINI_S;
         c.fillStyle = '#F7931A';
-        c.fillRect(mx + 0.5, my + 0.5, MINI_S * 0.6, MINI_S * 0.6); // +0.5 for crisp center
+        c.fillRect(mx + 0.5, my + 0.5, MINI_S * 0.8, MINI_S * 0.8); // same size as player
     });
 
     // Player (white dot)
