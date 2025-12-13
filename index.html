@@ -6186,7 +6186,7 @@ function doScourgeSpinAttack() {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+    if (!scrollDroppedThisFloor && Math.random() < 1) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
@@ -8741,14 +8741,23 @@ function startPuzzleRoom() {
     puzzleStaticCanvas.height = 320;
     puzzleStaticCtx = puzzleStaticCanvas.getContext('2d');
 
-    // Static tiles
-    for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-            if (map[y][x] === 0) puzzleStaticCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
-            if (map[y][x] === 1) puzzleStaticCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
-            if (map[y][x] === 6) puzzleStaticCtx.drawImage(assets.themes.hell.special, x*S, y*S, S, S);
+// Static tiles + puzzle objects – FLOOR FIRST, then overlays (no black background)
+for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+        // Always draw floor under everything
+        puzzleStaticCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
+
+        // Then overlay walls, lava, soul stash, farm spot
+        if (map[y][x] === 1) puzzleStaticCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
+        if (map[y][x] === 6) puzzleStaticCtx.drawImage(assets.themes.hell.special, x*S, y*S, S, S);
+        if (map[y][x] === 19) puzzleStaticCtx.drawImage(assets.soul_stash, x*S, y*S, S, S);
+        if (map[y][x] === 27) {
+            // Use farmSpot2 if mature, else farmSpot1
+            const img = (p.farmLocked && floor >= p.farmLockedFloor + 50) ? assets.farmSpot2 : assets.farmSpot1;
+            puzzleStaticCtx.drawImage(img, x*S, y*S, S, S);
         }
     }
+}
 
     // Pre-rotated arrows
     const arrowSprites = {
