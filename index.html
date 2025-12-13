@@ -1443,6 +1443,8 @@ let zoomEnabled = false;          // ← you toggle this later
 let camera = { x: 0, y: 0 };
 let stairsArrow = null;           // {dx,dy} when stairs are off-screen
 
+let minimapVisible = zoomEnabled;  // sync with zoom
+
 let map = [],
 p = {
 x: 2,
@@ -5694,11 +5696,14 @@ if (map[ny][nx] === 23) { // Cursed ring
     }
 }
 
-if (map[ny][nx] === 28 && catPos) { // Cat pickup
-    p.soulStormCharges = 256; // Full refill
+if (map[ny][nx] === 28 && catPos && catPos.x === nx && catPos.y === ny) {
+    p.soulStormCharges = 256;
     map[ny][nx] = 0;
     catPos = null;
+    catVisible = false;
+    catAnimStart = 0;
     playCatPurr();
+    needsRedraw = true;
     logBattleEvent(`Floor ${floor} - Black cat blesses you! Soul charges maxed.`);
     updatePlayerState();
 }
@@ -8201,6 +8206,8 @@ else if (subCmd === 'zoom') {
         if (state === 'on' || state === 'true' || state === '1') {
             zoomEnabled = true;
             localStorage.setItem('zoomEnabled', 'true');
+            minimapVisible = zoomEnabled;
+            needsRedraw = true;
             addTerminalLineToContent('2× ZOOM ACTIVATED – PLAYFIELD ONLY');
         } 
         else if (state === 'off' || state === 'false' || state === '0') {
@@ -9198,6 +9205,8 @@ waveActive = false;
     populateNameList();
  
     currentThemeBlock = null;  // 'hell_normal' or 'hell_snowy' for the current 3-floor block
+
+    currentWeapon = 'sword';
     
 // Fix: Properly reset MusicManager state and ensure audio context is ready
     try {
@@ -10516,21 +10525,25 @@ if (uniqueNameToShow && !isHarbinger && !uniqueMonsterRevealActive && !uniqueMon
         }
     }
 
-        // ───── SNOW (only in snowy hell) ─────
-        if (snowyHellActive && snowflakes.length) {
-            c.fillStyle = 'rgba(255,255,255,0.9)';
-            snowflakes.forEach(f => {
-                f.y += f.speed;
-                f.x += Math.sin(performance.now() / 1000 + f.sway) * 0.3;
-                if (f.y > 320) {
-                    f.y = -5;
-                    f.x = Math.random() * 320;
-                }
-                if (f.x < -10) f.x = 319;
-                if (f.x > 330) f.x = 0;
-                c.fillRect(f.x, f.y, f.size, f.size);
-            });
+// ───── SNOW (snowy hell – zoom-aware, no snapping) ─────
+if (snowyHellActive && snowflakes.length) {
+    const SCREEN_W = zoomEnabled ? 640 : 320;
+    const SCREEN_H = zoomEnabled ? 640 : 320;
+    const SCALE = zoomEnabled ? 2 : 1;
+
+    c.fillStyle = 'rgba(255,255,255,0.9)';
+    snowflakes.forEach(f => {
+        f.y += f.speed * SCALE;
+        f.x += Math.sin(performance.now() / 1000 + f.sway) * 0.3 * SCALE;
+        if (f.y > SCREEN_H) {
+            f.y = -f.size * SCALE;
+            f.x = Math.random() * SCREEN_W;
         }
+        if (f.x < -10) f.x = SCREEN_W - 1;
+        if (f.x > SCREEN_W + 10) f.x = 0;
+        c.fillRect(f.x, f.y, f.size * SCALE, f.size * SCALE);
+    });
+}
 
 // ───── RESTORE ONLY IF WE ZOOMED ─────
 if (zoomEnabled && !splashActive && !gameOver) {
@@ -10582,6 +10595,41 @@ if (exit) {
 
     c.restore();
 }
+
+    c.restore();
+}
+
+// ───── ZELDA-ISH RADAR MINIMAP – TOP-LEFT BELOW FLOOR TEXT (PERFECTION) ─────
+if (minimapVisible && zoomEnabled) {
+    const MINI_W = 64;
+    const MINI_H = 64;
+    const MINI_S = MINI_W / W;  // 3.2px per tile
+
+    // Position: top-left, just below "Floor X" text
+    const PADDING = 8;
+    const X = PADDING;
+    const Y = 38;  // 38px down = just below floor text (perfect on all screens)
+
+    c.save();
+    c.translate(X, Y);
+
+    // Dark semi-transparent background
+    c.fillStyle = 'rgba(27, 22, 16, 0.5)';
+    c.fillRect(0, 0, MINI_W, MINI_H);
+
+    // ALL enemies (true radar)
+    enemies.forEach(e => {
+        const mx = e.x * MINI_S;
+        const my = e.y * MINI_S;
+        c.fillStyle = '#F7931A';
+        c.fillRect(mx + 0.5, my + 0.5, MINI_S * 0.6, MINI_S * 0.6); // +0.5 for crisp center
+    });
+
+    // Player (white dot)
+    const px = p.x * MINI_S + 0.5;
+    const py = p.y * MINI_S + 0.5;
+    c.fillStyle = '#FFFFFF';
+    c.fillRect(px - 1, py - 1, MINI_S * 0.8, MINI_S * 0.8);
 
     c.restore();
 }
