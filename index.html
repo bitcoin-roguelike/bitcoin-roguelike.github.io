@@ -1441,7 +1441,7 @@ let spearHitShakeStart = 0;     // ← ADD THIS LINE
 let spearHitShakeIntensity = 0;
 
 // ─────── ZOOM SYSTEM ───────
-let zoomEnabled = false;          // ← you toggle this later
+let zoomEnabled = true;          // ← you toggle this later
 let camera = { x: 0, y: 0 };
 let stairsArrow = null;           // {dx,dy} when stairs are off-screen
 
@@ -8031,94 +8031,121 @@ case 'reset':
         addTerminalLineToContent('Type "help" for help.');
         break;
     }
-        addTerminalLineToContent('Trial is reset!');
-        addTerminalLineToContent('Type exit or press start on the gamepad.');
-        addTerminalLineToContent('_____________________');
-        addTerminalLineToContent('Type "help" for help.');
-        
-        puzzleReturnPos = { x: p.x, y: p.y };  // keep current position
-        puzzlePreviousTheme = currentTheme;
 
-        enemies = [];
-        isFetchingTxs = true;
-        exit = null;
-
-        currentTheme = 'dungeon';
-        musicManager.play('hideout');
-        musicManager.current = 'hideout';
-
-        // —— RESET CURRENT PUZZLE ROOM (exact same layout) ——
-        puzzleHazards = [];
-        puzzleArrows = [];
-        puzzleBoulders = [];
-        puzzleHeartFramers = [];
-        puzzleChest = null;
-        soulStashPos = null;
-
-        // Re-apply the exact same layout we entered with
-        const PX = 3, PY = 2;
-        for (let y = 0; y < H; y++) {
-            for (let x = 0; x < W; x++) {
-                if (x >= PX && x < PX+14 && y >= PY && y < PY+12) {
-                    map[y][x] = 0;
-                } else {
-                    map[y][x] = 1;
-                }
-            }
-        }
-                
-        fogMap = Array(H).fill().map(() => Array(W).fill(1));
-
-        // Re-parse the exact same layout (respecting the correct tier for this floor)
-        let tierTemplates;
-
-        if (floor >= 30) {
-            tierTemplates = [
-                ...PUZZLE_TEMPLATES.common,
-                ...PUZZLE_TEMPLATES.rare,
-                ...PUZZLE_TEMPLATES.legendary
-            ];
-        } else if (floor >= 15) {
-            tierTemplates = [
-                ...PUZZLE_TEMPLATES.common,
-                ...PUZZLE_TEMPLATES.rare
-            ];
-        } else {
-            tierTemplates = PUZZLE_TEMPLATES.common;
-        }
-
-        // Use the saved layout if we have one (reset case), otherwise fall back to a random one from the correct tier
-        const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
-        const layout = layoutStr.trim().split('\n');
-
-        for (let y = 0; y < layout.length; y++) {
-            for (let x = 0; x < layout[y].length; x++) {
-                const cx = PX + x;
-                const cy = PY + y;
-                const ch = layout[y][x];
-                if (ch === '#') map[cy][cx] = 1;
-                if (ch === '@') { p.x = cx; p.y = cy; p.currentX = cx*S; p.currentY = cy*S; }
-                if (ch === 'B') { puzzleBoulders.push({x:cx,y:cy}); map[cy][cx] = 26; }
-                if (ch === 'H') puzzleHeartFramers.push({x:cx,y:cy});
-                if (ch === 'C') puzzleChest = {x:cx,y:cy};
-                if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:'lava'}); map[cy][cx] = 6; }
-                if (ch === '>') puzzleArrows.push({x:cx,y:cy,dir:'right'});
-                if (ch === '<') puzzleArrows.push({x:cx,y:cy,dir:'left'});
-                if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
-                if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
-                if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
-                if (ch === 'F') { map[cy][cx] = 27; farmSpot = {x:cx, y:cy}; }
-            }
-        }
-
-        logBattleEvent("The trial has been reborn from the void...");
-        needsRedraw = true;
-        musicManager.play('hideout');
-musicManager.current = 'hideout';  // Force pure hideout music
-
-closeSoulTerminal();
+    addTerminalLineToContent('Trial is reset!');
+    addTerminalLineToContent('Type exit or press start on the gamepad.');
     addTerminalLineToContent('_____________________');
     addTerminalLineToContent('Type "help" for help.');
+
+    // Save current player position (so we don't teleport to @)
+    const savedPlayerX = p.x;
+    const savedPlayerY = p.y;
+
+    // Reset puzzle state
+    puzzleReturnPos = { x: p.x, y: p.y };
+    puzzlePreviousTheme = currentTheme;
+    enemies = [];
+    isFetchingTxs = true;
+    exit = null;
+    currentTheme = 'dungeon';
+    updateSnowState();
+    musicManager.play('hideout');
+    musicManager.current = 'hideout';
+
+    puzzleHazards = [];
+    puzzleArrows = [];
+    puzzleBoulders = [];
+    puzzleHeartFramers = [];
+    puzzleChest = null;
+    soulStashPos = null;
+    farmSpot = null;
+
+    const PX = 3, PY = 2;
+
+    // Clear puzzle area
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (x >= PX && x < PX + 14 && y >= PY && y < PY + 12) {
+                map[y][x] = 0;
+            } else {
+                map[y][x] = 1;
+            }
+        }
+    }
+
+    fogMap = Array(H).fill().map(() => Array(W).fill(1));
+
+    const layoutStr = puzzleCurrentLayout;
+    const layout = layoutStr.trim().split('\n');
+
+    // Parse layout but PRESERVE player position
+    for (let y = 0; y < layout.length; y++) {
+        for (let x = 0; x < layout[y].length; x++) {
+            const cx = PX + x;
+            const cy = PY + y;
+            const ch = layout[y][x];
+
+            if (ch === '#') map[cy][cx] = 1;
+            if (ch === '@') {
+                // DO NOT move player — keep saved position
+                // Just treat as floor
+                map[cy][cx] = 0;
+            }
+            if (ch === 'B') { puzzleBoulders.push({x:cx, y:cy, pushed: false}); map[cy][cx] = 26; }
+            if (ch === 'H') puzzleHeartFramers.push({x:cx,y:cy});
+            if (ch === 'C') puzzleChest = {x:cx,y:cy};
+            if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:'lava'}); map[cy][cx] = 6; }
+            if (ch === '>') puzzleArrows.push({x:cx,y:cy,dir:'right'});
+            if (ch === '<') puzzleArrows.push({x:cx,y:cy,dir:'left'});
+            if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
+            if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
+            if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
+            if (ch === 'F') { map[cy][cx] = 27; farmSpot = {x:cx, y:cy}; }
+        }
+    }
+
+    // Restore saved player position
+    p.x = savedPlayerX;
+    p.y = savedPlayerY;
+    p.currentX = p.x * S;
+    p.currentY = p.y * S;
+
+    // Rebuild static background (same as startPuzzleRoom)
+    puzzleStaticCanvas = document.createElement('canvas');
+    puzzleStaticCanvas.width = 320;
+    puzzleStaticCanvas.height = 320;
+    puzzleStaticCtx = puzzleStaticCanvas.getContext('2d');
+
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            puzzleStaticCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
+            if (map[y][x] === 1) puzzleStaticCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
+            if (map[y][x] === 6) puzzleStaticCtx.drawImage(assets.themes.hell.special, x*S, y*S, S, S);
+            if (map[y][x] === 19) puzzleStaticCtx.drawImage(assets.soul_stash, x*S, y*S, S, S);
+            if (map[y][x] === 27) {
+                const img = (p.farmLocked && floor >= p.farmLockedFloor + 50) ? assets.farmSpot2 : assets.farmSpot1;
+                puzzleStaticCtx.drawImage(img, x*S, y*S, S, S);
+            }
+        }
+    }
+
+    // Arrows (if you have pre-rotated sprites)
+    const arrowSprites = {
+        up: assets.arrow_up,
+        right: assets.arrow_right,
+        down: assets.arrow_down,
+        left: assets.arrow_left
+    };
+    puzzleArrows.forEach(a => {
+        const sprite = arrowSprites[a.dir];
+        if (sprite?.complete) {
+            puzzleStaticCtx.drawImage(sprite, a.x * S, a.y * S, S, S);
+        }
+    });
+    
+    logBattleEvent("The trial has been reborn from the void...");
+    needsRedraw = true;
+    closeSoulTerminal();
     break;
 case 'swap':
     // Split command and ignore anything after "swap"
@@ -8710,7 +8737,15 @@ function startPuzzleRoom() {
     else if (floor >= 15) tierTemplates = [...PUZZLE_TEMPLATES.common, ...PUZZLE_TEMPLATES.rare];
     else tierTemplates = PUZZLE_TEMPLATES.common;
 
-    const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+    // Use saved layout if resetting, else pick new and save it
+    if (!puzzleCurrentLayout) {
+        let tierTemplates;
+        if (floor >= 30) tierTemplates = [...PUZZLE_TEMPLATES.common, ...PUZZLE_TEMPLATES.rare, ...PUZZLE_TEMPLATES.legendary];
+        else if (floor >= 15) tierTemplates = [...PUZZLE_TEMPLATES.common, ...PUZZLE_TEMPLATES.rare];
+        else tierTemplates = PUZZLE_TEMPLATES.common;
+        puzzleCurrentLayout = tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+    }
+    const layoutStr = puzzleCurrentLayout;
     const layout = layoutStr.trim().split('\n');
 
     // Parse layout
@@ -8722,7 +8757,7 @@ function startPuzzleRoom() {
 
             if (ch === '#') map[cy][cx] = 1;
             if (ch === '@') { p.x = cx; p.y = cy; p.currentX = cx * S; p.currentY = cy * S; }
-            if (ch === 'B') { puzzleBoulders.push({x:cx, y:cy}); map[cy][cx] = 26; }
+            if (ch === 'B') { puzzleBoulders.push({x:cx, y:cy, pushed: false}); map[cy][cx] = 26; }
             if (ch === 'H') puzzleHeartFramers.push({x:cx, y:cy});
             if (ch === 'C') puzzleChest = {x:cx, y:cy};
             if (ch === 'L') { puzzleHazards.push({x:cx, y:cy, type:'lava'}); map[cy][cx] = 6; }
