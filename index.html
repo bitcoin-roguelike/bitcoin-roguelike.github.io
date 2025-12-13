@@ -1414,6 +1414,11 @@ function selectNewTheme(current) {
     return available[Math.floor(Math.random() * available.length)];
 }
 
+function patchStaticCanvas(x, y) {
+    if (!puzzleStaticCtx) return;
+    puzzleStaticCtx.drawImage(assets.themes.dungeon.floor, x * S, y * S, S, S);
+}
+
 let isFetchingTxs = false; // Track if fetchTxs is currently running
 let savedPauseState = null; // remembers pause button state before screensaver
 let currentRuneTile = null; // Track current rune tile position
@@ -1443,7 +1448,15 @@ let zoomEnabled = false;          // ← you toggle this later
 let camera = { x: 0, y: 0 };
 let stairsArrow = null;           // {dx,dy} when stairs are off-screen
 
+camera.velocityX = 0;
+camera.velocityY = 0;
+camera.lastDeltaX = 0;
+camera.lastDeltaY = 0;
+
 let minimapVisible = zoomEnabled;  // sync with zoom
+
+let puzzleStaticCanvas = null;
+let puzzleStaticCtx = null;
 
 let map = [],
 p = {
@@ -4454,7 +4467,7 @@ if (p.moveCounter >= 2) {
     }
 
 // ———————————————————————————————————————
-// PUZZLE ROOM: BOULDER & LAVA LOGIC (L2 perfect)
+// PUZZLE ROOM: BOULDER & LAVA LOGIC (FINAL – NO BLACK TILES)
 // ———————————————————————————————————————
 if (inPuzzleRoom) {
     const targetTile = map[ny][nx];
@@ -4470,9 +4483,9 @@ if (inPuzzleRoom) {
     if (puzzleBoulders.some(b => b.x === nx && b.y === ny)) {
         const boulder = puzzleBoulders.find(b => b.x === nx && b.y === ny);
 
-        // 2a. Boulder on lava → walkable, not pushable
+        // 2a. Boulder on lava → walkable bridge
         if (puzzleHazards.some(h => h.x === nx && h.y === ny)) {
-            // do nothing → player walks on bridge
+            // do nothing — player walks on bridge
         }
         // 2b. Boulder is pushable
         else {
@@ -4480,60 +4493,52 @@ if (inPuzzleRoom) {
             const pushY = ny + (dir === 'down' ? 1 : dir === 'up' ? -1 : 0);
 
             // Sacred blocks
-            if (puzzleChest && pushX === puzzleChest.x && pushY === puzzleChest.y) {
-                p.anim.direction = newDirection;
-                needsRedraw = true;
-                return;
-            }
-            if (puzzleHeartFramers.some(h => h.x === pushX && h.y === pushY)) {
-                p.anim.direction = newDirection;
-                needsRedraw = true;
-                return;
-            }
+            if (puzzleChest && pushX === puzzleChest.x && pushY === puzzleChest.y) return;
+            if (puzzleHeartFramers.some(h => h.x === pushX && h.y === pushY)) return;
 
-if (pushX >= 0 && pushX < W && pushY >= 0 && pushY < H) {
-    let isSinkingIntoLava = false;
+            if (pushX >= 0 && pushX < W && pushY >= 0 && pushY < H) {
+                if (map[pushY][pushX] === 6) {
+                    // ——— SINK INTO LAVA ———
+                    const oldX = boulder.x;
+                    const oldY = boulder.y;
 
-    if (map[pushY][pushX] === 6) {
-        // ——— SINK INTO LAVA ———
-        isSinkingIntoLava = true;
+                    // Remove boulder + lava
+                    map[oldY][oldX] = 0;
+                    map[pushY][pushX] = 0;
+                    puzzleBoulders = puzzleBoulders.filter(b => b !== boulder);
+                    puzzleHazards = puzzleHazards.filter(h => h.x !== pushX || h.y !== pushY);
 
-        map[pushY][pushX] = 0;
+                    // Patch BOTH tiles in static canvas → floor
+                    patchStaticCanvas(oldX, oldY);
+                    patchStaticCanvas(pushX, pushY);
 
-        const boulderX = boulder.x;
-        const boulderY = boulder.y;
+                    // Flash effect
+                    highlightTiles.push({x: oldX, y: oldY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
+                    highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
 
-        puzzleBoulders = puzzleBoulders.filter(b => b.x !== boulderX || b.y !== boulderY);
-        puzzleHazards = puzzleHazards.filter(h => h.x !== pushX || h.y !== pushY);
-        map[boulderY][boulderX] = 0;
+                    logBattleEvent("Boulder sinks and cools into permanent stone!");
+                    playWebAudioSound(sounds.lava);
+                }
+                else if (map[pushY][pushX] === 0) {
+                    // ——— NORMAL PUSH ———
+                    const oldX = boulder.x;
+                    const oldY = boulder.y;
 
-        highlightTiles.push({x: boulderX, y: boulderY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
-        highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
+                    // Patch old position
+                    patchStaticCanvas(oldX, oldY);
 
-        // And add this ONCE per frame (best in draw() or gameLoop):
-        highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
-        
-        logBattleEvent("Boulder sinks and cools into permanent stone!");
-        playWebAudioSound(sounds.lava);
-    }
-    else if (map[pushY][pushX] !== 0) {
-        p.anim.direction = newDirection;
-        needsRedraw = true;
-        return;
-    }
+                    // Move boulder
+                    map[oldY][oldX] = 0;
+                    map[pushY][pushX] = 26;
+                    boulder.x = pushX;
+                    boulder.y = pushY;
+                }
+                else {
+                    p.anim.direction = newDirection;
+                    needsRedraw = true;
+                    return;
+                }
 
-    // ——— PUSH SUCCESS ———
-    map[boulder.y][boulder.x] = 0; // old position → floor
-
-    if (!isSinkingIntoLava) {
-        map[pushY][pushX] = 26;
-    }
-
-    boulder.x = pushX;
-    boulder.y = pushY;
-}
-            else {
-                p.anim.direction = newDirection;
                 needsRedraw = true;
                 return;
             }
@@ -6191,7 +6196,7 @@ function doScourgeSpinAttack() {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+    if (!scrollDroppedThisFloor && Math.random() < 1) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
@@ -8672,78 +8677,53 @@ F.....##H###H#
     ]
 };
 
-// ──────────────────────────────────────────────────────────────────────
-// One-time off-screen canvas for the puzzle room background (dungeon theme)
-// ──────────────────────────────────────────────────────────────────────
-const puzzleBgCanvas = document.createElement('canvas');
-puzzleBgCanvas.width  = 320;
-puzzleBgCanvas.height = 320;
-const puzzleBgCtx = puzzleBgCanvas.getContext('2d'); // default alpha: true (reverted)
-
 function startPuzzleRoom() {
     inPuzzleRoom = true;
-    puzzleReturnPos   = { x: p.x, y: p.y };      // remember where we came from
-    puzzlePreviousTheme = currentTheme;         // save original theme
-
-    enemies = [];          // critical – no enemies in puzzle rooms
-    isFetchingTxs = true; // stop mempool spawning while inside
-
-    // Kill any old exit (prevents weird teleport bugs)
+    puzzleReturnPos = { x: p.x, y: p.y };
+    puzzlePreviousTheme = currentTheme;
+    enemies = [];
+    isFetchingTxs = true;
     exit = null;
 
     const PX = 3, PY = 2;
     const PW = 14, PH = 12;
 
-    // Force dungeon visuals & hideout music
     currentTheme = 'dungeon';
     updateSnowState();
     musicManager.play('hideout');
     musicManager.current = 'hideout';
 
-    // ───── Clear the puzzle area + outer walls ─────
+    // Clear puzzle area
     for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
-            if (x >= PX && x < PX+PW && y >= PY && y < PY+PH) {
-                map[y][x] = 0;     // floor
+            if (x >= PX && x < PX + PW && y >= PY && y < PY + PH) {
+                map[y][x] = 0;
             } else {
-                map[y][x] = 1;     // wall
+                map[y][x] = 1;
             }
         }
     }
-
     fogMap = Array(H).fill().map(() => Array(W).fill(1));
 
     // Reset puzzle state
     puzzleHazards = [];
-    puzzleArrows  = [];
+    puzzleArrows = [];
     puzzleBoulders = [];
     puzzleHeartFramers = [];
     puzzleChest = null;
     soulStashPos = null;
+    farmSpot = null;
 
-        // Re-parse the exact same layout (respecting the correct tier for this floor)
-        let tierTemplates;
+    // Layout selection
+    let tierTemplates;
+    if (floor >= 30) tierTemplates = [...PUZZLE_TEMPLATES.common, ...PUZZLE_TEMPLATES.rare, ...PUZZLE_TEMPLATES.legendary];
+    else if (floor >= 15) tierTemplates = [...PUZZLE_TEMPLATES.common, ...PUZZLE_TEMPLATES.rare];
+    else tierTemplates = PUZZLE_TEMPLATES.common;
 
-        if (floor >= 30) {
-            tierTemplates = [
-                ...PUZZLE_TEMPLATES.common,
-                ...PUZZLE_TEMPLATES.rare,
-                ...PUZZLE_TEMPLATES.legendary
-            ];
-        } else if (floor >= 15) {
-            tierTemplates = [
-                ...PUZZLE_TEMPLATES.common,
-                ...PUZZLE_TEMPLATES.rare
-            ];
-        } else {
-            tierTemplates = PUZZLE_TEMPLATES.common;
-        }
+    const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
+    const layout = layoutStr.trim().split('\n');
 
-        // Use the saved layout if we have one (reset case), otherwise fall back to a random one from the correct tier
-        const layoutStr = puzzleCurrentLayout || tierTemplates[Math.floor(Math.random() * tierTemplates.length)];
-        const layout = layoutStr.trim().split('\n');
-
-    // ───── Parse the ASCII layout ─────
+    // Parse layout
     for (let y = 0; y < layout.length; y++) {
         for (let x = 0; x < layout[y].length; x++) {
             const cx = PX + x;
@@ -8751,37 +8731,53 @@ function startPuzzleRoom() {
             const ch = layout[y][x];
 
             if (ch === '#') map[cy][cx] = 1;
-            if (ch === '@') { p.x = cx; p.y = cy; p.currentX = cx*S; p.currentY = cy*S; }
-            if (ch === 'B') { puzzleBoulders.push({x:cx,y:cy}); map[cy][cx] = 26; }
-            if (ch === 'H') puzzleHeartFramers.push({x:cx,y:cy});
-            if (ch === 'C') puzzleChest = {x:cx,y:cy};
-            if (ch === 'L') { puzzleHazards.push({x:cx,y:cy,type:'lava'}); map[cy][cx] = 6; }
-            if (ch === '>') puzzleArrows.push({x:cx,y:cy,dir:'right'});
-            if (ch === '<') puzzleArrows.push({x:cx,y:cy,dir:'left'});
-            if (ch === '^') puzzleArrows.push({x:cx,y:cy,dir:'up'});
-            if (ch === 'v') puzzleArrows.push({x:cx,y:cy,dir:'down'});
+            if (ch === '@') { p.x = cx; p.y = cy; p.currentX = cx * S; p.currentY = cy * S; }
+            if (ch === 'B') { puzzleBoulders.push({x:cx, y:cy}); map[cy][cx] = 26; }
+            if (ch === 'H') puzzleHeartFramers.push({x:cx, y:cy});
+            if (ch === 'C') puzzleChest = {x:cx, y:cy};
+            if (ch === 'L') { puzzleHazards.push({x:cx, y:cy, type:'lava'}); map[cy][cx] = 6; }
+            if (ch === '>') puzzleArrows.push({x:cx, y:cy, dir:'right'});
+            if (ch === '<') puzzleArrows.push({x:cx, y:cy, dir:'left'});
+            if (ch === '^') puzzleArrows.push({x:cx, y:cy, dir:'up'});
+            if (ch === 'v') puzzleArrows.push({x:cx, y:cy, dir:'down'});
             if (ch === 'S') { map[cy][cx] = 19; soulStashPos = {x:cx, y:cy}; }
             if (ch === 'F') { map[cy][cx] = 27; farmSpot = {x:cx, y:cy}; }
         }
     }
 
-// ───── PRE-RENDER THE ENTIRE DUNGEON BACKGROUND ONCE (the fix!) ─────
-    puzzleBgCtx.clearRect(0, 0, 320, 320);
+    // ───── PRE-RENDER STATIC BACKGROUND (walls, floors, lava, arrows) ─────
+    puzzleStaticCanvas = document.createElement('canvas');
+    puzzleStaticCanvas.width = 320;
+    puzzleStaticCanvas.height = 320;
+    puzzleStaticCtx = puzzleStaticCanvas.getContext('2d');
+
+    // Static tiles
     for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
-            if (map[y][x] === 0) {
-                puzzleBgCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
-            } else if (map[y][x] === 1) {
-                puzzleBgCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
-            }
+            if (map[y][x] === 0) puzzleStaticCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
+            if (map[y][x] === 1) puzzleStaticCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
+            if (map[y][x] === 6) puzzleStaticCtx.drawImage(assets.themes.hell.special, x*S, y*S, S, S);
         }
     }
 
-    // UI / log
+    // Pre-rotated arrows
+    const arrowSprites = {
+        up:    assets.arrow_up,
+        right: assets.arrow_right,
+        down:  assets.arrow_down,
+        left:  assets.arrow_left
+    };
+    puzzleArrows.forEach(a => {
+        const sprite = arrowSprites[a.dir];
+        if (sprite?.complete) {
+            puzzleStaticCtx.drawImage(sprite, a.x * S, a.y * S, S, S);
+        }
+    });
+
+    // UI
     document.getElementById('floor-indicator').textContent =
         floor >= 30 ? 'LEGENDARY TRIAL' :
         floor >= 15 ? 'Rare Trial' : 'Trial of Wisdom';
-
     logBattleEvent("A sacred trial of wisdom begins...");
     needsRedraw = true;
 }
@@ -8850,6 +8846,8 @@ updateSnowState();  // ensures snowflakes + snowy tiles match the theme
     farmSpot = null;
     puzzleReturnPos = null;
     puzzleCurrentLayout = null;  // ← NEW: prevents reusing old layout on next floor
+    puzzleStaticCanvas = null;
+    puzzleStaticCtx = null;
 
     // Stairs appear under player
     exit = { x: p.x, y: p.y };
@@ -9367,7 +9365,7 @@ if (p.moving) {
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
 
-// ───── 2× ZOOM – FINAL, ULTRA-SMOOTH, NO ROCKY ROAD (PERFECTION v∞) ─────
+// ───── 2× ZOOM – JET FUEL ORBIT CAMERA (ignores player janks, silky momentum) ─────
 if (zoomEnabled && !splashActive && !gameOver) {
     c.save();
     c.imageSmoothingEnabled = false;
@@ -9375,22 +9373,40 @@ if (zoomEnabled && !splashActive && !gameOver) {
     c.translate(160, 160);
     c.scale(2, 2);
 
-    // BASE: follow logical grid position (p.x/p.y), NOT animated p.currentX/Y
-    let targetX = -(p.x * S + S / 2);
-    let targetY = -(p.y * S + S / 2);
+    // Base target: player center
+    const baseX = -(p.currentX + S / 2);
+    const baseY = -(p.currentY + S / 2);
 
-    // LOOK-AHEAD (still perfect)
+    // JET FUEL MOMENTUM: impulse AHEAD of movement direction
     if (p.moving) {
-        const LOOK = 20;
-        targetX -= p.deltaX * LOOK;
-        targetY -= p.deltaY * LOOK;
+        // Trigger "jet fuel" impulse on direction change or movement start
+        if (p.deltaX !== camera.lastDeltaX || p.deltaY !== camera.lastDeltaY) {
+            // SNAP TO CARDINAL DIRECTIONS ONLY (up/right/down/left)
+            if (Math.abs(p.deltaX) > Math.abs(p.deltaY)) {
+                camera.velocityX = p.deltaX * -5;  // less extreme = stable
+                camera.velocityY = 0;
+            } else {
+                camera.velocityX = 0;
+                camera.velocityY = p.deltaY * -5;
+            }
+        }
+        camera.lastDeltaX = p.deltaX;
+        camera.lastDeltaY = p.deltaY;
+    } else {
+        // Coast gently to stop
+camera.velocityX *= 0.85;  // stops faster = more stable
+camera.velocityY *= 0.85;
     }
 
-    // Legendary 0.12 lerp — now follows smooth grid, not jittery sub-steps
-    camera.x += (targetX - camera.x) * 0.12;
-    camera.y += (targetY - camera.y) * 0.12;
+    // Apply velocity as smooth offset (orbits/coasts)
+    let targetX = baseX + camera.velocityX;
+    let targetY = baseY + camera.velocityY;
 
-    c.translate(Math.round(camera.x), Math.round(camera.y));
+    // Ultra-smooth lerp to target (ignores player janks)
+camera.x += (targetX - camera.x) * 0.35;  // direct but stable
+camera.y += (targetY - camera.y) * 0.35;
+
+    c.translate(Math.floor(camera.x + 0.5), Math.floor(camera.y + 0.5));
 }
     
     // Warden entry flash:
@@ -9584,51 +9600,38 @@ if (map[y][x] === 25) { // Puzzle portal tile
         if (map[y][x] === 23) { // Cursed Ring
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
         }
-        
-        if (inPuzzleRoom) {  
-            // One single blit of the pre-rendered dungeon background
-            c.drawImage(puzzleBgCanvas, 0, 0);
 
-            // Hazards (lava visual)
-            puzzleHazards.forEach(h => {
-                c.drawImage(assets.themes.hell.special, h.x*S, h.y*S, S, S);
-            });
+// ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
+if (inPuzzleRoom && puzzleStaticCanvas) {
+    c.clearRect(0, 0, 320, 320);
+    c.drawImage(puzzleStaticCanvas, 0, 0);
 
-const arrowSprites = {
-        up:    assets.arrow_up,
-        right: assets.arrow_right,
-        down:  assets.arrow_down,
-        left:  assets.arrow_left
-    };
-    
-puzzleArrows.forEach(a => {
-        const sprite = arrowSprites[a.dir];
-        if (sprite?.complete) {
-            c.drawImage(sprite, a.x * S, a.y * S, S, S);
+    // DYNAMIC FLOOR REVEAL: one-frame flash when boulder sinks or moves
+    highlightTiles.forEach(t => {
+        if (Date.now() - t.highlightStart < 500) {
+            c.fillStyle = t.color || 'rgba(100,100,100,0.7)';
+            c.fillRect(t.x * S, t.y * S, S, S);
         }
     });
 
-            // 4. BOULDERS — NOW VISIBLE!
-            puzzleBoulders.forEach(b => {
-                c.drawImage(assets.boulder, b.x*S, b.y*S, S, S);
-            });
+    // Boulders
+    puzzleBoulders.forEach(b => c.drawImage(assets.boulder, b.x * S, b.y * S, S, S));
 
-            // === MULTIPLE HEART FRAMERS (pulsing wave) ===
-            puzzleHeartFramers.forEach((h, i) => {
-                const pulse = 0.9 + 0.1 * Math.sin(performance.now() / 250 + i * 0.3);
-                c.globalAlpha = pulse;
-                c.drawImage(assets.heartFramer, h.x * S, h.y * S, S, S);
-            });
-            c.globalAlpha = 1; // Reset once
+    // Heart framers (pulsing)
+    puzzleHeartFramers.forEach((h, i) => {
+        const pulse = 0.9 + 0.1 * Math.sin(performance.now() / 250 + i * 0.3);
+        c.globalAlpha = pulse;
+        c.drawImage(assets.heartFramer, h.x * S, h.y * S, S, S);
+    });
+    c.globalAlpha = 1;
 
-            // === CHEST — OPENS ONLY WHEN ALL HEARTS COLLECTED ===
-            if (puzzleChest) {
-                const allCollected = puzzleHeartFramers.length === 0;
-                const img = allCollected ? assets.chestOpen : assets.chestClosed;
-                c.drawImage(img, puzzleChest.x*S, puzzleChest.y*S, S, S);
-            }
-        }
-        
+    // Chest
+    if (puzzleChest) {
+        const img = puzzleHeartFramers.length === 0 ? assets.chestOpen : assets.chestClosed;
+        c.drawImage(img, puzzleChest.x * S, puzzleChest.y * S, S, S);
+    }
+}
+                
 // keep a flag that tells the main render loop “the warden is done”
 let wardenFinished = false;
 
@@ -10092,7 +10095,7 @@ if (!inPuzzleRoom) {
         }
     }
 }
-   
+
     // Draw unique monster reveal animation (centered 64x64 overlay)
     if (uniqueMonsterRevealActive) {
         const elapsed = now - uniqueMonsterRevealStartTime;
@@ -10114,7 +10117,7 @@ if (!inPuzzleRoom) {
             c.restore();
         }
     }
-    
+       
 /**
  * Makes pure‑red pixels transparent (α = 0).  
  * Works for desert and ruins – the same color is used for the “eyes” in those PNGs.
