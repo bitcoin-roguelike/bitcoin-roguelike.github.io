@@ -9367,7 +9367,7 @@ if (p.moving) {
     c.fillStyle = splashActive ? '#F7931A' : '#000';
     c.fillRect(0, 0, W * S, H * S);
 
-// ───── 2× ZOOM – PERFECT + CORRECT LOOK-AHEAD (YOU SEE WHERE YOU’RE GOING) ─────
+// ───── 2× ZOOM – FINAL, ULTRA-SMOOTH, NO ROCKY ROAD (PERFECTION v∞) ─────
 if (zoomEnabled && !splashActive && !gameOver) {
     c.save();
     c.imageSmoothingEnabled = false;
@@ -9375,18 +9375,18 @@ if (zoomEnabled && !splashActive && !gameOver) {
     c.translate(160, 160);
     c.scale(2, 2);
 
-    // Base target: player centered
-    let targetX = -(p.currentX + S / 2);
-    let targetY = -(p.currentY + S / 2);
+    // BASE: follow logical grid position (p.x/p.y), NOT animated p.currentX/Y
+    let targetX = -(p.x * S + S / 2);
+    let targetY = -(p.y * S + S / 2);
 
-    // LOOK-AHEAD IN THE DIRECTION YOU’RE MOVING (this is the correct one!)
+    // LOOK-AHEAD (still perfect)
     if (p.moving) {
-        const LOOK = 20;                    // perfect visibility ahead
-        targetX -= p.deltaX * LOOK;         // ← MINUS SIGN = CORRECT DIRECTION
-        targetY -= p.deltaY * LOOK;         // ← MINUS SIGN = CORRECT DIRECTION
+        const LOOK = 20;
+        targetX -= p.deltaX * LOOK;
+        targetY -= p.deltaY * LOOK;
     }
 
-    // The legendary 0.12 lerp — untouched forever
+    // Legendary 0.12 lerp — now follows smooth grid, not jittery sub-steps
     camera.x += (targetX - camera.x) * 0.12;
     camera.y += (targetY - camera.y) * 0.12;
 
