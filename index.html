@@ -1378,7 +1378,6 @@ document.addEventListener('dblclick', (e) => {
     }, { passive: false });
 
 const canvas = document.getElementById('game');
-
 let touchMoveInterval = null; // Global variable for continuous touch movement
 let touchTimeout = null; // Global variable for touch timeout
 let dpadButtons = document.querySelectorAll('#dpad button');
@@ -1406,7 +1405,6 @@ document.querySelectorAll('#actions button').forEach(button => {
 
 const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
-
 let currentTheme = 'dungeon'; // Default theme
 const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
 let initialWaveSpawned = false; // Track if initial wave has spawned
@@ -1945,42 +1943,6 @@ types.forEach(t => {
         });
     }
 });
-
-
-// ───── LAZY ARROW CACHE – CREATED ONLY WHEN FIRST PUZZLE STARTS ─────
-let arrowCache = null;
-
-function createArrowCache() {
-    if (arrowCache) return; // already done
-
-    arrowCache = {};
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = S;
-    tempCanvas.height = S;
-    const ctx = tempCanvas.getContext('2d');
-
-    const rotations = {
-        up: -Math.PI/2,
-        down: Math.PI/2,
-        left: Math.PI,
-        right: 0
-    };
-
-    for (const [dir, rot] of Object.entries(rotations)) {
-        ctx.clearRect(0, 0, S, S);
-        ctx.save();
-        ctx.translate(S/2, S/2);
-        ctx.rotate(rot);
-        ctx.drawImage(assets.arrowTile, -S/2, -S/2, S, S);
-        ctx.restore();
-
-        const cached = document.createElement('canvas');
-        cached.width = S;
-        cached.height = S;
-        cached.getContext('2d').drawImage(tempCanvas, 0, 0);
-        arrowCache[dir] = cached;
-    }
-}
 
 function placeStairs() {
     if (inHideout) {
@@ -8709,7 +8671,6 @@ puzzleBgCanvas.height = 320;
 const puzzleBgCtx = puzzleBgCanvas.getContext('2d'); // default alpha: true (reverted)
 
 function startPuzzleRoom() {
-    createArrowCache(); // ← safe, runs once, only when needed
     inPuzzleRoom = true;
     puzzleReturnPos   = { x: p.x, y: p.y };      // remember where we came from
     puzzlePreviousTheme = currentTheme;         // save original theme
@@ -8794,17 +8755,17 @@ function startPuzzleRoom() {
         }
     }
 
-// Pre-render static dungeon background ONCE (huge mobile perf win)
-puzzleBgCtx.clearRect(0, 0, 320, 320);
-for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-        if (map[y][x] === 0) {
-            puzzleBgCtx.drawImage(assets.themes.dungeon.floor, x * S, y * S, S, S);
-        } else if (map[y][x] === 1) {
-            puzzleBgCtx.drawImage(assets.themes.dungeon.wall, x * S, y * S, S, S);
+// ───── PRE-RENDER THE ENTIRE DUNGEON BACKGROUND ONCE (the fix!) ─────
+    puzzleBgCtx.clearRect(0, 0, 320, 320);
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] === 0) {
+                puzzleBgCtx.drawImage(assets.themes.dungeon.floor, x*S, y*S, S, S);
+            } else if (map[y][x] === 1) {
+                puzzleBgCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
+            }
         }
     }
-}
 
     // UI / log
     document.getElementById('floor-indicator').textContent =
@@ -9613,8 +9574,8 @@ if (map[y][x] === 25) { // Puzzle portal tile
         }
         
         if (inPuzzleRoom) {
-// FAST: blit pre-rendered static background
-c.drawImage(puzzleBgCanvas, 0, 0);
+            // One single blit of the pre-rendered dungeon background
+            c.drawImage(puzzleBgCanvas, 0, 0);
 
             // Hazards (lava visual)
             puzzleHazards.forEach(h => {
@@ -9622,13 +9583,15 @@ c.drawImage(puzzleBgCanvas, 0, 0);
             });
 
             // 3. Arrow tiles
-// FAST + SAFE arrow rotation rendering
-if (arrowCache) {
-    puzzleArrows.forEach(a => {
-        const tile = arrowCache[a.dir];
-        if (tile) c.drawImage(tile, a.x * S, a.y * S, S, S);
-    });
-}
+            puzzleArrows.forEach(a => {
+                c.save();
+                c.translate(a.x*S + S/2, a.y*S + S/2);
+                const rot = {up: -Math.PI/2, down: Math.PI/2, left: Math.PI, right: 0}[a.dir];
+                c.rotate(rot);
+                c.drawImage(assets.arrowTile, -S/2, -S/2, S, S);
+                c.restore();
+            });
+
             // 4. BOULDERS — NOW VISIBLE!
             puzzleBoulders.forEach(b => {
                 c.drawImage(assets.boulder, b.x*S, b.y*S, S, S);
