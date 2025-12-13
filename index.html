@@ -1858,8 +1858,11 @@ assets.chestClosed = new Image();
 assets.chestClosed.src = 'chest_closed.png';
 assets.chestOpen = new Image();
 assets.chestOpen.src = 'chest_open.png';
-assets.arrowTile = new Image();
-assets.arrowTile.src = 'arrow_tile.png'; // will rotate based on direction
+
+assets.arrow_up    = new Image(); assets.arrow_up.src    = 'arrow_up.png';
+assets.arrow_right = new Image(); assets.arrow_right.src = 'arrow_right.png';
+assets.arrow_down  = new Image(); assets.arrow_down.src  = 'arrow_down.png';
+assets.arrow_left  = new Image(); assets.arrow_left.src  = 'arrow_left.png';
 	
 	assets.jeweller.src = 'jeweller.png';
 	assets.blacksmith.src = 'blacksmith.png';
@@ -9573,7 +9576,7 @@ if (map[y][x] === 25) { // Puzzle portal tile
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
         }
         
-        if (inPuzzleRoom) {
+        if (inPuzzleRoom) {  
             // One single blit of the pre-rendered dungeon background
             c.drawImage(puzzleBgCanvas, 0, 0);
 
@@ -9582,15 +9585,19 @@ if (map[y][x] === 25) { // Puzzle portal tile
                 c.drawImage(assets.themes.hell.special, h.x*S, h.y*S, S, S);
             });
 
-            // 3. Arrow tiles
-            puzzleArrows.forEach(a => {
-                c.save();
-                c.translate(a.x*S + S/2, a.y*S + S/2);
-                const rot = {up: -Math.PI/2, down: Math.PI/2, left: Math.PI, right: 0}[a.dir];
-                c.rotate(rot);
-                c.drawImage(assets.arrowTile, -S/2, -S/2, S, S);
-                c.restore();
-            });
+const arrowSprites = {
+        up:    assets.arrow_up,
+        right: assets.arrow_right,
+        down:  assets.arrow_down,
+        left:  assets.arrow_left
+    };
+    
+puzzleArrows.forEach(a => {
+        const sprite = arrowSprites[a.dir];
+        if (sprite?.complete) {
+            c.drawImage(sprite, a.x * S, a.y * S, S, S);
+        }
+    });
 
             // 4. BOULDERS — NOW VISIBLE!
             puzzleBoulders.forEach(b => {
