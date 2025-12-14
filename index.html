@@ -1441,7 +1441,22 @@ let spearHitShakeStart = 0;     // ← ADD THIS LINE
 let spearHitShakeIntensity = 0;
 
 // ─────── ZOOM SYSTEM ───────
-let zoomEnabled = true;          // ← you toggle this later
+// Auto-enable zoom on mobile/touch devices, but respect saved user preference
+let zoomEnabled = false; // Default fallback
+let minimapVisible = zoomEnabled;  // sync with zoom
+
+// Respect saved preference first
+if (localStorage.getItem('zoomEnabled') === 'true') {
+    zoomEnabled = true;
+} else if (localStorage.getItem('zoomEnabled') === 'false') {
+    zoomEnabled = false;
+}
+// Then auto-enable on mobile if no preference saved
+else if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 767) {
+    zoomEnabled = true;
+}
+// Sync minimap visibility
+minimapVisible = zoomEnabled;
 let camera = { x: 0, y: 0 };
 let stairsArrow = null;           // {dx,dy} when stairs are off-screen
 
@@ -1449,8 +1464,6 @@ camera.velocityX = 0;
 camera.velocityY = 0;
 camera.lastDeltaX = 0;
 camera.lastDeltaY = 0;
-
-let minimapVisible = zoomEnabled;  // sync with zoom
 
 let puzzleStaticCanvas = null;
 let puzzleStaticCtx = null;
@@ -1588,13 +1601,6 @@ let portals = []; // Array to store active portal positions and animation state
 let splashActive = true;
 let waveActive = false;
 let musicMuted = localStorage.getItem('musicMuted') === 'true';
-
-// Load saved zoom preference (add this near your other localStorage reads)
-if (localStorage.getItem('zoomEnabled') === 'true') {
-    zoomEnabled = true;
-} else if (localStorage.getItem('zoomEnabled') === 'false') {
-    zoomEnabled = false;
-}
       
 let swordDir = 'right', swordActive = false, swordStart = 0;
 let gameOverSoundPlayed = false;
@@ -5691,9 +5697,9 @@ if (map[ny][nx] === 23) { // Cursed ring
     }
 }
 
-if (map[ny][nx] === 28 && catPos && catPos.x === nx && catPos.y === ny) {
+if (map[p.y][p.x] === 28 && catPos && catPos.x === p.x && catPos.y === p.y) {
     p.soulStormCharges = 256;
-    map[ny][nx] = 0;
+    map[p.y][p.x] = 0;
     catPos = null;
     catVisible = false;
     catAnimStart = 0;
@@ -7619,21 +7625,18 @@ function canShootProjectile() {
 if (p.currentWeapon === 'satoshi_scourge' && !usePickaxeSword) {
     // Prevent spam + cost
     if (p.scourgeCooldown > Date.now()) return;
-    if (p.soulStormCharges < 8) {
-        return;
+    if (p.soulStormCharges >= 8) {
+        p.soulStormCharges -= 8;
+        p.scourgeSpin = { start: Date.now() };
+        p.scourgeCooldown = Date.now() + 600; // 600ms cooldown
+        doScourgeSpinAttack();
+        playScourgeSpin();
+       
+        moveEnemies();
+        updateWisps();
+        needsRedraw = true;
+        return; // Exit early — no other attack
     }
-
-    p.soulStormCharges -= 8;
-    p.scourgeSpin = { start: Date.now() };
-    p.scourgeCooldown = Date.now() + 600; // 600ms cooldown
-
-    doScourgeSpinAttack();
-    playScourgeSpin();
-    
-    moveEnemies();
-    updateWisps();
-    needsRedraw = true;
-    return; // Exit early — no other attack
 }
 
 // ——— SOUL SWORD: 4+ charges → AOE wave + ranged projectile ———
@@ -9148,6 +9151,7 @@ function restart() {
     waypointPos = null;
     p.hasDiamondArmor = false;
     p.hasDiamondHand = false;
+    p.currentWeapon = 'sword';
     p.hasCursedRing = false;
     p.echoWardenBlessingGiven = false;
 p.curseActive = false;  // Lift lingering curse
@@ -10434,6 +10438,32 @@ c.restore();
 
 // Draw fading dangerous spell areas after enemies
 drawFadingDangerousAreas();
+
+// Draw low-health warning border with smooth transition
+if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
+    // Use a smooth, consistent pulse instead of frame-rate dependent flashing
+    const pulse = Math.sin(Date.now() / 100); // Slower, smoother pulse
+    let alpha, color;
+    
+    if (p.hp <= 4) {
+        alpha = 0.5 + 0.1 * pulse; // Smooth red transition (0.7 to 1.0)
+        color = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
+    } else {
+        alpha = 0.5 + 0.1 * pulse; // Smooth orange transition (0.5 to 0.8)
+        color = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 9
+    }
+    
+    c.strokeStyle = color;
+    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
+    c.beginPath();
+    // Draw the border around the entire canvas
+    c.moveTo(0, 0);
+    c.lineTo(W * S, 0);
+    c.lineTo(W * S, H * S);
+    c.lineTo(0, H * S);
+    c.closePath();
+    c.stroke();
+}
 
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
