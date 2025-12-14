@@ -1441,22 +1441,23 @@ let spearHitShakeStart = 0;     // ← ADD THIS LINE
 let spearHitShakeIntensity = 0;
 
 // ─────── ZOOM SYSTEM ───────
-// Auto-enable zoom on mobile/touch devices, but respect saved user preference
-let zoomEnabled = false; // Default fallback
-let minimapVisible = zoomEnabled;  // sync with zoom
+let zoomEnabled = false; // Default: no zoom
+let minimapVisible = false;
 
-// Respect saved preference first
+// Respect saved user preference first
 if (localStorage.getItem('zoomEnabled') === 'true') {
     zoomEnabled = true;
 } else if (localStorage.getItem('zoomEnabled') === 'false') {
     zoomEnabled = false;
 }
-// Then auto-enable on mobile if no preference saved
-else if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 767) {
+// Auto-enable zoom ONLY on phones (small screens + touch), if no preference saved
+else if (window.innerWidth <= 767 && (navigator.maxTouchPoints > 0 || 'ontouchstart' in window)) {
     zoomEnabled = true;
 }
-// Sync minimap visibility
+
+// Final sync
 minimapVisible = zoomEnabled;
+
 let camera = { x: 0, y: 0 };
 let stairsArrow = null;           // {dx,dy} when stairs are off-screen
 
