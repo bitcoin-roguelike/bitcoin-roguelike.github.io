@@ -1437,9 +1437,6 @@ let puzzlePreviousTheme = null;  // remembers theme before entering puzzle porta
 let currentThemeBlock = null;  // 'hell_normal' or 'hell_snowy' for the current 3-floor block
 let puzzleCurrentLayout = null;  // ← ADD THIS
 
-let spearHitShakeStart = 0;     // ← ADD THIS LINE
-let spearHitShakeIntensity = 0;
-
 // ─────── ZOOM SYSTEM ───────
 let zoomEnabled = false; // Default: no zoom
 let minimapVisible = false;
@@ -2623,13 +2620,13 @@ if (!musicMuted && !inPuzzleRoom) {
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
-    
-// Set music volume to 0 when restarting
-setSoundVolume(0);
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
+
+// Restart current music track from the beginning when unmuting
+if (musicManager.current && musicManager.audios[musicManager.current]) {
+    const currentAudio = musicManager.audios[musicManager.current];
+    currentAudio.currentTime = 0;
+}
+localStorage.setItem('musicMuted', 'false');
 fadeSplash();
 setTimeout(() => {
     if (!gameOver && !splashActive) {
@@ -2651,19 +2648,7 @@ setTimeout(() => {
     }
 }, 2000);
     }
-    
-    // Set music volume to max when starting
-if (musicManager.current) {
-    const currentAudio = musicManager.audios[musicManager.current];
-    if (currentAudio) {
-        currentAudio.currentTime = 0;
-        currentAudio.volume = 1;
-    }
-}
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
+
 });
 
 function toggleMute() {
@@ -6164,15 +6149,13 @@ if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast 
 function doScourgeSpinAttack() {
     const dirs = [
         {dx:-1,dy:-1},{dx:0,dy:-1},{dx:1,dy:-1},
-        {dx:-1,dy:0},             {dx:1,dy:0},
+        {dx:-1,dy:0}, {dx:1,dy:0},
         {dx:-1,dy:1}, {dx:0,dy:1},{dx:1,dy:1}
     ];
-
     dirs.forEach(d => {
         const x = p.x + d.dx;
         const y = p.y + d.dy;
         if (x < 0 || x >= W || y < 0 || y >= H || map[y][x] === 1) return;
-
         const enemy = enemies.find(e => e.x === x && e.y === y);
         if (enemy) {
             enemy.hp -= 2;
@@ -6181,10 +6164,36 @@ function doScourgeSpinAttack() {
                 kills[enemy.type.name]++;
                 handleUniqueMonsterReward(enemy);
                 tryDropScroll(enemy.x, enemy.y);
-                if (!enemy.uniqueName && map[y][x] === 0) {
+
+                // Normal sats drop for non-unique enemies (skip Cursed Trader to avoid bitcoin glitch)
+                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && map[y][x] === 0) {
                     map[y][x] = 3;
                     satoshiDrops.push({x, y, sats: enemy.sats, type: enemy.type.name});
                 }
+
+                // Guaranteed Soul Stone drop for Cursed Trader
+                if (enemy.type.name === 'Cursed Trader') {
+                    let placed = false;
+                    if (map[y][x] === 0) {
+                        map[y][x] = 20; // Soul stone tile
+                        placed = true;
+                    } else {
+                        const adjDirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+                        for (let ad of adjDirs) {
+                            let nx = enemy.x + ad.dx, ny = enemy.y + ad.dy;
+                            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                                map[ny][nx] = 20;
+                                placed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (placed) {
+                        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Soul Stone!`);
+                        playWebAudioSound(sounds.pickup);
+                    }
+                }
+
                 enemies = enemies.filter(e => e !== enemy);
             }
         }
@@ -6628,16 +6637,6 @@ if (nx === p.targetTileX && ny === p.targetTileY) {
     const dmg = proj.value === 1 ? 2 : 0;
     p.hp -= dmg;
 
-    // ←←←←←←←←←←←  SPEAR HIT SHAKE  ←←←←←←←←←←←
-    if (dmg > 0) {
-        spearHitShakeIntensity = 1.0;              // full intensity for real hit
-        spearHitShakeStart = Date.now();
-    } else {
-        spearHitShakeIntensity = 0.4;              // lighter shake for blank spear
-        spearHitShakeStart = Date.now();
-    }
-    // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-
     // Decrement shooter ammo
     const shooter = enemies.find(e =>
         e.x === proj.x - (proj.dirX || 0) &&
@@ -6651,10 +6650,8 @@ if (nx === p.targetTileX && ny === p.targetTileY) {
     
     if (dmg > 0) {
         logBattleEvent(`Floor ${floor} - ${shooterName} spear hits! ${dmg} DMG`);
-        spearHitShakeIntensity = 1.0;  // strong shake
     } else {
         logBattleEvent(`Floor ${floor} - ${shooterName} spear flies by!`);
-        spearHitShakeIntensity = 0.6;  // ↑ slightly stronger miss shake (noticeable!)
     }
     playWebAudioSound(sounds.hit);
     updatePlayerState();
@@ -9252,9 +9249,7 @@ waveActive = false;
             audioContext.resume();
         }
 
-        // Set initial volumes
-        setSoundVolume(soundVolume);
-        setMusicVolume(musicVolume);
+localStorage.setItem('musicMuted', 'true');
     } catch (e) {
         console.warn('Error resetting music manager:', e);
     }
@@ -10441,7 +10436,7 @@ c.restore();
 drawFadingDangerousAreas();
 
 // Draw low-health warning border with smooth transition
-if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
+if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive && !zoomEnabled) {
     // Use a smooth, consistent pulse instead of frame-rate dependent flashing
     const pulse = Math.sin(Date.now() / 100); // Slower, smoother pulse
     let alpha, color;
@@ -10511,31 +10506,6 @@ if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUn
 
     updateAndDrawMatrix();  // ← PERFECT SPOT! Magical flames + red balls
 
-// —————————————————————————————
-    // BIT SPEAR HIT SHAKE — FINAL & FLAWLESS
-    // —————————————————————————————
-    if (spearHitShakeStart > 0) {
-        const elapsed = Date.now() - spearHitShakeStart;
-
-        if (elapsed >= 200) {
-            // Shake finished → clean reset once
-            spearHitShakeStart = 0;
-            spearHitShakeIntensity = 0;
-            c.setTransform(1, 0, 0, 1, 0, 0); // Reset any translation if shake was active
-        } else {
-            // Apply shake every frame while active
-            const decay = 1 - (elapsed / 200);
-            let intensity = spearHitShakeIntensity * decay;
-
-            if (intensity > 0.5) {
-                const shake = (intensity - 0.5) * 2; // extra punchy
-                c.translate(
-                    (Math.random() * 2 - 1) * shake * 8,
-                    (Math.random() * 2 - 1) * shake * 6
-                );
-            }
-        }
-    }
 
 // ───── SNOW (snowy hell – zoom-aware, no snapping) ─────
 if (snowyHellActive && snowflakes.length) {
@@ -10818,51 +10788,6 @@ currentTheme = 'dungeon'; // Force default theme on game start
         splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
     }
     
-if (splashActive) {
-        preloadSounds();
-        // Ensure AudioContext is resumed for iOS
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                // Reset music manager state and play music after AudioContext is resumed
-                musicManager.current = null;
-if (!musicMuted && !inPuzzleRoom) {
-    musicManager.play(currentTheme);
-}
-            }).catch(e => console.error('Failed to resume AudioContext:', e));
-        } else {
-            // Reset music manager state on restart
-            musicManager.current = null;
-if (!musicMuted && !inPuzzleRoom) {
-    musicManager.play(currentTheme);
-}
-        }
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
-        fadeSplash();
-        setTimeout(() => {
-            if (!gameOver && !splashActive) {
-                fetchTxs();
-                lastUpdate = Date.now();
-                console.log('Initial fetchTxs triggered after splash, wave=', wave);
-            }
-        }, 2000);
-    }
-    
-    // Set music volume to max when starting
-if (musicManager.current) {
-    const currentAudio = musicManager.audios[musicManager.current];
-    if (currentAudio) {
-        currentAudio.currentTime = 0;
-        currentAudio.volume = 1;
-    }
-}
-// Restore sound volume after preloading
-setTimeout(() => {
-    setSoundVolume(soundVolume);
-}, 100);
-
             fadeSplash();
             setTimeout(() => {
                 if (!gameOver && !splashActive) {
