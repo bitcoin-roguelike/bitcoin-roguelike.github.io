@@ -1935,6 +1935,10 @@ assets.satoshi_scourge.onerror = () => console.error('Failed to load satoshi_sco
 assets.cat = new Image();
 assets.cat.src = 'black_cat.png';
 assets.cat.onerror = () => console.error('Failed to load black_cat.png');
+
+assets.swap = new Image();
+assets.swap.src = 'swap.png';
+assets.swap.onerror = () => console.error('Failed to load swap.png');
 	
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
@@ -2965,10 +2969,19 @@ function initMap() {
 
             // Place blacksmith at a fixed position in the left room
             const blacksmithX = leftRoomX + 4;
-            const blacksmithY = leftRoomY + 3;
+            const blacksmithY = leftRoomY + 2;
             if (map[blacksmithY][blacksmithX] === 0) {
                 map[blacksmithY][blacksmithX] = 15; // Blacksmith
                 blacksmithPos = { x: blacksmithX, y: blacksmithY };
+
+                // Place swap.png just two tiles below the blacksmith
+                const swapX = blacksmithX;
+                const swapY = blacksmithY + 2; // Two tiles below
+                if (map[swapY][swapX] === 0) {
+                    map[swapY][swapX] = 29; // Swap tile
+                } else {
+                    console.warn('Failed to place swap.png: tile occupied at', swapX, swapY);
+                }
             } else {
                 console.warn('Failed to place blacksmith: tile occupied at', blacksmithX, blacksmithY);
             }
@@ -5695,6 +5708,24 @@ if (map[p.y][p.x] === 28 && catPos && catPos.x === p.x && catPos.y === p.y) {
     updatePlayerState();
 }
 
+// Add the swap tile interaction code here
+if (map[ny][nx] === 29) { // Swap tile
+    // Handle weapon swapping
+    if (p.currentWeapon === 'sword') {
+        p.currentWeapon = 'satoshi_scourge';
+        logBattleEvent('Satoshi\'s Scourge equipped');
+    } else if (p.currentWeapon === 'satoshi_scourge') {
+        p.currentWeapon = 'sword';
+        logBattleEvent('Returned to sword');
+    } else if (p.currentWeapon === 'soul_sword') {
+        p.currentWeapon = 'sword';
+        logBattleEvent('Soul Sword dismissed');
+    }
+
+    updatePlayerState();
+    needsRedraw = true;
+}
+
 // Check for unique monster in fog of war
 function checkUniqueMonsterInFog() {
     if (activeUniqueMonsterName) return;
@@ -7903,9 +7934,8 @@ case 'clear':
 case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
-    addTerminalLineToContent('  convert ----- Convert soul stones, shards, wisp');
-    addTerminalLineToContent('  swap -------- Swap weapons');
-    addTerminalLineToContent('  reset ------- Restart current puzzle trial');
+    addTerminalLineToContent('  convert ----- Convert stones etc ..');
+    addTerminalLineToContent('  reset ------- Restart puzzle trial');
     addTerminalLineToContent('  set --------- Settings');
     addTerminalLineToContent('  clear ------- Clear screen');
     addTerminalLineToContent('  leaderboard - View top 10 scores');
@@ -8147,39 +8177,6 @@ case 'reset':
     logBattleEvent("The trial has been reborn from the void...");
     needsRedraw = true;
     closeSoulTerminal();
-    break;
-case 'swap':
-    // Split command and ignore anything after "swap"
-    const cmdParts = command.trim().split(' ');
-    const baseCmd = cmdParts[0].toLowerCase();
-
-    if (baseCmd !== 'swap') break; // safety (should never happen)
-
-    // If player typed extra garbage like "swap balloon" → show usage
-    if (cmdParts.length > 1) {
-        addTerminalLineToContent('Usage: swap');
-        addTerminalLineToContent('No arguments needed.');
-        addTerminalLineToContent('_____________________');
-        addTerminalLineToContent('Type "help" for help.');
-        break;
-    }
-
-    // Normal swap behavior
-    if (p.currentWeapon === 'sword') {
-        p.currentWeapon = 'satoshi_scourge';
-        addTerminalLineToContent('Satoshi\'s Scourge equipped');
-    } 
-    else if (p.currentWeapon === 'satoshi_scourge') {
-        p.currentWeapon = 'sword';
-        addTerminalLineToContent('Returned to sword');
-    } 
-    else if (p.currentWeapon === 'soul_sword') {
-        p.currentWeapon = 'sword';
-        addTerminalLineToContent('Soul Sword dismissed');
-    }
-
-    addTerminalLineToContent('_____________________');
-    addTerminalLineToContent('Type "help" for help.');
     break;
 case 'set':
     if (args.length === 0) {
@@ -9630,6 +9627,9 @@ if (map[y][x] === 25) { // Puzzle portal tile
         }
         if (map[y][x] === 23) { // Cursed Ring
             c.drawImage(assets.cursed_ring, x * S, y * S, S, S);
+        }
+        if (map[y][x] === 29) { // Swap tile
+            c.drawImage(assets.swap, x * S, y * S, S, S);
         }
 
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
