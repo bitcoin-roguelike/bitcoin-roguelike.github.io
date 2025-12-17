@@ -9367,6 +9367,7 @@ function dropSoulStone(x, y) {
 }
 
 function draw() {
+if (!needsRedraw) return;
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
     if (now - lastDrawTime < 50) {
