@@ -4562,23 +4562,6 @@ p.previousY = p.y;
     // Update direction and position (will be interpolated during draw)
     p.anim.direction = newDirection;
     
-    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
-        // Set target position for animation but don't update immediately
-        // Actual position will be updated during interpolation in draw()
-// Animation frame update logic here
-if (p.moving) {
-    const now = performance.now();
-// Cap animation updates to 10 FPS (100ms - doubled interval)
-if (now - p.anim.lastFrameTime >= 50) { // 10 FPS capped
-    p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-    p.anim.lastFrameTime = now;
-}
-} else {
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = performance.now();
-    }
-    }
-    
     if (!map[ny] || map[ny][nx] === undefined) {
         console.error('Invalid map access: nx=', nx, 'ny=', ny);
         initMap();
@@ -4590,22 +4573,6 @@ if (now - p.anim.lastFrameTime >= 50) { // 10 FPS capped
     if (enemies.some(e => e.x === nx && e.y === ny)) {
         needsRedraw = true; // Ensure redraw to reflect new direction
         return;
-    }
-    
-    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] !== 1) {
-        // Actual position update will happen during interpolation in draw()
-// Animation frame update logic here
-if (p.moving) {
-    const now = performance.now();
-    // Cap animation updates to 20 FPS (50ms)
-    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = now;
-    }
-} else {
-            p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-            p.anim.lastFrameTime = performance.now();
-        }
     }
     
     if (!map[ny] || map[ny][nx] === undefined) {
@@ -4675,15 +4642,7 @@ p.anim.direction = newDirection;
     p.moveStartTime = performance.now(); // Track start for smooth lerp
     p.moveDuration = 200; // ms per tile (tune for feel)
 
-// Animation frame update logic here
-if (p.moving) {
-    const now = performance.now();
-    // Half speed animation during movement (10 FPS)
-    if (now - p.anim.lastFrameTime >= 50) {
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = now;
-    }
-}
+
 
         // Apply spell damage when moving onto dangerous areas
         applySpellDamage(p.x, p.y);
@@ -9375,15 +9334,7 @@ function draw() {
     }
     lastDrawTime = now;
     
-// Animation frame update logic here
-if (p.moving) {
-    const now = performance.now();
-    // Cap animation updates to 20 FPS (50ms)
-    if (now - p.anim.lastFrameTime >= 50) { // 20 FPS capped
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = now;
-    }
-}
+
     
     if (!map?.[0] || !p || !enemies || !rooms?.length || !fogMap?.[0]) {
         console.error('Invalid state: map=', map, 'p=', p, 'enemies=', enemies, 'rooms=', rooms, 'fogMap=', fogMap);
@@ -9911,16 +9862,14 @@ for (let y = 0; y < H; y++) {
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
 const now = performance.now();
 // Animation frame update logic here
+// PERFECTLY SYNCED PLAYER ANIM – 200ms full cycle (half visual speed), no drift
+let frameIndex = 0;
 if (p.moving) {
-    // Half speed animation during movement (5 FPS - doubled interval)
-    if (now - p.anim.lastFrameTime >= 50) {
-        p.anim.frameIndex = (p.anim.frameIndex + 1) % 2;
-        p.anim.lastFrameTime = now;
-    }
-} else {
-    // Idle: No animation (fixed frame)
-    p.anim.frameIndex = 0;
+    const progress = Math.min((performance.now() - p.moveStartTime) / p.moveDuration, 1);
+    const eased = 0.5 + 0.5 * Math.sin(Math.PI * progress - Math.PI / 2);
+    frameIndex = Math.floor(eased * 2);  // frame0: first half tile, frame1: second half
 }
+p.anim.frameIndex = frameIndex;  // Update for consistency
         
 let drawX = p.currentX;
 let drawY = p.currentY;
@@ -9931,12 +9880,21 @@ let frameKey = p.hasDiamondArmor ? `diamond_armor_${baseDirection}` : (p.hasArmo
 if (p.isFalling) {
     frameKey = 'fall';
 }
-	const frame = p.anim.frames[frameKey][p.anim.frameIndex];
+// SAFE FRAME ACCESS – prevents crash on missing/invalid frames
+let safeFrameIndex = (p.anim.frameIndex || 0) % 2;  // Clamp 0-1
+let safeFrames = p.anim.frames[frameKey];
+if (!safeFrames || safeFrames.length <= safeFrameIndex || !safeFrames[safeFrameIndex]) {
+    // Fallback: frame 0 of primary direction, or front[0]
+    safeFrameIndex = 0;
+    safeFrames = p.anim.frames[baseDirection] || p.anim.frames.front;
+}
+const frame = safeFrames[safeFrameIndex];
         c.save();
                 
         if (direction === 'left') {
             c.translate(drawX + S, drawY);
             c.scale(-1, 1);
+            
             c.drawImage(frame, 0, 0, S, S);
         } else {
             c.drawImage(frame, drawX, drawY, S, S);
