@@ -3390,8 +3390,8 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
-// 5% chance black cat spawn (once per floor) — NEVER in puzzle rooms
-if (!inHideout && !inPuzzleRoom && Math.random() < 0.05) {
+// 5% chance black cat spawn (once per floor) — NEVER in hideout and NEVER in puzzle rooms
+if (!inHideout && !inPuzzleRoom && currentTheme !== 'hideout' && Math.random() < 0.05) {
     let attempts = 50;
     do {
         const x = Math.floor(Math.random() * W);
@@ -9405,34 +9405,69 @@ if (zoomEnabled && !splashActive && !gameOver) {
     const baseX = -(p.currentX + S / 2);
     const baseY = -(p.currentY + S / 2);
 
-    // JET FUEL MOMENTUM: impulse AHEAD of movement direction
-    if (p.moving) {
-        // Trigger "jet fuel" impulse on direction change or movement start
-        if (p.deltaX !== camera.lastDeltaX || p.deltaY !== camera.lastDeltaY) {
-            // SNAP TO CARDINAL DIRECTIONS ONLY (up/right/down/left)
-            if (Math.abs(p.deltaX) > Math.abs(p.deltaY)) {
-                camera.velocityX = p.deltaX * -5;  // less extreme = stable
-                camera.velocityY = 0;
-            } else {
-                camera.velocityX = 0;
-                camera.velocityY = p.deltaY * -5;
-            }
-        }
-        camera.lastDeltaX = p.deltaX;
-        camera.lastDeltaY = p.deltaY;
-    } else {
-        // Coast gently to stop
-camera.velocityX *= 0.85;  // stops faster = more stable
-camera.velocityY *= 0.85;
-    }
+// CARDINAL-LOCKED CAMERA – locks to player's exact movement axis (no jitter)
+const buffer = 16;           // Natural lag-behind feel
+const deadzone = 6;          // Ignore tiny offsets
+const accel = 0.22;          // Acceleration toward target
+const dampMoving = 0.85;     // Damping while moving
+const dampStopped = 0.78;    // Stronger damping when stopped
+
+// Buffered prediction – center of player + axis-locked lookahead (no cross-axis bleed)
+const playerCenterX = p.currentX + S / 2;
+const playerCenterY = p.currentY + S / 2;
+
+// Determine player's current movement axis (horizontal or vertical)
+const absDeltaX = Math.abs(p.deltaX);
+const absDeltaY = Math.abs(p.deltaY);
+const playerIsHorizontal = absDeltaX > absDeltaY && absDeltaX > 0;
+const playerIsVertical   = absDeltaY > absDeltaX && absDeltaY > 0;
+
+const predX = playerCenterX + (playerIsHorizontal ? p.deltaX * buffer / 2 : 0);
+const predY = playerCenterY + (playerIsVertical   ? p.deltaY * buffer / 2 : 0);
+
+// Offset from current camera center
+let offsetX = predX - (camera.x + 160);
+let offsetY = predY - (camera.y + 160);
+
+// Force lock to player's axis (zero the opposite component)
+if (playerIsHorizontal) {
+    offsetY = 0;
+    camera.velocityY = 0;        // Immediately kill any lingering vertical velocity
+} else if (playerIsVertical) {
+    offsetX = 0;
+    camera.velocityX = 0;        // Immediately kill any lingering horizontal velocity
+}
+
+let dist = Math.sqrt(offsetX*offsetX + offsetY*offsetY);
+
+if (dist > deadzone) {
+    const nx = offsetX / dist || 0;
+    const ny = offsetY / dist || 0;
+
+    camera.velocityX += nx * accel;
+    camera.velocityY += ny * accel;
+}
+
+// Apply damping
+if (p.moving) {
+    camera.velocityX *= dampMoving;
+    camera.velocityY *= dampMoving;
+} else {
+    camera.velocityX *= dampStopped;
+    camera.velocityY *= dampStopped;
+}
+
+// Final apply
+camera.x += camera.velocityX;
+camera.y += camera.velocityY;
 
     // Apply velocity as smooth offset (orbits/coasts)
     let targetX = baseX + camera.velocityX;
     let targetY = baseY + camera.velocityY;
 
-    // Ultra-smooth lerp to target (ignores player janks)
-camera.x += (targetX - camera.x) * 0.35;  // direct but stable
-camera.y += (targetY - camera.y) * 0.35;
+// Smoothly lerp to base position + gentle velocity offset
+camera.x += (targetX + camera.velocityX - camera.x) * 0.22;
+camera.y += (targetY + camera.velocityY - camera.y) * 0.22;
 
     c.translate(Math.floor(camera.x + 0.5), Math.floor(camera.y + 0.5));
 }
