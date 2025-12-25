@@ -1521,6 +1521,9 @@ soulOrbs: 0,
 soulStormCharges: 256, // Track how many charges we have (max 256)
 soulStormCharges: 256,
 currentWeapon: 'sword', // 'sword | soul_sword | satoshi_scourge | etc ..
+coolROI: 0,              // total Cool ROI collected
+farmROI: 0,              // Cool ROI currently placed in the active farm spot (0–∞)
+
 echoWardenBlessingGiven: false,
 
 farmLocked: false,
@@ -1939,6 +1942,10 @@ assets.cat.onerror = () => console.error('Failed to load black_cat.png');
 assets.swap = new Image();
 assets.swap.src = 'swap.png';
 assets.swap.onerror = () => console.error('Failed to load swap.png');
+
+assets.coolROI = new Image();
+assets.coolROI.src = 'Cool_ROI.png';
+assets.coolROI.onerror = () => console.error('Failed to load Cool_ROI.png');
 	
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
@@ -3390,15 +3397,35 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
-// 5% chance black cat spawn (once per floor) — NEVER in hideout and NEVER in puzzle rooms
-if (!inHideout && !inPuzzleRoom && currentTheme !== 'hideout' && Math.random() < 0.05) {
+// Cool ROI drop – 2.5% chance on any normal floor (not hideout or puzzle)
+if (!inHideout && !inPuzzleRoom && Math.random() < 0.025) {
     let attempts = 50;
     do {
         const x = Math.floor(Math.random() * W);
         const y = Math.floor(Math.random() * H);
-        if (map[y][x] === 0 && 
-            !(x === p.x && y === p.y) && 
-            Math.abs(x - p.x) > 3 && 
+        if (map[y][x] === 0 && !(x === p.x && y === p.y)) {
+            map[y][x] = 30; // new tile ID for Cool ROI
+            logBattleEvent(`Floor ${floor} - A magical Cool ROI bean appears!`);
+            break;
+        }
+        attempts--;
+    } while (attempts > 0);
+}
+
+// 5% chance black cat spawn (once per floor) — NEVER in hideout, puzzle rooms, or Glitch Zone
+if (!inHideout && 
+    !inPuzzleRoom && 
+    currentTheme !== 'hideout' && 
+    exit === null && 
+    puzzleStaticCanvas === null && 
+    Math.random() < 0.05) {
+    let attempts = 50;
+    do {
+        const x = Math.floor(Math.random() * W);
+        const y = Math.floor(Math.random() * H);
+        if (map[y][x] === 0 &&
+            !(x === p.x && y === p.y) &&
+            Math.abs(x - p.x) > 3 &&
             Math.abs(y - p.y) > 3) {
             map[y][x] = 28; // Cat tile
             catPos = {x, y};
@@ -3409,6 +3436,10 @@ if (!inHideout && !inPuzzleRoom && currentTheme !== 'hideout' && Math.random() <
         attempts--;
     } while (attempts > 0);
 }
+// Memory cleanup: clear old cat state on new floor to prevent carry-over
+catPos = null;
+catVisible = false;
+catAnimStart = 0;
 
 // Initialize dangerous areas array for spells
 dangerousAreas = [];
@@ -5438,49 +5469,84 @@ if (map[ny][nx] === 22 && !inHideout) { // Shrine tile
 
 if (map[ny][nx] === 27 && inPuzzleRoom && farmSpot && farmSpot.x === nx && farmSpot.y === ny) {
     const rawSats = Object.values(satsEarned).reduce((sum, v) => sum + v, 0);
-
-    if (!p.farmLocked) {
-        // PLANT: First time stepping on it
-        p.farmLockedSats = rawSats;
-        // ZERO OUT ALL CURRENT SATS
-        Object.keys(satsEarned).forEach(key => satsEarned[key] = 0);
-        updateSatsDisplay();
-
-        p.farmLocked = true;
-        p.farmLockedFloor = floor;
-
-        logBattleEvent(`Floor ${floor} - SATS planted! 2× in 50 floors.`);
-        playWebAudioSound(sounds.pickup);
-    }
-    else if (floor >= p.farmLockedFloor + 50) {
-        // HARVEST: Ready after 50 floors
-        const harvest = p.farmLockedSats * 2;
-        satsEarned.Farm = (satsEarned.Farm || 0) + harvest;
-
+if (!p.farmLocked) {
+    // Can only plant if player has at least 1 Cool ROI
+    if (p.coolROI < 1) {
         const floorIndicator = document.getElementById('floor-indicator');
-        floorIndicator.textContent = `Farm: HARVEST!`;
-        setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 2000);
-
-        logBattleEvent(`Floor ${floor} - HARVEST! +${harvest} sats (2×)`);
-        playWebAudioSound(sounds.pickup);
-        updateSatsDisplay();
-
-        // Reset farm
-        p.farmLocked = false;
-        p.farmLockedFloor = 0;
-        p.farmLockedSats = 0;
+        floorIndicator.textContent = `Farm: Need Cool ROI!`;
+        setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 3000);
+        logBattleEvent(`Floor ${floor} - Farm locked — find a Cool ROI first!`);
+        return;
     }
-    else {
-        // GROWING: Still waiting
-        const floorsLeft = p.farmLockedFloor + 50 - floor;
+
+    // PLANT: First visit – take half the sats, lock the rest
+    const halfSats = Math.floor(rawSats / 2);
+    p.farmLockedSats = halfSats;           // store the locked half
+    // Zero current sats and give player the other half immediately
+    Object.keys(satsEarned).forEach(key => satsEarned[key] = 0);
+    if (halfSats > 0) {
+        satsEarned.Farm = (satsEarned.Farm || 0) + halfSats;
+    }
+    updateSatsDisplay();
+    p.farmLocked = true;
+    p.farmLockedFloor = floor;
+    logBattleEvent(`Floor ${floor} - BTC planted! Half kept, half locked. Return later for 2× total.`);
+    playWebAudioSound(sounds.pickup);
+    // Graphics handled on room entry — no redraw here
+} else {
+    // REVISIT: Check if on a different floor than when planted
+    if (floor === p.farmLockedFloor) {
+        // Same floor → blocked
         const floorIndicator = document.getElementById('floor-indicator');
-        floorIndicator.textContent = `Farm: ${floorsLeft} floors left`;
-        setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 2000);
-
-        logBattleEvent(`Floor ${floor} - Growing... ${floorsLeft} floors left.`);
+        floorIndicator.textContent = `Farm: Come back later!`;
+        setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 3000);
+        logBattleEvent(`Floor ${floor} - Farm not ready yet — visit on a different floor.`);
+        return;
     }
 
+    // Different floor → mature and harvest
+    // Real fee: start at 49% with 1 Cool ROI, reduce 1% per Cool ROI, never below 25%
+    let feePercent = 49 - (p.coolROI - 1) * 1; // 49% at 1 ROI, 48% at 2, etc.
+    feePercent = Math.max(25, feePercent); // cap at minimum 25%
+    const multiplier = (100 - feePercent) / 100; // e.g., 25% fee → 0.75x harvest
+    const harvest = Math.floor(p.farmLockedSats * 2 * multiplier);
+    satsEarned.Farm = (satsEarned.Farm || 0) + harvest;
+    const floorIndicator = document.getElementById('floor-indicator');
+    // Show ROI: BTC if ≥ 100,000 sats (0.001 BTC), else sats
+    const btc = harvest / 100000000;
+    const displayText = harvest >= 100000 ? `ROI: ${btc.toFixed(3)} BTC` : `ROI: ${harvest} sats`;
+    floorIndicator.textContent = displayText;
+    setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 3000);
+    logBattleEvent(`Floor ${floor} - Farm matured! +${harvest} sats (fee ${feePercent}%)`);
+    playWebAudioSound(sounds.pickup);
+    updateSatsDisplay();
+
+    // Immediately switch matured farmSpot2 → empty farmSpot1 (dirt) in real-time
+    if (puzzleStaticCtx) {
+        puzzleStaticCtx.drawImage(assets.farmSpot1, nx * S, ny * S, S, S);
+    }
+
+    // Reset farm state
+    p.farmLocked = false;
+    p.farmLockedFloor = 0;
+    p.farmLockedSats = 0;
+    p.farmROI = 0;
+}
     // Allow player to stand on the tile
+    return;
+}
+
+// Cool ROI pickup
+if (map[ny][nx] === 30) {
+    p.coolROI++;
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Floor ${floor} - Cool ROI collected! (${p.coolROI} total)`);
+    // If we have an active farm, automatically place one if possible
+    if (p.farmLocked && p.farmROI === undefined) p.farmROI = 0; // init if needed
+    if (p.farmLocked) p.farmROI++;
+    updatePlayerState();
+    needsRedraw = true;
     return;
 }
 
@@ -5612,7 +5678,7 @@ if (map[ny][nx] === 18 && inHideout) { // Hooded Heirloom
             }
         }
 
-// Puzzle: Collect heart framers
+// Puzzle: Collect Heart Keys
 if (inPuzzleRoom) {
     const heartIndex = puzzleHeartFramers.findIndex(h => h.x === p.x && h.y === p.y);
     if (heartIndex !== -1) {
@@ -5622,7 +5688,7 @@ if (inPuzzleRoom) {
         const totalHearts = puzzleHeartFramers.length + 1; // +1 because we just picked one up
         const collected = totalHearts - puzzleHeartFramers.length;
 
-        logBattleEvent(`Heart Framer ${collected}/${totalHearts} collected!`);
+        logBattleEvent(`Heart Key ${collected}/${totalHearts} collected!`);
         needsRedraw = true;
     }
 
@@ -7805,6 +7871,9 @@ checkRunewords();
     addTerminalLineToContent(`Soul Shards: ${p.soulShards}`);
     addTerminalLineToContent(`Soul Orbs: ${p.soulOrbs}`);
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
+let fee = p.coolROI > 0 ? 49 - (p.coolROI - 1) * 1 : 50; // 49% at 1 ROI, 50% if none
+fee = Math.max(25, fee); // cap at minimum 25%
+addTerminalLineToContent(`Farm Spot Fee: ${fee}%`);
     addTerminalLineToContent('');
 
     // Display regular inventory items
@@ -8112,10 +8181,11 @@ case 'reset':
             if (map[y][x] === 1) puzzleStaticCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
             if (map[y][x] === 6) puzzleStaticCtx.drawImage(assets.themes.hell.special, x*S, y*S, S, S);
             if (map[y][x] === 19) puzzleStaticCtx.drawImage(assets.soul_stash, x*S, y*S, S, S);
-            if (map[y][x] === 27) {
-                const img = (p.farmLocked && floor >= p.farmLockedFloor + 50) ? assets.farmSpot2 : assets.farmSpot1;
-                puzzleStaticCtx.drawImage(img, x*S, y*S, S, S);
-            }
+if (map[y][x] === 27) {
+    // Choose farm spot image based on farm state
+    const img = p.farmLocked && floor > p.farmLockedFloor ? assets.farmSpot2 : assets.farmSpot1;
+    puzzleStaticCtx.drawImage(img, x * S, y * S, S, S);
+}
         }
     }
 
@@ -8743,11 +8813,21 @@ for (let y = 0; y < H; y++) {
         if (map[y][x] === 1) puzzleStaticCtx.drawImage(assets.themes.dungeon.wall, x*S, y*S, S, S);
         if (map[y][x] === 6) puzzleStaticCtx.drawImage(assets.themes.hell.special, x*S, y*S, S, S);
         if (map[y][x] === 19) puzzleStaticCtx.drawImage(assets.soul_stash, x*S, y*S, S, S);
-        if (map[y][x] === 27) {
-            // Use farmSpot2 if mature, else farmSpot1
-            const img = (p.farmLocked && floor >= p.farmLockedFloor + 50) ? assets.farmSpot2 : assets.farmSpot1;
-            puzzleStaticCtx.drawImage(img, x*S, y*S, S, S);
+if (map[y][x] === 27) {
+    let img = assets.farmSpot1; // default: empty dirt
+
+    if (p.farmLocked) {
+        // Farm is still active (waiting for harvest)
+        // Show matured version ONLY while waiting on a later floor
+        if (floor > p.farmLockedFloor) {
+            img = assets.farmSpot2;
         }
+        // else: still on planting floor → show farmSpot1 (just planted)
+    }
+    // If not locked → already harvested → stay farmSpot1 (empty)
+
+    puzzleStaticCtx.drawImage(img, x * S, y * S, S, S);
+}
     }
 }
 
@@ -8774,6 +8854,10 @@ for (let y = 0; y < H; y++) {
 }
 
 function finishPuzzleRoom() {
+// Force clear cat in Glitch Zone transition
+catPos = null;
+catVisible = false;
+catAnimStart = 0;
     logBattleEvent("The ancient chest opens... power surges through you!");
     if (wisps.length > 0) wispSpeak('victory');
 
@@ -9617,6 +9701,9 @@ if (map[y][x] === 25) { // Puzzle portal tile
         if (map[y][x] === 29) { // Swap tile
             c.drawImage(assets.swap, x * S, y * S, S, S);
         }
+        if (map[y][x] === 30) {
+            c.drawImage(assets.coolROI, x * S, y * S, S, S);
+        }
 
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
 if (inPuzzleRoom && puzzleStaticCanvas) {
@@ -9634,7 +9721,7 @@ if (inPuzzleRoom && puzzleStaticCanvas) {
     // Boulders
     puzzleBoulders.forEach(b => c.drawImage(assets.boulder, b.x * S, b.y * S, S, S));
 
-    // Heart framers (pulsing)
+    // Heart Key (pulsing)
     puzzleHeartFramers.forEach((h, i) => {
         const pulse = 0.9 + 0.1 * Math.sin(performance.now() / 250 + i * 0.3);
         c.globalAlpha = pulse;
@@ -9810,11 +9897,6 @@ for (let y = 0; y < H; y++) {
         if (map[y][x] === 22 && isVisible) { // Shrine tile
             c.drawImage(assets.shrine, x * S, y * S, S, S);
             needsRedraw = true; // Add this to ensure proper redraw after shrine drawing
-        }
-        
-        if (map[y][x] === 27 && farmSpot && farmSpot.x === x && farmSpot.y === y && isVisible) {
-            const mature = p.farmLocked && floor >= p.farmLockedFloor + 50;
-            c.drawImage(mature ? assets.farmSpot2 : assets.farmSpot1, x * S, y * S, S, S);
         }
     }
 }
