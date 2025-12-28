@@ -1080,18 +1080,28 @@ function getScoreWithMultiplier(rawScore, currentFloor) {
 // Modified submitScore function with nearest name matching and random fallback
 async function submitScore() {
     if (!gameOver) return;
+
+    // Prevent double submission
     if (scoreSubmitted) {
         document.getElementById('leaderboard-output').textContent = 'Score already submitted for this game!';
         document.getElementById('leaderboard-output').style.display = 'block';
         console.log('Score submission blocked: already submitted');
         return;
     }
+
     if (floor < 3) {
         document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
         document.getElementById('leaderboard-output').style.display = 'block';
         console.log('Score submission blocked: floor=', floor, '< 3');
         return;
     }
+
+    // Disable the button immediately to prevent accidental double-clicks
+    const submitButton = document.getElementById('submit-score');
+    submitButton.disabled = true;
+    submitButton.style.background = '#666';
+    submitButton.textContent = 'Submitted';
+
     let username = document.getElementById('username-input').value.trim();
     if (!username) {
         // Select random name if input is empty
@@ -1100,7 +1110,7 @@ async function submitScore() {
     } else if (!names.includes(username)) {
         // Find the closest matching name using enhanced algorithm
         const closestName = findClosestName(username, names);
-        
+       
         // Check if we found a match and it's different from input
         if (closestName !== username && closestName.toLowerCase() !== username.toLowerCase()) {
             console.log(`Username '${username}' matched to '${closestName}'`);
@@ -1111,49 +1121,51 @@ async function submitScore() {
             console.log(`Username '${username}' not matched, selected random name: '${username}'`);
         }
     }
+
     const totalSats = Object.values(satsEarned).reduce((sum, val) => sum + val, 0);
-    // NEW: calculate the leaderboard score with the floor multiplier
     const leaderboardScore = getScoreWithMultiplier(totalSats, floor);
+
     try {
-    const response = await fetch(`${API_URL}?action=submit`, {
-        method: 'POST',
-        headers,
-        // send the multiplied score
-        body: JSON.stringify({ username, score: leaderboardScore, floor })
-    });
-      if (response.status === 429) {
-        console.error('Rate limit exceeded for submitting scores');
-        return;
-      }
-      if (!response.ok) {
-        console.error(`POST Status: ${response.status}, Response: ${await response.text()}`);
-        return;
-      }
+        const response = await fetch(`${API_URL}?action=submit`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ username, score: leaderboardScore, floor })
+        });
+
+        if (response.status === 429) {
+            console.error('Rate limit exceeded for submitting scores');
+            throw new Error('Rate limited');
+        }
+
+        if (!response.ok) {
+            const text = await response.text();
+            console.error(`POST Status: ${response.status}, Response: ${text}`);
+            throw new Error(`Server error ${response.status}`);
+        }
+
         const text = await response.text();
         console.log(`POST Status: ${response.status}, Response: ${text}`);
+
         let data;
         try {
             data = text ? JSON.parse(text) : {};
         } catch (e) {
             data = { raw: text };
         }
-        if (response.ok) {
-            scoreSubmitted = true;
-            document.getElementById('submit-score').disabled = true;
-            document.getElementById('submit-score').style.background = '#666';
-            document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${leaderboardScore} sats (Floor ${floor})`;
-            document.getElementById('leaderboard-output').style.display = 'block';
-            
-            await fetchLeaderboard(username, leaderboardScore, floor);
-        } else {
-            document.getElementById('leaderboard-output').textContent = `Error: ${response.status} ${JSON.stringify(data, null, 2)}`;
-            if (response.status === 400 && text.includes('new row violates row-level security policy')) {
-                document.getElementById('leaderboard-output').textContent = 'Submission blocked: Must reach at least Floor 3!';
-            }
-            document.getElementById('leaderboard-output').style.display = 'block';
-        }
+
+        scoreSubmitted = true;
+        document.getElementById('leaderboard-output').textContent = `Score submitted: ${username}, ${leaderboardScore} sats (Floor ${floor})`;
+        document.getElementById('leaderboard-output').style.display = 'block';
+
+        await fetchLeaderboard(username, leaderboardScore, floor);
+
     } catch (error) {
-        document.getElementById('leaderboard-output').textContent = `Fetch error: ${error.message}`;
+        // Re-enable button on any error so player can try again
+        submitButton.disabled = false;
+        submitButton.style.background = '#ff8c00';
+        submitButton.textContent = 'Submit Score';
+
+        document.getElementById('leaderboard-output').textContent = `Error: ${error.message}`;
         document.getElementById('leaderboard-output').style.display = 'block';
     }
 }
@@ -4280,7 +4292,7 @@ if (enemy.type.name === 'Cursed Trader') {
                 logBattleEvent(`Floor ${floor} - ${enemy.type.name} destroyed!`);
 let dropPlaced = false;
 
-// Skip bitcoin drop for uniques/Cursed Trader
+// No sats/BTC drop for uniques OR Cursed Trader — they are not blockchain natives
 if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
     if (map[enemy.y][enemy.x] === 0) {
         map[enemy.y][enemy.x] = 3;
@@ -4307,10 +4319,9 @@ if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
             }
         }
     }
-} else if (enemy.type.name === 'Cursed Trader') {
-    // Explicit no-drop for Cursed Trader (prevents visual bitcoin.png glitch)
-    dropPlaced = false;
 }
+// No else needed — uniques and Cursed Trader drop nothing (no visual glitch)
+dropPlaced = dropPlaced || false; // ensure defined if no drop
 
                 // Cursed Ring drop (50% for Cursed Trader only, even in blast)
                 if (enemy.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
@@ -7049,38 +7060,40 @@ function handleUniqueMonsterReward(hit) {
         }
     }
     
-    if (dropPlaced) {
-        const rewardBtc = reward / 1e8;
-        const [displayAmount, displayUnit] = rewardBtc < 1 ? [Math.round(reward), 'sats'] : [rewardBtc.toFixed(2), 'BTC'];
-        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated! Reward: ${displayAmount} ${displayUnit}`);
-
-        // Clear harbinger message if it was active for this monster
-        const floorIndicator = document.getElementById('floor-indicator');
-        if (floorIndicator.textContent === "A harbinger of doom is near.") {
-            floorIndicator.textContent = `Floor ${floor}`;
-        }
-        activeUniqueMonsterName = null; // Also clear any lingering visible name
-        // Also add to satsEarned for proper display (skip Cursed Trader)
-        if (hit.type.name !== 'Cursed Trader') {
-            satsEarned[hit.type.name] += reward;
-        }
-        updateSatsDisplay();
-    } else {
-        logBattleEvent(`Floor ${floor} - Unique monster ${hit.uniqueName} defeated!`);
+    // Tag all areas with this monster's death timestamp for global fadeout/removal
+    if (hit.uniqueName && hit.spell) {
+        const deathTime = Date.now();
+        dangerousAreas.forEach(area => {
+            if (area.spellType === hit.spell) {
+                area.deathTime = deathTime; // Tag for fadeout
+            }
+        });
     }
-    
-// Tag all areas with this monster's death timestamp for global fadeout/removal
-if (hit.uniqueName && hit.spell) {
-    const deathTime = Date.now();
-    dangerousAreas.forEach(area => {
-        if (area.spellType === hit.spell) {
-            area.deathTime = deathTime; // Tag for fadeout
-        }
-    });
-    
 
-}
-    
+    // === UNIQUE REWARD MESSAGE ===
+    const multiplier = Math.round(randomMultiplier * 10) / 10; // e.g., 2.7x
+    const rewardBtc = reward / 100000000;
+    const displayAmount = rewardBtc >= 0.001 
+        ? rewardBtc.toFixed(3) + ' BTC' 
+        : Math.round(reward) + ' sats';
+
+    logBattleEvent(`UNIQUE: ${hit.uniqueName} defeated!`);
+    logBattleEvent(`Multiplier: ${multiplier}x`);
+    logBattleEvent(`Reward: ${displayAmount}`);
+
+    // Add reward to earned stats (skip Cursed Trader)
+    if (hit.type.name !== 'Cursed Trader') {
+        satsEarned[hit.type.name] = (satsEarned[hit.type.name] || 0) + reward;
+        updateSatsDisplay();
+    }
+
+    // Clear harbinger if it was this monster
+    const floorIndicator = document.getElementById('floor-indicator');
+    if (floorIndicator.textContent === "A harbinger of doom is near.") {
+        floorIndicator.textContent = `Floor ${floor}`;
+    }
+    activeUniqueMonsterName = null;
+
     return true;
 }
 
@@ -7344,29 +7357,31 @@ if (hit) {
 handleUniqueMonsterReward(enemy);
 tryDropScroll(enemy.x, enemy.y);
                         
-                        // Drop satoshi
-                        if (map[enemy.y][enemy.x] === 0) {
-                            map[enemy.y][enemy.x] = 3;
-                            satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
-                            dropPlaced = true;
-                        } else {
-                            const adjacent = [
-                                {x: enemy.x, y: enemy.y - 1},
-                                {x: enemy.x, y: enemy.y + 1},
-                                {x: enemy.x - 1, y: enemy.y},
-                                {x: enemy.x + 1, y: enemy.y}
-                            ];
-                            for (const pos of adjacent) {
-                                const nx = pos.x, ny = pos.y;
-                                if (
-                                    nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                                    map[ny][nx] === 0 &&
-                                    !enemies.some(e => e.x === nx && e.y === ny)
-                                ) {
-                                    map[ny][nx] = 3;
-                                    satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
-                                    dropPlaced = true;
-                                    break;
+                        // Drop satoshi — ONLY for normal blockchain enemies (not uniques or Cursed Trader)
+                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
+                            if (map[enemy.y][enemy.x] === 0) {
+                                map[enemy.y][enemy.x] = 3;
+                                satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                                dropPlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: enemy.x, y: enemy.y - 1},
+                                    {x: enemy.x, y: enemy.y + 1},
+                                    {x: enemy.x - 1, y: enemy.y},
+                                    {x: enemy.x + 1, y: enemy.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (
+                                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                        map[ny][nx] === 0 &&
+                                        !enemies.some(e => e.x === nx && e.y === ny)
+                                    ) {
+                                        map[ny][nx] = 3;
+                                        satoshiDrops.push({x: nx, y: ny, sats: enemy.sats, type: enemy.type.name});
+                                        dropPlaced = true;
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -8683,15 +8698,15 @@ S............#
 F............#
 ##############`,
 `##############
-##HL.L..L.LH##
-###L.L..L.L###
-####.L..L.####
+##L.L....L.L##
+###HLL..L.L###
+####.L..LH####
 #####L..L#####
 ######..######
 #.....@......#
-#.B........B.#
+#.B..........#
 #............#
-S.B...HC...B.#
+S.....HC...B.#
 F............#
 ##############`,
 `##############
@@ -8736,7 +8751,7 @@ F............#
 #..##LLLLL##.#
 #..#H<...<H#.#
 #..#HH#B#HH#.#
-#..#HHLLLHH#.#
+#..<HHLLLHH#.#
 #..#LLLCLLL#.#
 #..#.......#.#
 S..#...B...#.#
@@ -10034,8 +10049,8 @@ let wardenFinished = false;
 if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.y === y) {
     const age = Date.now() - echoWardenPos.spawnTime;
     const spawnDuration = 1200;
-    const holdDuration   = 3800;
-    const fadeOutDuration = 1500;
+    const holdDuration   = 1800;
+    const fadeOutDuration = 1000;
 
     // -------------------------------------------------
     // 1️⃣  End‑of‑life handling – *do not* touch the map yet
