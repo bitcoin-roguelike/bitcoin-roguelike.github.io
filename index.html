@@ -7981,7 +7981,8 @@ case 'clear':
 case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
-    addTerminalLineToContent('  convert ----- Convert stones etc ..');
+    addTerminalLineToContent('  convert ----- Convert stones, shards');
+    addTerminalLineToContent('  ------------> Or resurrect your wisp');
     addTerminalLineToContent('  reset ------- Restart puzzle trial');
     addTerminalLineToContent('  set --------- Settings');
     addTerminalLineToContent('  clear ------- Clear screen');
@@ -7994,7 +7995,7 @@ case 'convert':
             if (args.length === 0) {
                 addTerminalLineToContent('Usage: convert stones [count]');
                 addTerminalLineToContent('Usage: convert shards [count]');
-                addTerminalLineToContent('Usage: convert wisp [count]');
+                addTerminalLineToContent('Usage: convert wisp');
                 addTerminalLineToContent('_____________________');
                 addTerminalLineToContent('Type "help" for help.');
             } else {
@@ -8082,7 +8083,7 @@ case 'convert':
                                 anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 },
                                 lastPos: null
                             });
-                            addTerminalLineToContent('10 Soul Orbs consumed – a loyal wisp has been resurrected!');
+                            addTerminalLineToContent('10 Soul Orbs consumed – a loyal wisp came back to life!');
                             logBattleEvent(`Floor ${floor} - Wisp resurrected from the Soul Terminal!`);
                             playWebAudioSound(sounds.pickup);
                             setTimeout(() => playWebAudioSound(sounds.pickup), 100);
@@ -10050,7 +10051,7 @@ if (map[y][x] === 24 && echoWardenPos && echoWardenPos.x === x && echoWardenPos.
     const age = Date.now() - echoWardenPos.spawnTime;
     const spawnDuration = 1200;
     const holdDuration   = 1800;
-    const fadeOutDuration = 1000;
+    const fadeOutDuration = 1500;
 
     // -------------------------------------------------
     // 1️⃣  End‑of‑life handling – *do not* touch the map yet
@@ -10817,30 +10818,53 @@ c.restore();
 // Draw fading dangerous spell areas after enemies
 drawFadingDangerousAreas();
 
-// Draw low-health warning border with smooth transition
-if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive && !zoomEnabled) {
-    // Use a smooth, consistent pulse instead of frame-rate dependent flashing
-    const pulse = Math.sin(Date.now() / 100); // Slower, smoother pulse
+// Low-health warning — full border for non-zoom, camera-following inner frame for zoom
+if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
+    const pulse = Math.sin(Date.now() / 100);
     let alpha, color;
-    
+
     if (p.hp <= 4) {
-        alpha = 0.5 + 0.1 * pulse; // Smooth red transition (0.7 to 1.0)
-        color = `rgba(255, 0, 0, ${alpha})`; // Red border for hp <= 4
+        alpha = 0.5 + 0.1 * pulse;
+        color = `rgba(255, 0, 0, ${alpha})`; // Critical red
     } else {
-        alpha = 0.5 + 0.1 * pulse; // Smooth orange transition (0.5 to 0.8)
-        color = `rgba(255, 165, 0, ${alpha})`; // Bitcoin orange border for 4 < hp < 9
+        alpha = 0.5 + 0.1 * pulse;
+        color = `rgba(255, 165, 0, ${alpha})`; // Warning orange
     }
-    
+
     c.strokeStyle = color;
-    c.lineWidth = Math.max(5, window.innerWidth > 700 ? 10 : 5); // Responsive thickness
-    c.beginPath();
-    // Draw the border around the entire canvas
-    c.moveTo(0, 0);
-    c.lineTo(W * S, 0);
-    c.lineTo(W * S, H * S);
-    c.lineTo(0, H * S);
-    c.closePath();
-    c.stroke();
+    c.lineWidth = 8;
+
+    if (!zoomEnabled) {
+        // Full-canvas border (non-zoom)
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.lineTo(W * S, 0);
+        c.lineTo(W * S, H * S);
+        c.lineTo(0, H * S);
+        c.closePath();
+        c.stroke();
+    } else {
+        // Zoom mode: inner warning frame that follows the camera
+        c.save();
+        // Undo the zoom scale and translation so we draw in screen space
+        c.restore(); // temporarily exit zoom context
+        c.setTransform(1, 0, 0, 1, 0, 0); // reset to identity
+
+        const padding = 0;
+        c.beginPath();
+        c.moveTo(padding, padding);
+        c.lineTo(320 - padding, padding);
+        c.lineTo(320 - padding, 320 - padding);
+        c.lineTo(padding, 320 - padding);
+        c.closePath();
+        c.stroke();
+
+        // Re-enter zoom context for the rest of the frame
+        c.save();
+        c.translate(160, 160);
+        c.scale(2, 2);
+        c.translate(Math.floor(camera.x + 0.5), Math.floor(camera.y + 0.5));
+    }
 }
 
     document.getElementById('potions').textContent = p.potions;
