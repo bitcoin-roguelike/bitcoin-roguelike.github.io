@@ -4550,10 +4550,14 @@ if (inPuzzleRoom) {
                     // ——— NORMAL PUSH ———
                     const oldX = boulder.x;
                     const oldY = boulder.y;
-
-                    // Patch old position
+                    // Patch old position (restore underlying floor/arrow)
                     patchStaticCanvas(oldX, oldY);
-
+                    // If the push destination had an arrow tile underneath, clear it
+                    if (puzzleArrows.some(a => a.x === pushX && a.y === pushY)) {
+                        puzzleArrows = puzzleArrows.filter(a => !(a.x === pushX && a.y === pushY));
+                        // Patch the destination to plain floor (arrow is gone)
+                        puzzleStaticCtx.drawImage(assets.themes.dungeon.floor, pushX * S, pushY * S, S, S);
+                    }
                     // Move boulder
                     map[oldY][oldX] = 0;
                     map[pushY][pushX] = 26;
