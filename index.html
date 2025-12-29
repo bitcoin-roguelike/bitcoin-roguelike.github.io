@@ -2975,10 +2975,6 @@ function updateSnowState() {
 
 function initMap() {
     try {
-    // Prevent full reset when returning from puzzle room
-    if (previousFloorState && previousFloorState.savedRuinsRain && currentTheme === 'ruins') {
-        return;  // skip reset — restoration already handled in finishPuzzleRoom
-    }
         if (inHideout) {
             currentTheme = 'hideout';
             updateSnowState();
@@ -3139,6 +3135,7 @@ if (floor % 3 === 0 && floor > 1) {
 
 const newTheme = selectNewTheme(currentTheme);
 
+// DEBUG THEME
 //let newTheme;
 //if (floor === 3) {
 //    newTheme = 'ruins';  // DEBUG: Force ruins on floor 3
@@ -5547,7 +5544,8 @@ if (map[ny][nx] === 12 && !inHideout) {
     }
 
     inHideout = true;
-    initMap();
+    initMap();  // this actually switches to hideout map/theme
+    needsRedraw = true;  // force immediate redraw
     return;
 }
 // Puzzle Portal — Enter the trial!
@@ -5599,6 +5597,16 @@ if (map[ny][nx] === 25) {
                 waveActive = previousFloorState.waveActive;
 currentTheme = previousFloorState.currentTheme;
 updateSnowState();
+
+        // Restore rainy ruins if saved before hideout
+        if (previousFloorState.savedRuinsRain) {
+            ruinsRainActive = true;
+            ruinsRainAngle = previousFloorState.savedRuinsRain.angle;
+            raindrops = previousFloorState.savedRuinsRain.drops.map(d => ({ ...d }));
+            floorSplashes = previousFloorState.savedRuinsRain.splashes.map(s => ({ ...s }));
+            startRainAmbience();
+            previousFloorState.savedRuinsRain = null;  // prevent leak
+        }
 
 fogMap = previousFloorState.fogMap.map(row => [...row]);  // ← Add this line
 const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
@@ -9392,14 +9400,14 @@ if (currentTheme === 'hell') {
     } else {
         snowyHellActive = false;
     }
+    updateSnowState();
 }
-updateSnowState();
 
 // Properly restore rainy ruins state if we were in a rainy ruins block
 if (currentTheme === 'ruins') {
     if (currentThemeBlock === 'ruins_rainy') {
         ruinsRainActive = true;
-        // Re-initialize rain particles and sound
+        // Re-create rain particles with fresh random angle
         raindrops = [];
         floorSplashes = [];
         ruinsRainAngle = 0.26 + Math.random() * 0.35;
@@ -9410,11 +9418,12 @@ if (currentTheme === 'ruins') {
                 speed: 3.0 + Math.random() * 3.0
             });
         }
-        startRainAmbience();
+        startRainAmbience();  // restart the looping ambience
     } else {
         ruinsRainActive = false;
         raindrops = [];
         floorSplashes = [];
+        // Stop ambience if it was running
         if (rainAmbienceTimer) {
             rainAmbienceTimer = null;
         }
@@ -11219,26 +11228,21 @@ if (snowyHellActive && snowflakes.length) {
 
 // ───── RAIN (rainy RUINS ) ─────
 if (ruinsRainActive && currentTheme === 'ruins' && raindrops.length) {
-    // Subtle wet floor tint (before floors? No – overlay after)
-    c.fillStyle = 'rgba(0, 0, 50, 0.22)';
-    c.fillRect(0, 0, 320, 320);
-
-    // Sharp, short diagonal rain spikes
+    // Sharp, short diagonal rain spikes (drawn first)
     c.strokeStyle = 'rgba(140, 170, 240, 0.95)';
-    c.lineWidth = 0.7;  // ← super thin
+    c.lineWidth = 0.7;
     c.lineCap = 'round';
 
     raindrops.forEach(d => {
-        d.y += d.speed * 2;  // ← x2 faster fall
-        d.x += d.speed * 0.5 * Math.sin(ruinsRainAngle);  // ← doubled wind drift to match speed
+        d.y += d.speed * 2;
+        d.x += d.speed * 0.5 * Math.sin(ruinsRainAngle);
 
         if (d.y > 340) {
             d.y = -15;
             d.x = Math.random() * 340 - 10;
 
-            // Spawn splash ONLY on random nearby FLOOR TILE (Zelda-style)
+            // Splash spawning (safe version from earlier)
             if (Math.random() < 0.4) {
-                // Find nearby floor tile (player-centered, visible range)
                 let attempts = 0;
                 let tileX, tileY;
                 do {
@@ -11246,28 +11250,27 @@ if (ruinsRainActive && currentTheme === 'ruins' && raindrops.length) {
                     tileY = Math.floor(p.y + (Math.random() - 0.5) * 8);
                     attempts++;
                 } while (
-                    (attempts < 20) &&
-                    (tileX < 0 || tileX >= W || tileY < 0 || tileY >= H || map[tileY][tileX] !== 0)
+                    attempts < 20 &&
+                    (tileX < 0 || tileX >= W || tileY < 0 || tileY >= H ||
+                     !map[tileY] || map[tileY][tileX] !== 0)
                 );
-                if (map[tileY][tileX] === 0) {  // floor only!
-                    floorSplashes.push({
-                        tileX: tileX,
-                        tileY: tileY,
-                        start: Date.now()
-                    });
+
+                if (tileY >= 0 && tileY < H && map[tileY] && map[tileY][tileX] === 0) {
+                    floorSplashes.push({ tileX, tileY, start: Date.now() });
                 }
             }
         }
 
-        // Ultra-light, short spikes (2-4px, feather-thin)
         const length = 2 + Math.random() * 2;
-        c.lineWidth = 0.5;  // ← even thinner
-        c.strokeStyle = 'rgba(160, 190, 250, 0.85)';  // ← lighter blue, less opaque
         c.beginPath();
         c.moveTo(d.x, d.y);
         c.lineTo(d.x + length * Math.sin(ruinsRainAngle), d.y + length);
         c.stroke();
     });
+
+    // Wet floor tint — drawn LAST so it doesn't interfere with portals/stairs
+    c.fillStyle = 'rgba(0, 0, 50, 0.22)';
+    c.fillRect(0, 0, 320, 320);
 }
 
 // ───── RESTORE ONLY IF WE ZOOMED ─────
