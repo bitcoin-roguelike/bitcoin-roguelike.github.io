@@ -1917,15 +1917,36 @@ assets.echo_warden = new Image();
 assets.echo_warden.src = 'ἀρχάγγελος.png';
 assets.echo_warden.onerror = () => console.error('Failed to load echo_warden.png');
 
-// Wisp animation frames
-assets.wispFrames = [
-    new Image(), new Image(), new Image()
-];
-assets.wispFrames[0].src = 'wisp1.png';
-assets.wispFrames[1].src = 'wisp2.png';
-assets.wispFrames[2].src = 'wisp3.png';
-assets.wispFrames.forEach((frame, i) => {
-    frame.onerror = () => console.error(`Failed to load wisp frame ${i}: wisp${i+1}.png`);
+// Wisp animation frames — per type
+assets.wispFrames = {
+    cold:  [new Image(), new Image(), new Image()],
+    fire:  [new Image(), new Image(), new Image()],
+    chain: [new Image(), new Image(), new Image()],
+    earth: [new Image(), new Image(), new Image()]
+};
+
+assets.wispFrames.cold[0].src = 'wisp1.png';
+assets.wispFrames.cold[1].src = 'wisp2.png';
+assets.wispFrames.cold[2].src = 'wisp3.png';
+
+assets.wispFrames.fire[0].src = 'wisp-f1.png';
+assets.wispFrames.fire[1].src = 'wisp-f2.png';
+assets.wispFrames.fire[2].src = 'wisp-f3.png';
+
+assets.wispFrames.chain[0].src = 'wisp-c1.png';
+assets.wispFrames.chain[1].src = 'wisp-c2.png';
+assets.wispFrames.chain[2].src = 'wisp-c3.png';
+
+assets.wispFrames.earth[0].src = 'wisp-e1.png';
+assets.wispFrames.earth[1].src = 'wisp-e2.png';
+assets.wispFrames.earth[2].src = 'wisp-e3.png';
+
+// Error handling
+Object.values(assets.wispFrames).forEach((frames, typeIndex) => {
+    const typeNames = ['cold', 'fire', 'chain', 'earth'];
+    frames.forEach((frame, i) => {
+        frame.onerror = () => console.error(`Failed to load wisp ${typeNames[typeIndex]} frame ${i+1}`);
+    });
 });
 
 // Enemy background circles (16x16px animated)
@@ -3754,6 +3775,7 @@ else {
             sounds.gameover.play().catch(e => console.error('Wisp death sound error:', e));
             deadWispCorpse = {
                 x: wisp.x, y: wisp.y,
+                type: wisp.type.name,
                 frameIndex: wisp.anim.frameIndex,
                 fadeStart: Date.now()
             };
@@ -6096,6 +6118,7 @@ if (wisps.length > 0) {
             // Place dead wisp on ground
             deadWispCorpse = {
                 x: wisp.x, y: wisp.y,
+                type: wisp.type.name,
                 frameIndex: wisp.anim.frameIndex,
                 fadeStart: Date.now()
             };
@@ -6465,6 +6488,7 @@ function applyWispAttack(wisp, primaryTarget) {
         sounds.gameover.play().catch(() => {});
         deadWispCorpse = {
             x: wisp.x, y: wisp.y,
+            type: wisp.type.name,
             frameIndex: wisp.anim.frameIndex,
             fadeStart: now
         };
@@ -7081,19 +7105,18 @@ function handleUniqueMonsterReward(hit) {
     logBattleEvent(`Multiplier: ${multiplier}x`);
     logBattleEvent(`Reward: ${displayAmount}`);
 
+    activeUniqueMonsterName = null; // Also clear any lingering visible name
     // Add reward to earned stats (skip Cursed Trader)
     if (hit.type.name !== 'Cursed Trader') {
         satsEarned[hit.type.name] = (satsEarned[hit.type.name] || 0) + reward;
-        updateSatsDisplay();
     }
-
     // Clear harbinger if it was this monster
     const floorIndicator = document.getElementById('floor-indicator');
     if (floorIndicator.textContent === "A harbinger of doom is near.") {
         floorIndicator.textContent = `Floor ${floor}`;
     }
-    activeUniqueMonsterName = null;
-
+    updateSatsDisplay();
+    
     return true;
 }
 
@@ -10183,15 +10206,16 @@ if (deadWispCorpse) {
     const elapsed = Date.now() - deadWispCorpse.fadeStart;
     const fadeAlpha = Math.max(0, 1 - (elapsed / 5000)); // Fade over 5s
     if (fadeAlpha > 0) {
-        const frame = assets.wispFrames[deadWispCorpse.frameIndex];
-        if (frame.complete) {
+        const frames = assets.wispFrames[deadWispCorpse.type];
+        const frame = frames[deadWispCorpse.frameIndex];
+        if (frame && frame.complete) {
             c.save();
-            c.globalAlpha = fadeAlpha * 0.75; // 0.75 opacity for corpse
+            c.globalAlpha = fadeAlpha * 0.75;
             c.drawImage(frame, deadWispCorpse.x * S, deadWispCorpse.y * S, S, S);
             c.restore();
         }
     } else {
-        deadWispCorpse = null; // Cleanup after fade
+        deadWispCorpse = null;
     }
 }
 
@@ -10475,7 +10499,8 @@ wisps.forEach(wisp => {
         c.fillRect(wisp.currentX, drawY, S, S);
         c.globalCompositeOperation = 'source-over'; // Reset after multiply
         c.restore(); // End inner tint
-        const frame = assets.wispFrames[wisp.anim.frameIndex];
+        const frames = assets.wispFrames[wisp.type.name];
+        const frame = frames[wisp.anim.frameIndex];
         if (frame.complete) {
             c.drawImage(frame, wisp.currentX, drawY, S, S);
         }
