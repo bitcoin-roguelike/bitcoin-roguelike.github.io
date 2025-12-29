@@ -1621,6 +1621,13 @@ let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
 let snowflakes = [];
+let ruinsRainActive = false;
+let rainAmbienceTimer = null;  // restart loop timer
+let rainAudioCtx = null;       // shared context
+let rainAmbiencePlayed = false;  // track if we've started rain sound this run
+let raindrops = [];
+let floorSplashes = [];
+let ruinsRainAngle = 0;  // diagonal direction for rain streaks (set once per block)
 let snowyHellActive = false;        // master switch
 let snowyHellToggleFloor = 0;       // for slow random toggles
 let autoSubmitTriggered = false;
@@ -2553,6 +2560,54 @@ function playCatPurr() {
   osc.start(now); osc.stop(t + 0.3);
 }
 
+// POURING RAIN AMBIENCE v3 – true infinite loop (no stop/start needed)
+function startRainAmbience() {
+    if (rainAmbienceTimer) return;  // already running
+
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    rainAudioCtx = ctx;
+
+    // Resume if suspended
+    if (ctx.state !== 'running') {
+        ctx.resume();
+    }
+
+    const now = ctx.currentTime;
+
+    // White noise buffer
+    const bufferSize = 4 * ctx.sampleRate;  // longer buffer = truly seamless
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    noise.loop = true;  // this alone makes it infinite
+
+    const filter1 = ctx.createBiquadFilter();
+    filter1.type = 'lowpass';
+    filter1.frequency.setValueAtTime(1400, now);
+
+    const filter2 = ctx.createBiquadFilter();
+    filter2.type = 'bandpass';
+    filter2.frequency.setValueAtTime(1800, now);
+    filter2.Q.setValueAtTime(1.5, now);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.40 * soundVolume, now + 1.5);  // +15%
+    gain.gain.setValueAtTime(0.38 * soundVolume, now + 30);  // +15%
+
+    noise.connect(filter1).connect(filter2).connect(gain).connect(ctx.destination);
+    noise.start(now);
+
+    // No interval needed anymore — loop = true handles it perfectly
+    // We keep the timer reference only for cleanup on theme change
+    rainAmbienceTimer = true;  // simple flag
+}
+
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
 let currentSplashImage = 'splash.png';
 const splashImg = new Image();
@@ -2920,6 +2975,10 @@ function updateSnowState() {
 
 function initMap() {
     try {
+    // Prevent full reset when returning from puzzle room
+    if (previousFloorState && previousFloorState.savedRuinsRain && currentTheme === 'ruins') {
+        return;  // skip reset — restoration already handled in finishPuzzleRoom
+    }
         if (inHideout) {
             currentTheme = 'hideout';
             updateSnowState();
@@ -3077,19 +3136,20 @@ updateFogMap(p.x, p.y);
 
 // ——— THEME BLOCK CONSISTENCY ———
 if (floor % 3 === 0 && floor > 1) {
-    const newTheme = selectNewTheme(currentTheme);
+let newTheme;
+if (floor === 3) {
+    newTheme = 'ruins';  // DEBUG: Force ruins on floor 3
+} else {
+    newTheme = selectNewTheme(currentTheme);
+}
 
     if (newTheme === 'hell') {
         // First time entering a new hell block?
         if (currentThemeBlock !== 'hell_normal' && currentThemeBlock !== 'hell_snowy') {
-            // 50% chance to be snowy hell for the ENTIRE 3-floor block
             currentThemeBlock = Math.random() < 0.5 ? 'hell_snowy' : 'hell_normal';
-            
-            // Apply the decision
             snowyHellActive = (currentThemeBlock === 'hell_snowy');
-            
+
             if (snowyHellActive) {
-                // Initialize snowflakes ONCE per block
                 snowflakes = [];
                 for (let i = 0; i < 120; i++) {
                     snowflakes.push({
@@ -3103,22 +3163,74 @@ if (floor % 3 === 0 && floor > 1) {
                 logBattleEvent(`Floor ${floor} - Hell froze over! Snowy Hell begins…`);
             }
         }
-        // Keep using the same hell variant for the whole block
         currentTheme = 'hell';
-    } else {
-        // Not hell → reset everything
+    }
+    else if (newTheme === 'ruins') {
+        // First time entering a new ruins block?
+        if (currentThemeBlock !== 'ruins_normal' && currentThemeBlock !== 'ruins_rainy') {
+            currentThemeBlock = Math.random() < 0.5 ? 'ruins_rainy' : 'ruins_normal';
+            ruinsRainActive = (currentThemeBlock === 'ruins_rainy');
+
+            if (ruinsRainActive) {
+                raindrops = [];
+                floorSplashes = [];  // ← clear old splashes
+                ruinsRainAngle = 0.26 + Math.random() * 0.35;
+
+                for (let i = 0; i < 160; i++) {
+                    raindrops.push({
+                        x: Math.random() * 320,
+                        y: Math.random() * 320 - 100,
+                        speed: 3.0 + Math.random() * 3.0
+                    });
+                }
+                logBattleEvent(`Floor ${floor} - The ruins weep... rain begins.`);
+                startRainAmbience();  // ← auto-start looping rain (floor load = gesture)
+            }
+        }
+        currentTheme = 'ruins';
+    }
+    else {
+        // Any other theme → reset both variants
         currentThemeBlock = null;
         snowyHellActive = false;
+        ruinsRainActive = false;
         snowflakes = [];
+        raindrops = [];
+        floorSplashes = [];
+    if (rainAmbienceTimer) {
+        rainAmbienceTimer = null;
+    }
+    if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
+        rainAudioCtx.close().catch(() => {});
+        rainAudioCtx = null;
+    }
         currentTheme = newTheme;
     }
 } else {
-    // Not a theme-change floor → keep current hell variant (if any)
+    // Not a theme-change floor → preserve current variants if active
     if (currentTheme === 'hell' && currentThemeBlock === 'hell_snowy') {
         snowyHellActive = true;
+    } else {
+        snowyHellActive = false;
+    }
+
+    if (currentTheme === 'ruins' && currentThemeBlock === 'ruins_rainy') {
+        ruinsRainActive = true;
+    } else {
+        ruinsRainActive = false;
+        raindrops = [];
+        floorSplashes = [];
+    if (rainAmbienceTimer) {
+        rainAmbienceTimer = null;
+    }
+    if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
+        rainAudioCtx.close().catch(() => {});
+        rainAudioCtx = null;
+    }
     }
 }
-updateSnowState(); // make sure snowflakes match
+
+updateSnowState(); // keeps snowflakes in sync
         
         // Update text color based on theme
         let textColor;
@@ -5269,6 +5381,17 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
    
     // ← Removed the old inPuzzleRoom return logic — we now always go to next floor
     // (finishPuzzleRoom() already set inPuzzleRoom = false and placed stairs)
+
+    // Save rainy ruins state before floor advance (puzzle exit case)
+    let tempSavedRain = null;
+    if (currentTheme === 'ruins' && ruinsRainActive) {
+        tempSavedRain = {
+            active: true,
+            angle: ruinsRainAngle,
+            drops: raindrops.map(d => ({ ...d })),
+            splashes: floorSplashes.map(s => ({ ...s }))
+        };
+    }
    
     floor++;
     
@@ -5343,10 +5466,23 @@ catVisible = false;
    
     // Reset attack to base value before new floor (accounts for diamond hand)
     p.atk = p.hasDiamondHand ? 3 : 2;
-   
+
     initMap();
-    puzzleCurrentLayout = null;  // ← NEW: clear after any floor change
-    isFetchingTxs = false;   // ← THIS IS THE FIX – clears the stuck flag!
+
+    // === RESTORE RAINY RUINS AFTER PUZZLE EXIT ===
+    if (previousFloorState && previousFloorState.savedRuinsRain) {
+        ruinsRainActive = true;
+        ruinsRainAngle = previousFloorState.savedRuinsRain.angle;
+        raindrops = previousFloorState.savedRuinsRain.drops.map(d => ({ ...d }));
+        floorSplashes = previousFloorState.savedRuinsRain.splashes.map(s => ({ ...s }));
+        startRainAmbience();
+
+        // Clear saved state so it doesn't leak to unrelated floors
+        previousFloorState.savedRuinsRain = null;
+    }
+
+    puzzleCurrentLayout = null;
+    isFetchingTxs = false; // ← THIS IS THE FIX – clears the stuck flag!
     nextApiCallTime = null;
     deadWispCorpse = null; // Clear wisp corpse on floor transition
    
@@ -5394,6 +5530,19 @@ catVisible = false;
         // Town Portal
 if (map[ny][nx] === 12 && !inHideout) {
     playWebAudioSound(sounds.town_portal);
+
+    // Save rainy ruins state before leaving
+    if (currentTheme === 'ruins' && ruinsRainActive) {
+        previousFloorState.savedRuinsRain = {
+            active: true,
+            angle: ruinsRainAngle,
+            drops: raindrops.map(d => ({ ...d })),
+            splashes: floorSplashes.map(s => ({ ...s }))
+        };
+    } else {
+        previousFloorState.savedRuinsRain = null;
+    }
+
     inHideout = true;
     initMap();
     return;
@@ -5402,11 +5551,23 @@ if (map[ny][nx] === 12 && !inHideout) {
 if (map[ny][nx] === 25) {
     const portal = portals.find(p => p.x === nx && p.y === ny && p.type === 'puzzle');
     if (portal) {
-        playWebAudioSound(sounds.secret);  // Epic sound!
+        playWebAudioSound(sounds.secret);
 
-        // SAVE where we came from — position + theme
+        // Save position + theme
         puzzleReturnPos = { x: p.x, y: p.y };
-        puzzlePreviousTheme = currentTheme;  // ← THIS IS THE KEY!
+        puzzlePreviousTheme = currentTheme;
+
+        // Save rainy ruins state
+        if (currentTheme === 'ruins' && ruinsRainActive) {
+            previousFloorState.savedRuinsRain = {
+                active: true,
+                angle: ruinsRainAngle,
+                drops: raindrops.map(d => ({ ...d })),
+                splashes: floorSplashes.map(s => ({ ...s }))
+            };
+        } else {
+            previousFloorState.savedRuinsRain = null;
+        }
 
         logBattleEvent("You step into the shimmering rift... a sacred trial begins!");
         startPuzzleRoom();
@@ -5435,6 +5596,7 @@ if (map[ny][nx] === 25) {
                 waveActive = previousFloorState.waveActive;
 currentTheme = previousFloorState.currentTheme;
 updateSnowState();
+
 fogMap = previousFloorState.fogMap.map(row => [...row]);  // ← Add this line
 const portal = previousFloorState.portals.find(p => p.x !== undefined && p.y !== undefined);
 p.x = portal ? portal.x : 2;
@@ -9228,10 +9390,42 @@ if (currentTheme === 'hell') {
         snowyHellActive = false;
     }
 }
-updateSnowState();  // ensures snowflakes + snowy tiles match the theme
+updateSnowState();
 
-    // FAKE A HIDE-OUT VISIT — this magically restores the correct music!
-    musicManager.play('hideout');
+// Properly restore rainy ruins state if we were in a rainy ruins block
+if (currentTheme === 'ruins') {
+    if (currentThemeBlock === 'ruins_rainy') {
+        ruinsRainActive = true;
+        // Re-initialize rain particles and sound
+        raindrops = [];
+        floorSplashes = [];
+        ruinsRainAngle = 0.26 + Math.random() * 0.35;
+        for (let i = 0; i < 160; i++) {
+            raindrops.push({
+                x: Math.random() * 320,
+                y: Math.random() * 320 - 100,
+                speed: 3.0 + Math.random() * 3.0
+            });
+        }
+        startRainAmbience();
+    } else {
+        ruinsRainActive = false;
+        raindrops = [];
+        floorSplashes = [];
+        if (rainAmbienceTimer) {
+            rainAmbienceTimer = null;
+        }
+        if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
+            rainAudioCtx.close().catch(() => {});
+            rainAudioCtx = null;
+        }
+    }
+}
+
+    // Restore music without triggering full initMap reset
+    if (!musicMuted && !inPuzzleRoom) {
+        musicManager.play(currentTheme);  // play the restored theme directly
+    }
     puzzlePreviousTheme = null;
 
     // Clear all puzzle state
@@ -9524,6 +9718,20 @@ function restart() {
     p.hasCursedRing = false;
     p.echoWardenBlessingGiven = false;
 p.curseActive = false;  // Lift lingering curse
+
+    // === RUINS RAIN SYSTEM RESET ===
+    ruinsRainActive = false;
+    ruinsRainAngle = 0;
+    raindrops = [];
+    floorSplashes = [];
+    rainAmbiencePlayed = false;  // ← add this line
+    if (rainAmbienceTimer) {
+        rainAmbienceTimer = null;
+    }
+    if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
+        rainAudioCtx.close().catch(() => {});
+        rainAudioCtx = null;
+    }
 // Restore a random immunity on restart
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
 p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
@@ -9873,6 +10081,20 @@ if (wardenFlashStart > 0) {
         return;
     }
     if (splashActive) { needsRedraw = false; return; }
+
+    // Safety: stop rain visuals/sound if not in ruins
+    if (currentTheme !== 'ruins') {
+        if (ruinsRainActive) ruinsRainActive = false;
+        if (raindrops.length) raindrops = [];
+        if (floorSplashes.length) floorSplashes = [];
+        if (rainAmbienceTimer) {
+            rainAmbienceTimer = null;
+        }
+        if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
+            rainAudioCtx.close().catch(() => {});
+            rainAudioCtx = null;
+        }
+    }
 
     const radius = 4;
 // ───── WALLS ONLY (with Snowy Hell tint) ─────
@@ -10231,6 +10453,29 @@ for (let y = 0; y < H; y++) {
             needsRedraw = true; // Add this to ensure proper redraw after shrine drawing
         }
     }
+}
+
+// Ruins rain floor splashes – only in ruins theme + larger/more visible ripples
+if (currentTheme === 'ruins') {
+    floorSplashes.forEach(s => {
+        const age = Date.now() - s.start;
+        if (age < 450) {  // slightly longer lifetime for better visibility
+            const alpha = (1 - age / 450) * 0.68;
+            const sx = s.tileX * S + (S / 2) + (Math.random() - 0.5) * 5;  // more jitter
+            const sy = s.tileY * S + S - 5 + Math.sin(age / 50) * 1.5;     // deeper wave
+
+            c.save();
+            c.globalAlpha = alpha;
+            c.fillStyle = '#A8D0FF';
+            c.fillRect(sx - 2, sy, 4, 1.5);         // ← width halved (8 → 4)
+            c.globalAlpha = alpha * 0.65;
+            c.fillRect(sx - 1, sy + 1.5, 2, 0.75);  // ← width halved (4 → 2)
+            c.restore();
+        }
+    });
+
+    // Clean up old splashes
+    floorSplashes = floorSplashes.filter(s => Date.now() - s.start < 450);
 }
 
     // Draw projectiles – enemy bits use bit_spear.png, player sword uses shoot_sword.png
@@ -10898,38 +11143,49 @@ if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
 // (deleted: moved to updatePlayerState() for centralized death check)
     document.getElementById('pickaxes').textContent = p.pickaxes;
     
-// Consolidated unique monster name display (prevents flicker)
-let uniqueNameToShow = null;
+// Consolidated name display – clears Cursed Trader and uniques properly
+let nameToShow = null;
 let isHarbinger = false;
+
+// Visible unique blockchain monsters (exclude Cursed Trader)
 const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && fogMap[e.y][e.x] === 1);
 if (visibleUniques.length > 0) {
-    uniqueNameToShow = visibleUniques[0].uniqueName; // First visible
-} else {
+    nameToShow = visibleUniques[0].uniqueName;
+}
+
+// Visible Cursed Trader
+const visibleTrader = enemies.find(e => e.type.name === 'Cursed Trader' && fogMap[e.y][e.x] === 1);
+if (visibleTrader) {
+    nameToShow = 'Cursed Trader';
+}
+
+// Harbinger message for uniques in fog
+if (!nameToShow) {
     const fogUniques = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 0);
     if (fogUniques.length > 0) {
-        uniqueNameToShow = "A harbinger of doom is near.";
+        nameToShow = "A harbinger of doom is near.";
         isHarbinger = true;
     }
 }
+
 const floorIndicator = document.getElementById('floor-indicator');
 const cachedText = window.currentFloorText || `Floor ${floor}`;
-const debounceMs = isHarbinger ? 2000 : 1000; // Longer for harbinger
-// Always set text for harbinger/visible (separate from animation trigger)
-if (uniqueNameToShow && uniqueNameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs) && !floorIndicator.textContent.startsWith("Runeword")) {
-    floorIndicator.textContent = uniqueNameToShow;
-    window.currentFloorText = uniqueNameToShow;
+const debounceMs = isHarbinger ? 2000 : 1000;
+
+if (nameToShow && nameToShow !== cachedText && (now - (window.lastUniqueSetTime || 0) > debounceMs) && !floorIndicator.textContent.startsWith("Runeword")) {
+    floorIndicator.textContent = nameToShow;
+    window.currentFloorText = nameToShow;
     window.lastUniqueSetTime = now;
-    activeUniqueMonsterName = uniqueNameToShow;
-   
-    // Auto-clear after 5s
+    activeUniqueMonsterName = nameToShow;
+
     setTimeout(() => {
-        if (activeUniqueMonsterName === uniqueNameToShow) {
+        if (activeUniqueMonsterName === nameToShow) {
             activeUniqueMonsterName = null;
             floorIndicator.textContent = `Floor ${floor}`;
             window.currentFloorText = `Floor ${floor}`;
         }
     }, 5000);
-} else if (!uniqueNameToShow && cachedText !== `Floor ${floor}` && !floorIndicator.textContent.startsWith("Runeword")) {
+} else if (!nameToShow && cachedText !== `Floor ${floor}` && !floorIndicator.textContent.startsWith("Runeword")) {
     floorIndicator.textContent = `Floor ${floor}`;
     window.currentFloorText = `Floor ${floor}`;
     activeUniqueMonsterName = null;
@@ -10955,6 +11211,59 @@ if (snowyHellActive && snowflakes.length) {
         if (f.x < -10) f.x = SCREEN_W - 1;
         if (f.x > SCREEN_W + 10) f.x = 0;
         c.fillRect(f.x, f.y, f.size * SCALE, f.size * SCALE);
+    });
+}
+
+// ───── RAIN (rainy RUINS ) ─────
+if (ruinsRainActive && currentTheme === 'ruins' && raindrops.length) {
+    // Subtle wet floor tint (before floors? No – overlay after)
+    c.fillStyle = 'rgba(0, 0, 50, 0.22)';
+    c.fillRect(0, 0, 320, 320);
+
+    // Sharp, short diagonal rain spikes
+    c.strokeStyle = 'rgba(140, 170, 240, 0.95)';
+    c.lineWidth = 0.7;  // ← super thin
+    c.lineCap = 'round';
+
+    raindrops.forEach(d => {
+        d.y += d.speed * 2;  // ← x2 faster fall
+        d.x += d.speed * 0.5 * Math.sin(ruinsRainAngle);  // ← doubled wind drift to match speed
+
+        if (d.y > 340) {
+            d.y = -15;
+            d.x = Math.random() * 340 - 10;
+
+            // Spawn splash ONLY on random nearby FLOOR TILE (Zelda-style)
+            if (Math.random() < 0.4) {
+                // Find nearby floor tile (player-centered, visible range)
+                let attempts = 0;
+                let tileX, tileY;
+                do {
+                    tileX = Math.floor(p.x + (Math.random() - 0.5) * 8);
+                    tileY = Math.floor(p.y + (Math.random() - 0.5) * 8);
+                    attempts++;
+                } while (
+                    (attempts < 20) &&
+                    (tileX < 0 || tileX >= W || tileY < 0 || tileY >= H || map[tileY][tileX] !== 0)
+                );
+                if (map[tileY][tileX] === 0) {  // floor only!
+                    floorSplashes.push({
+                        tileX: tileX,
+                        tileY: tileY,
+                        start: Date.now()
+                    });
+                }
+            }
+        }
+
+        // Ultra-light, short spikes (2-4px, feather-thin)
+        const length = 2 + Math.random() * 2;
+        c.lineWidth = 0.5;  // ← even thinner
+        c.strokeStyle = 'rgba(160, 190, 250, 0.85)';  // ← lighter blue, less opaque
+        c.beginPath();
+        c.moveTo(d.x, d.y);
+        c.lineTo(d.x + length * Math.sin(ruinsRainAngle), d.y + length);
+        c.stroke();
     });
 }
 
