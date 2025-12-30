@@ -1440,6 +1440,14 @@ let lastDrawTime = null;
 let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
+
+let redMazeActive = false;          // Is the boss currently on the floor?
+let redMaze = null;                 // Boss object {x, y, hp, teleportTime}
+let redMazeLastFloor = 0;           // Last floor the boss appeared on (for 50-floor cooldown)
+let redMazeLazerTime = 0;           // Timestamp for next lazer volley
+let activeLazers = [];  // Array of active lazer beams for drawing {wallX, wallY, px, py, startTime}
+let redMazeAuraGiven = false;       // Has the player received the red aura reward this run?
+
 let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
@@ -1980,6 +1988,10 @@ assets.satoshi_scourge.onerror = () => console.error('Failed to load satoshi_sco
 assets.cat = new Image();
 assets.cat.src = 'black_cat.png';
 assets.cat.onerror = () => console.error('Failed to load black_cat.png');
+
+assets.red_maze = new Image();
+assets.red_maze.src = 'red_maze.png';
+assets.red_maze.onerror = () => console.error('Failed to load red_maze.png');
 
 assets.swap = new Image();
 assets.swap.src = 'swap.png';
@@ -3635,6 +3647,24 @@ exit = null;
 if (!musicMuted && !inPuzzleRoom) {
     musicManager.play(currentTheme);
 }
+
+if (redMazeActive) {
+    // Spawn the eye on a random floor tile (not player)
+    let attempts = 100;
+    do {
+        const rx = 1 + Math.floor(Math.random() * (W-2));
+        const ry = 1 + Math.floor(Math.random() * (H-2));
+        if (map[ry][rx] === 0 && !(rx === p.x && ry === p.y)) {
+            redMaze = { x: rx, y: ry, hp: 100, teleportTime: Date.now() + 3000 };
+            break;
+        }
+    } while (--attempts);
+    if (!redMaze) redMaze = { x: p.x + 2, y: p.y + 2, hp: 100, teleportTime: Date.now() + 3000 }; // fallback
+
+    redMazeLazerTime = Date.now() + 3000; // first volley syncs with first teleport
+}
+
+// END OF function initMap()
     } catch (e) {
         console.error('initMap Error:', e, e.stack);
         throw e;
@@ -3862,8 +3892,9 @@ if (p.hasDiamondArmor) {
     document.getElementById('armorStatus').textContent = 'Diamond';
 }
 else if (p.hasCursedRing) {
-    document.getElementById('armorStatus').textContent = 'Cursed Aura';
+    document.getElementById('armorStatus').textContent = redMazeAuraGiven ? 'Maze Aura' : 'Cursed Aura';
 }
+
 else if (p.hasArmor) {
     document.getElementById('armorStatus').textContent = 'Leather';
 }
@@ -4165,6 +4196,11 @@ async function fetchTxs() {
     }
     
     isFetchingTxs = true; // Set flag
+
+if (redMazeActive) {
+    isFetchingTxs = false;
+    return; // No enemies during Red Maze boss
+}
     
     const now = Date.now();
     // Prevent duplicate calls within API_INTERVAL
@@ -4801,11 +4837,13 @@ p.previousY = p.y;
         return; // Don't start animation
     }
 
-    if (enemies.some(e => e.x === nx && e.y === ny)) {
-        p.anim.direction = newDirection; // Update direction for rendering
-        needsRedraw = true;
-        return; // Don't start animation
-    }
+// Block movement if enemy or Red Maze eye is on target tile
+if (enemies.some(e => e.x === nx && e.y === ny) ||
+    (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny)) {
+    p.anim.direction = newDirection;
+    needsRedraw = true;
+    return; // Don't start animation
+}
 
     // Update direction and position (will be interpolated during draw)
     p.anim.direction = newDirection;
@@ -5462,6 +5500,24 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     }
    
     floor++;
+
+// ——— RED MAZE BOSS CHECK (corrected logic) ———
+// Activate on dungeon floors once ≥50 floors have passed since last Red Maze (or run start)
+if (currentTheme === 'dungeon' && floor >= 50) {
+    const floorsSinceLast = floor - (redMazeLastFloor || 0);
+    if (floorsSinceLast >= 50) {
+        logBattleEvent('RED MAZE HAS ARRIVED!');
+        playWebAudioSound(sounds.secret);
+        // Kill all normal enemies instantly
+        enemies.forEach(e => {
+            if (!e.uniqueName) e.hp = 0;
+        });
+        enemies = enemies.filter(e => e.hp > 0);
+        redMazeActive = true;
+        redMazeLastFloor = floor;           // lock out for next 50 floors
+        musicManager.mute(true);            // pause music
+    }
+}
     
     // CRITICAL: FULL WAVE & ENEMY RESET — this fixes dead Floor 2 after puzzle
     wave = 1;
@@ -6468,7 +6524,7 @@ updatePlayerState(); // Check HP and armor state after damage
     updatePlayerState();
     
 // === ONLY PLACE STAIRS IN NORMAL DUNGEON — NEVER IN PUZZLE ROOMS ===
-if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout) {
+if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast && !ripBlastActive && !inHideout && !redMazeActive) {
     if (placeStairs()) {
         wave++;
         if (wisps.length > 0) wispSpeak('victory');
@@ -6479,6 +6535,87 @@ if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast 
         logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
     }
 }
+}
+
+function updateRedMaze() {
+    if (!redMazeActive || !redMaze) return;
+
+    const now = Date.now();
+
+    // Teleport every 3 seconds to a random floor tile (not on player)
+    if (now >= redMaze.teleportTime) {
+        let attempts = 50;
+        let nx, ny;
+        do {
+            nx = Math.floor(Math.random() * W);
+            ny = Math.floor(Math.random() * H);
+        } while (attempts-- && (map[ny][nx] !== 0 || (nx === p.x && ny === p.y)));
+
+        if (attempts > 0) {
+            redMaze.x = nx;
+            redMaze.y = ny;
+        }
+        redMaze.teleportTime = now + 3000;
+    }
+
+    // Single lazer from eye to player every 3 seconds (syncs with teleport)
+    if (now >= redMazeLazerTime) {
+        // Store the single instant lazer beam for drawing
+        activeLazers = [{
+            wallX: redMaze.x,
+            wallY: redMaze.y,
+            px: p.x,
+            py: p.y,
+            startTime: now
+        }];
+
+// Direct browser playback for Red Maze lazer (bypasses Web Audio issues)
+if (sounds.secret) {
+    sounds.secret.currentTime = 0;
+    sounds.secret.play().catch(() => {});
+}
+
+        // Deal 1% HP damage
+        const dmg = Math.ceil(p.hp * 0.01);
+        p.hp -= dmg;
+        logBattleEvent(`Red Maze eye lazer hits! -${dmg} HP (1%)`);
+        updatePlayerState();
+
+        redMazeLazerTime = now + 3000;
+    }
+
+    // Boss defeat check (melee damage is applied in attack() function)
+    if (redMaze.hp <= 0) {
+        logBattleEvent('RED MAZE defeated!');
+        redMazeActive = false;
+        redMaze = null;
+
+        // Reward: permanent red aura (once per run)
+        if (!redMazeAuraGiven) {
+            const baseHP = p.hp;
+            p.auraMax = baseHP * 2;
+            p.auraShield = p.auraMax;
+            p.hasCursedRing = true; // reuse flag for red aura visuals
+            redMazeAuraGiven = true;
+            logBattleEvent(`Red Aura gained! Shield: ${p.auraShield}/${p.auraMax}`);
+        }
+
+        // Resume music
+        musicManager.mute(false);
+        musicManager.play(currentTheme);
+
+        // Reset cooldown from current floor
+        redMazeLastFloor = floor;
+
+        // Force stairs to spawn immediately after boss defeat
+        if (!exit) {
+            placeStairs();
+            wave++;
+            waveActive = false;
+            document.getElementById('wave').textContent = wave;
+            logBattleEvent(`Floor ${floor} - RED MAZE defeated! Stairs appeared!`);
+        }
+    }
 }
 
 function doScourgeSpinAttack() {
@@ -6966,6 +7103,22 @@ function updateProjectiles() {
                     needsRedraw = true;
                     return false; // sword stops on hit
                 }
+                
+                // Shooting sword also damages Red Maze eye
+if (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) {
+    const eyeDmg = Math.floor(p.atk * 0.5); // half damage like normal ranged
+    redMaze.hp -= eyeDmg;
+    logBattleEvent(`Floor ${floor} - Shooting Sword hits Red Maze eye! ${eyeDmg} DMG (HP: ${redMaze.hp}/100)`);
+    playWebAudioSound(sounds.hit);
+    highlightTiles.push({
+        x: redMaze.x,
+        y: redMaze.y,
+        highlightStart: Date.now(),
+        color: 'rgba(247, 147, 26, 0.7)'
+    });
+    return false; // stop projectile
+}
+                
             }
 
             // --------------------- Bit spear hits player ---------------------
@@ -7760,6 +7913,22 @@ if (enemy.type.name === 'Cursed Trader') {
                     logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG`);
                 }
                 playWebAudioSound(sounds.hit);
+
+// Damage Red Maze eye if adjacent during melee attack
+if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y - p.y) <= 1) {
+    const eyeDmg = p.atk; // Same as normal attack damage
+    redMaze.hp -= eyeDmg;
+    logBattleEvent(`Red Maze eye hit! ${eyeDmg} DMG (HP: ${redMaze.hp}/100)`);
+    playWebAudioSound(sounds.hit);
+
+    // Orange flash on eye
+    highlightTiles.push({
+        x: redMaze.x,
+        y: redMaze.y,
+        highlightStart: Date.now(),
+        color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
+    });
+}
         
         // Wisp sync attack: Assist player's target
         if (wisps.length > 0) {
@@ -8015,6 +8184,58 @@ else if (p.hp >= 24 && !p.hasDiamondHand && projectiles.length === 0 && !usePick
 
         sounds.shoot_sword.currentTime = 0;
         sounds.shoot_sword.play().catch(() => {});
+    }
+}
+
+// Standalone melee damage to Red Maze eye (runs on every attack swing)
+if (redMazeActive && redMaze) {
+    const dx = Math.abs(redMaze.x - p.x);
+    const dy = Math.abs(redMaze.y - p.y);
+    // Adjacent: cardinal or diagonal
+    if (dx + dy === 1 || (dx === 1 && dy === 1)) {
+        const eyeDmg = p.atk; // Full melee damage
+        redMaze.hp -= eyeDmg;
+        logBattleEvent(`Floor ${floor} - Red Maze eye hit! ${eyeDmg} DMG (HP: ${redMaze.hp}/100)`);
+        playWebAudioSound(sounds.hit);
+
+        // Bitcoin orange flash on the eye
+        highlightTiles.push({
+            x: redMaze.x,
+            y: redMaze.y,
+            highlightStart: Date.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
+        });
+
+        // Immediate boss defeat check
+        if (redMaze.hp <= 0) {
+            logBattleEvent('RED MAZE defeated!');
+            redMazeActive = false;
+            redMaze = null;
+
+            if (!redMazeAuraGiven) {
+                const baseHP = p.hp;
+                p.auraMax = baseHP * 2;
+                p.auraShield = p.auraMax;
+                p.hasCursedRing = true; // visual flag
+                redMazeAuraGiven = true;
+                logBattleEvent(`Red Aura gained! Shield: ${p.auraShield}/${p.auraMax}`);
+            }
+
+            musicManager.mute(false);
+            musicManager.play(currentTheme);
+
+            redMazeLastFloor = floor;
+            
+// Force stairs to spawn immediately after boss defeat
+if (!exit) {
+    placeStairs();
+    wave++;
+    waveActive = false;
+    document.getElementById('wave').textContent = wave;
+    logBattleEvent(`Floor ${floor} - RED MAZE defeated! Stairs appeared!`);
+}
+
+        }
     }
 }
     
@@ -9769,6 +9990,8 @@ function restart() {
     p.hasDiamondHand = false;
     p.currentWeapon = 'sword';
     p.hasCursedRing = false;
+    redMazeLastFloor = 0;
+    redMazeAuraGiven = false;
     p.echoWardenBlessingGiven = false;
 p.curseActive = false;  // Lift lingering curse
 
@@ -10166,6 +10389,16 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         } else {
             c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
         }
+        
+// Red Maze: tint dungeon walls red + transparent
+if (redMazeActive && currentTheme === 'dungeon') {
+    c.save();
+    c.globalCompositeOperation = 'source-atop';
+    c.fillStyle = 'rgba(200, 0, 0, 0.4)'; // slight red transparency
+    c.fillRect(x * S, y * S, S, S);
+    c.restore();
+}
+        
     }
 }
 // Save floor state before entering hideout (moved here to run once per draw)
@@ -10202,6 +10435,17 @@ if (currentTheme === 'hell' && snowyHellActive) {
     c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
 } else {
     c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+    
+if (redMazeActive) {
+    // Red walls
+c.fillStyle = 'rgba(255,0,0,0.18)'; // much more transparent
+
+    // Draw the eye
+    if (redMaze) {
+        c.drawImage(assets.red_maze, redMaze.x * S, redMaze.y * S, S, S);
+    }
+}
+    
 }
         
         // Draw dangerous areas (spells) before other items
@@ -10823,6 +11067,38 @@ wisps.forEach(wisp => {
         c.restore();
     }
 });
+
+// Draw single Red Maze eye lazer (instant thick beam with glow)
+if (redMazeActive && activeLazers.length > 0) {
+    const l = activeLazers[0];
+    const age = Date.now() - l.startTime;
+    if (age >= 300) return;
+    const alpha = 1 - (age / 300);
+
+    c.save();
+
+    // Outer intense pink glow
+    c.shadowColor = '#ff1493';
+    c.shadowBlur = 25;
+    c.strokeStyle = `rgba(255, 20, 147, ${alpha * 0.9})`;
+    c.lineWidth = 12;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(l.wallX * S + S/2, l.wallY * S + S/2);
+    c.lineTo(l.px * S + S/2, l.py * S + S/2);
+    c.stroke();
+
+    // Bright white-hot core
+    c.shadowBlur = 15;
+    c.strokeStyle = `rgba(255, 220, 255, ${alpha})`;
+    c.lineWidth = 6;
+    c.beginPath();
+    c.moveTo(l.wallX * S + S/2, l.wallY * S + S/2);
+    c.lineTo(l.px * S + S/2, l.py * S + S/2);
+    c.stroke();
+
+    c.restore();
+}
 
 // Draw fog overlay — SKIP IN PUZZLE ROOMS (mobile performance fix!)
 if (!inPuzzleRoom) {
@@ -11450,6 +11726,7 @@ if (gameOver) {
 }
     
 updateProjectiles();
+updateRedMaze();
 
     // Unique monster harasses player who stands still inside its spell
     const playerOnSpell = dangerousAreas.some(area => area.x === p.x && area.y === p.y);
