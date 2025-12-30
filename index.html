@@ -1597,6 +1597,8 @@ let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let soulResonance = 0; // 0-100%, +1 per floor, maxed triggers resurrection
 let resonanceTriggeredThisRun = false; // One-time per run
+let wardenUses = 0;  // tracks echo warden revives (reset on restart)
+let wardenRollPending = false;  // true when we need to roll for revive
 let wardenFlashStart = 0; // Timestamp for 500ms invert flash
 let wisps = []; // Array for active wisps (max 1)
 let wispPromptTimeout = null; // Timer for floor text prompt
@@ -3967,69 +3969,135 @@ else {
         logBattleEvent(`Floor ${floor} - Cursed Ring shattered! HP unchanged at ${p.hp}/${p.maxHP}. Gained ${p.elementImmunity} immunity.`);
     }
 
-    // Centralized death check (immortal + resonance + normal)
-    if (p.hp <= 0 && !gameOver) {
-        if (p.immortal) {
-            p.hp = 1;
-            logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
-        } else if (soulResonance >= 100 && !resonanceTriggeredThisRun) {
-            // Resonance Surge: One-time resurrection
-            resonanceTriggeredThisRun = true;
-            soulResonance = 0; // Consume meter
-            p.hp = 100;
-            p.hasArmor = true; // Leather armor
-            p.maxHP = 36; // Leather max
+// Centralized death check (immortal + resonance + normal)
+if (p.hp <= 0 && !gameOver) {
+    // -------------------------------------------------
+    // 1️⃣ Immortal hero – never dies
+    // -------------------------------------------------
+    if (p.immortal) {
+        p.hp = 1;
+        logBattleEvent(`Floor ${floor} - HODL immortality prevents death! HP set to 1`);
+        return;
+    }
+
+    // -------------------------------------------------
+    // 2️⃣ Echo Warden revival attempt (integer math)
+    // -------------------------------------------------
+    // Allow up to 3 revives (wardenUses 0‑2). The roll itself decides success.
+    if (wardenUses < 3 && !wardenRollPending) {
+        wardenRollPending = true;               // guard against double‑rolls
+
+        // Integer roll 1‑100 inclusive
+        const roll = Math.floor(Math.random() * 100) + 1;
+        const success = roll <= soulResonance;
+
+        // Debug line (optional)
+        // logBattleEvent(`Roll ${roll} vs resonance ${soulResonance}%`);
+
+        if (success) {
+            // ----- successful revival -----
+            wardenUses++;
+            soulResonance = 0;                  // consume resonance
+            wardenRollPending = false;          // allow next death to roll again
+
+            const reviveHP = wardenUses === 1 ? 100 :
+                             wardenUses === 2 ? 10 : 1;
+
+            // ----- player stats -----
+            p.hp = reviveHP;
+            p.hasArmor = true;
+            p.maxHP = 36;
             p.soulStormCharges = 256;
-            // Clear all enemies (with drops, like RIP)
+
+            // ----- clear enemies & spawn Echo Warden -----
             enemies.forEach(enemy => {
                 kills[enemy.type.name]++;
                 if (enemy.type.name !== 'Cursed Trader' && !enemy.uniqueName) {
-                    // Drop sats (simplified)
                     if (map[enemy.y][enemy.x] === 0) {
                         map[enemy.y][enemy.x] = 3;
-                        satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
+                        satoshiDrops.push({
+                            x: enemy.x,
+                            y: enemy.y,
+                            sats: enemy.sats,
+                            type: enemy.type.name
+                        });
                     }
                 }
-                handleUniqueMonsterReward(enemy); // Handle uniques
+                handleUniqueMonsterReward(enemy);
             });
-            enemies = []; // Wipe enemies
-        // Place Echo Warden directly on player's death spot
-        const wx = p.x;
-        const wy = p.y;
-        echoWardenPos = {x: wx, y: wy};
-        map[wy][wx] = 24; // New tile type for warden
-            // Effects
-            playWebAudioSound(sounds.rune); // Rune sound
-            logBattleEvent(`Floor ${floor} - Resonance Surge! Echo Warden descends—enemies vanquished, HP restored to 100, leather armor granted, soul charges maxed.`);
+            enemies = [];
+
+            // place the warden tile (24) at the player's current location
+            const wx = p.x;
+            const wy = p.y;
+            echoWardenPos = { x: wx, y: wy };
+            map[wy][wx] = 24;
+
+            playWebAudioSound(sounds.rune);
+            const lifeMsg = reviveHP.toString();
+            logBattleEvent(
+                `Floor ${floor} - Echo Warden revives you with ${lifeMsg} HP! (${wardenUses}/3 uses)`
+            );
             updateSatsDisplay();
             needsRedraw = true;
-            // Trigger 500ms invert flash on warden entry
             wardenFlashStart = Date.now();
-                    gameOver = false; // Force reset if spell/attack overrode
-        //console.log('DEBUG: Post-surge force - HP:', p.hp, 'gameOver:', gameOver); // Remove after test
+            gameOver = false;                    // keep the game running
         } else {
-            // Normal death
+            // ----- failed roll – instant death -----
+            logBattleEvent(
+                `Floor ${floor} - Echo Warden fails... (${Math.floor(soulResonance)}% chance missed, rolled ${roll})`
+            );
+
+            // Normal‑death handling (same as the “no resonance” branch)
             p.hp = 0;
             diamonds = 0;
 
-            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-            // NEW: Lose the farm when you die
             if (p.farmLocked) {
-                logBattleEvent(`Floor ${floor} - Your farm withered... all planted SATS lost forever.`);
+                logBattleEvent(
+                    `Floor ${floor} - Your farm withered... all planted SATS lost forever.`
+                );
                 p.farmLocked = false;
                 p.farmLockedFloor = 0;
                 p.farmLockedSats = 0;
             }
-            // ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 
             logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-            gameOver = true; // Centralized set
-            updatePlayerState(); // Run death/resonance check
-            // 2s input lock
+            gameOver = true;
             inputBlocked = true;
-            setTimeout(() => { inputBlocked = false; }, 1000);
+            setTimeout(() => {
+                inputBlocked = false;
+            }, 1000);
+
+            wardenRollPending = false; // reset for any future death checks
         }
+
+        // -------------------------------------------------
+        // End of warden‑revival attempt
+        // -------------------------------------------------
+    } else {
+        // -------------------------------------------------
+        // 3️⃣ Normal death (no revives left or roll already pending)
+        // -------------------------------------------------
+        p.hp = 0;
+        diamonds = 0;
+
+        if (p.farmLocked) {
+            logBattleEvent(
+                `Floor ${floor} - Your farm withered... all planted SATS lost forever.`
+            );
+            p.farmLocked = false;
+            p.farmLockedFloor = 0;
+            p.farmLockedSats = 0;
+        }
+
+        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+        gameOver = true;
+        inputBlocked = true;
+        setTimeout(() => {
+            inputBlocked = false;
+        }, 1000);
     }
+}
 
     needsRedraw = true;
 }  // ← Add this closing brace here (end of function)
@@ -6791,18 +6859,46 @@ function updateProjectiles() {
 
                     if (hit.hp <= 0) {
                         kills[hit.type.name]++;
-                        let dropPlaced = false;
+                        tryDropScroll(hit.x, hit.y);
 
+                        // Handle unique monster rewards
                         handleUniqueMonsterReward(hit);
+
+                        // Cursed Trader special: soul stone + possible ring, NO sats drop
                         if (hit.type.name === 'Cursed Trader') {
                             dropSoulStone(hit.x, hit.y);
-                        }
 
-                        enemies = enemies.filter(e => e !== hit);
-
-                        // Normal sats drop (skip uniques & Cursed Trader)
-                        if (hit.type.name !== 'Cursed Trader') {
+                            // Cursed Ring drop (50% chance)
+                            if (Math.random() < 0.5 && !p.hasCursedRing) {
+                                let ringPlaced = false;
+                                if (map[hit.y][hit.x] === 0) {
+                                    map[hit.y][hit.x] = 23;
+                                    ringPlaced = true;
+                                } else {
+                                    const adjacent = [
+                                        {x: hit.x, y: hit.y - 1},
+                                        {x: hit.x, y: hit.y + 1},
+                                        {x: hit.x - 1, y: hit.y},
+                                        {x: hit.x + 1, y: hit.y}
+                                    ];
+                                    for (const pos of adjacent) {
+                                        const ax = pos.x, ay = pos.y;
+                                        if (ax >= 0 && ax < W && ay >= 0 && ay < H && map[ay][ax] === 0 && !enemies.some(e => e.x === ax && e.y === ay)) {
+                                            map[ay][ax] = 23;
+                                            ringPlaced = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (ringPlaced) {
+                                    logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                                    playWebAudioSound(sounds.pickup);
+                                }
+                            }
+                        } else {
+                            // Normal enemies only (including uniques — they get handled in handleUniqueMonsterReward)
                             if (!hit.uniqueName) {
+                                let dropPlaced = false;
                                 if (map[hit.y][hit.x] === 0) {
                                     map[hit.y][hit.x] = 3;
                                     satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
@@ -6827,36 +6923,8 @@ function updateProjectiles() {
                             }
                         }
 
-                        // Cursed Ring drop (50% for Cursed Trader only)
-                        if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5) {
-                            let ringPlaced = false;
-                            if (map[hit.y][hit.x] === 0 && !p.hasCursedRing) {
-                                map[hit.y][hit.x] = 23;
-                                ringPlaced = true;
-                            } else {
-                                const adjacent = [
-                                    {x: hit.x, y: hit.y - 1},
-                                    {x: hit.x, y: hit.y + 1},
-                                    {x: hit.x - 1, y: hit.y},
-                                    {x: hit.x + 1, y: hit.y}
-                                ];
-                                for (const pos of adjacent) {
-                                    const ax = pos.x, ay = pos.y;
-                                    if (ax >= 0 && ax < W && ay >= 0 && ay < H && map[ay][ax] === 0 && !enemies.some(e => e.x === ax && e.y === ay) && !p.hasCursedRing) {
-                                        map[ay][ax] = 23;
-                                        ringPlaced = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (ringPlaced) {
-                                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
-                                playWebAudioSound(sounds.pickup);
-                            }
-                        }
-
-                        // Rune drop (20% Hell Shrimp, 10% others)
-                        if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                        // Rune drop (20% Hell Shrimp, 10% others) — applies to all except Cursed Trader
+                        if (hit.type.name !== 'Cursed Trader' && Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
                             let runeLetter;
                             if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
                                 const hellShrimpRunes = ['r', 'i', 'p', 'h', 'o', 'd', 'l'];
@@ -7699,163 +7767,136 @@ if (enemy.type.name === 'Cursed Trader') {
             applyWispAttack(wisp, hit);
         }
         
-if (hit.hp <= 0) {
-    kills[hit.type.name]++;
-    
-tryDropScroll(hit.x, hit.y);
-    
-    let dropPlaced = false;
-    
-// Handle unique monster rewards using new function
-handleUniqueMonsterReward(hit);
+                    if (hit.hp <= 0) {
+                        kills[hit.type.name]++;
+                        tryDropScroll(hit.x, hit.y);
 
-        // Normal enemy reward (skip for uniques/Cursed Trader)
-        if (!hit.uniqueName && hit.type.name !== 'Cursed Trader') {
-            if (map[hit.y][hit.x] === 0) {
-                map[hit.y][hit.x] = 3;
-                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
-                dropPlaced = true;
-            } else {
-                const adjacent = [
-                    {x: hit.x, y: hit.y - 1},
-                    {x: hit.x, y: hit.y + 1},
-                    {x: hit.x - 1, y: hit.y},
-                    {x: hit.x + 1, y: hit.y}
-                ];
-                for (const pos of adjacent) {
-                    const nx = pos.x, ny = pos.y;
-                    if (
-                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                        map[ny][nx] === 0 &&
-                        !enemies.some(e => e.x === nx && e.y === ny)
-                    ) {
-                        map[ny][nx] = 3;
-                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
-                        dropPlaced = true;
-                        break;
-                    }
-                }
-            }
-        }
+                        // Handle unique monster rewards
+                        handleUniqueMonsterReward(hit);
 
-        // Cursed Ring drop (50% for Cursed Trader only)
-        if (hit.type.name === 'Cursed Trader' && Math.random() < 0.5 && !p.hasCursedRing) {
-            let ringPlaced = false;
-            if (map[hit.y][hit.x] === 0) {
-                map[hit.y][hit.x] = 23; // Cursed ring tile
-                ringPlaced = true;
-            } else {
-                const adjacent = [
-                    { x: hit.x, y: hit.y - 1 },
-                    { x: hit.x, y: hit.y + 1 },
-                    { x: hit.x - 1, y: hit.y },
-                    { x: hit.x + 1, y: hit.y }
-                ];
-                for (const pos of adjacent) {
-                    const nx = pos.x, ny = pos.y;
-                    if (
-                        nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                        map[ny][nx] === 0 &&
-                        !enemies.some(e => e.x === nx && e.y === ny)
-                    ) {
-                        map[ny][nx] = 23; // Cursed ring tile
-                        ringPlaced = true;
-                        break;
-                    }
-                }
-            }
-            if (ringPlaced) {
-                logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
-                playWebAudioSound(sounds.pickup);
-            }
-        }
+                        // Cursed Trader special: soul stone + possible ring, NO sats drop
+                        if (hit.type.name === 'Cursed Trader') {
+                            dropSoulStone(hit.x, hit.y);
 
-        if (!dropPlaced && hit.type.name !== 'Cursed Trader') {
-            // No space for satoshi drop
-        }
-
-            // Soul stone drop logic (5% chance)
-            if (Math.random() < 0.05) {
-                let stonePlaced = false;
-                if (map[hit.y][hit.x] === 0) {
-                    map[hit.y][hit.x] = 20; // Soul stone tile
-                    stonePlaced = true;
-                } else {
-                    const adjacent = [
-                        {x: hit.x, y: hit.y - 1},
-                        {x: hit.x, y: hit.y + 1},
-                        {x: hit.x - 1, y: hit.y},
-                        {x: hit.x + 1, y: hit.y}
-                    ];
-                    for (const pos of adjacent) {
-                        const nx = pos.x, ny = pos.y;
-                        if (
-                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                            map[ny][nx] === 0 &&
-                            !enemies.some(e => e.x === nx && e.y === ny)
-                        ) {
-                            map[ny][nx] = 20; // Soul stone tile
-                            stonePlaced = true;
-                            break;
+                            // Cursed Ring drop (50% chance)
+                            if (Math.random() < 0.5 && !p.hasCursedRing) {
+                                let ringPlaced = false;
+                                if (map[hit.y][hit.x] === 0) {
+                                    map[hit.y][hit.x] = 23;
+                                    ringPlaced = true;
+                                } else {
+                                    const adjacent = [
+                                        {x: hit.x, y: hit.y - 1},
+                                        {x: hit.x, y: hit.y + 1},
+                                        {x: hit.x - 1, y: hit.y},
+                                        {x: hit.x + 1, y: hit.y}
+                                    ];
+                                    for (const pos of adjacent) {
+                                        const nx = pos.x, ny = pos.y;
+                                        if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                                            map[ny][nx] = 23;
+                                            ringPlaced = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (ringPlaced) {
+                                    logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Cursed Ring!`);
+                                    playWebAudioSound(sounds.pickup);
+                                }
+                            }
+                        } else if (!hit.uniqueName) {
+                            // Normal enemies only — drop sats visually
+                            if (map[hit.y][hit.x] === 0) {
+                                map[hit.y][hit.x] = 3;
+                                satoshiDrops.push({x: hit.x, y: hit.y, sats: hit.sats, type: hit.type.name});
+                            } else {
+                                const adjacent = [
+                                    {x: hit.x, y: hit.y - 1},
+                                    {x: hit.x, y: hit.y + 1},
+                                    {x: hit.x - 1, y: hit.y},
+                                    {x: hit.x + 1, y: hit.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                                        map[ny][nx] = 3;
+                                        satoshiDrops.push({x: nx, y: ny, sats: hit.sats, type: hit.type.name});
+                                        break;
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-                if (stonePlaced) {
-                    p.soulStones++;
-                    logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a Soul Stone!`);
-                    playWebAudioSound(sounds.buzz);
-                }
-            }
 
-            // Rune drop logic (20% chance for Hell Shrimp, 10% for others)
-            if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
-                let runeLetter;
-                if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
-                    // Hell Shrimp: Use specific rune letters
-                    const hellShrimpRunes = ['r', 'i', 'p', 'h', 'o', 'd', 'l'];
-                    runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
-                } else {
-                    // Regular rune drop
-                    const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
-                    runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
-                }
-                let runePlaced = false;
-                if (map[hit.y][hit.x] === 0) {
-                    map[hit.y][hit.x] = 8; // Generic rune on floor
-                    runeDrops.push({ x: hit.x, y: hit.y, letter: runeLetter });
-                    runePlaced = true;
-                } else {
-                    const adjacent = [
-                        { x: hit.x, y: hit.y - 1 },
-                        { x: hit.x, y: hit.y + 1 },
-                        { x: hit.x - 1, y: hit.y },
-                        { x: hit.x + 1, y: hit.y }
-                    ];
-                    for (const pos of adjacent) {
-                        const nx = pos.x, ny = pos.y;
-                        if (
-                            nx >= 0 && nx < W && ny >= 0 && ny < H &&
-                            map[ny][nx] === 0 &&
-                            !enemies.some(e => e.x === nx && e.y === ny)
-                        ) {
-                            map[ny][nx] = 8; // Generic rune on floor
-                            runeDrops.push({ x: nx, y: ny, letter: runeLetter });
-                            runePlaced = true;
-                            break;
+                        // Soul stone drop logic (5% chance) — all enemies except Cursed Trader
+                        if (hit.type.name !== 'Cursed Trader' && Math.random() < 0.05) {
+                            let stonePlaced = false;
+                            if (map[hit.y][hit.x] === 0) {
+                                map[hit.y][hit.x] = 20;
+                                stonePlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: hit.x, y: hit.y - 1},
+                                    {x: hit.x, y: hit.y + 1},
+                                    {x: hit.x - 1, y: hit.y},
+                                    {x: hit.x + 1, y: hit.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                                        map[ny][nx] = 20;
+                                        stonePlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (stonePlaced) {
+                                p.soulStones++;
+                                logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a Soul Stone!`);
+                                playWebAudioSound(sounds.buzz);
+                            }
                         }
-                    }
-                }
-                if (runePlaced) {
-                    logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
-                    playWebAudioSound(sounds.rune_drop);
-                }
-            }
 
-if (hit.type.name === 'Cursed Trader') {
-        dropSoulStone(hit.x, hit.y);
-    }
-            enemies = enemies.filter(en => en !== hit);
-        }
+                        // Rune drop logic (20% for Hell Shrimp, 10% for others)
+                        if (Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                            let runeLetter;
+                            if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
+                                const hellShrimpRunes = ['r', 'i', 'p', 'h', 'o', 'd', 'l'];
+                                runeLetter = hellShrimpRunes[Math.floor(Math.random() * hellShrimpRunes.length)];
+                            } else {
+                                const runeLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'y', 'z', 'æ', 'ø'];
+                                runeLetter = runeLetters[Math.floor(Math.random() * runeLetters.length)];
+                            }
+                            let runePlaced = false;
+                            if (map[hit.y][hit.x] === 0) {
+                                map[hit.y][hit.x] = 8;
+                                runeDrops.push({x: hit.x, y: hit.y, letter: runeLetter});
+                                runePlaced = true;
+                            } else {
+                                const adjacent = [
+                                    {x: hit.x, y: hit.y - 1},
+                                    {x: hit.x, y: hit.y + 1},
+                                    {x: hit.x - 1, y: hit.y},
+                                    {x: hit.x + 1, y: hit.y}
+                                ];
+                                for (const pos of adjacent) {
+                                    const nx = pos.x, ny = pos.y;
+                                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                                        map[ny][nx] = 8;
+                                        runeDrops.push({x: nx, y: ny, letter: runeLetter});
+                                        runePlaced = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (runePlaced) {
+                                logBattleEvent(`Floor ${floor} - ${hit.type.name} dropped a mysterious rune!`);
+                                playWebAudioSound(sounds.rune_drop);
+                            }
+                        }
+
+                        enemies = enemies.filter(en => en !== hit);
+                    }
     }
 } else if (initialPickaxes > 0 && isWallNearby) {
     if (inPuzzleRoom) {
@@ -9778,6 +9819,9 @@ p.farmLockedSats = 0;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity on restart
     soulResonance = 0;
+    resonanceTriggeredThisRun = false; // Reset for new run
+    wardenUses = 0;  // reset echo warden tracker
+    wardenRollPending = false;
     wardenFlashStart = 0; // Clear flash on restart
     
     p.runes = [];
