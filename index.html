@@ -1632,9 +1632,9 @@ let battleLogTimeout = null;
 let projectiles = [];
 let snowflakes = [];
 let ruinsRainActive = false;
-let rainAmbienceTimer = null;  // restart loop timer
-let rainAudioCtx = null;       // shared context
-let rainAmbiencePlayed = false;  // track if we've started rain sound this run
+let rainAmbienceTimer = null; // restart loop timer
+let rainNoiseSource = null; // source node for looping rain (use global context)
+let rainAmbiencePlayed = false; // track if we've started rain sound this run
 let raindrops = [];
 let floorSplashes = [];
 let ruinsRainAngle = 0;  // diagonal direction for rain streaks (set once per block)
@@ -2409,41 +2409,35 @@ function wispSpeak(type) {
 }
 
 function playPigSnort() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
+    }
+
     const duration = 0.45;
-    const sampleRate = ctx.sampleRate;
-
-    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate);
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < data.length; i++) {
         const t = i / sampleRate;
-
         // Base low growl with wobble
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
-
         // Higher piggy harmonic
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
-
         // Add some roughness/noise
         wave += 0.2 * (Math.random() - 0.5);
-
         // Punchy envelope: fast attack, long decay
         const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
         data[i] = wave * envelope;
     }
-
-    const source = ctx.createBufferSource();
+    const source = audioContext.createBufferSource();
     source.buffer = buffer;
-
     // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = soundVolume;  // uses the global soundVolume set by terminal
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = soundVolume; // uses the global soundVolume set by terminal
     source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
+    gainNode.connect(audioContext.destination);
     source.start(0);
 }
 
@@ -2451,26 +2445,28 @@ function playPigSnort() {
 function playScourgeSpin() {
     if (musicMuted || soundVolume === 0) return;
 
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
+if (audioContext.state === 'suspended') {
+    audioContext.resume().catch(e => console.error('Failed to resume AudioContext for scourge spin:', e));
+}
+const now = audioContext.currentTime;
 
     // Master gain – louder epic
-    const master = ctx.createGain();
+    const master = audioContext.createGain();
     master.gain.value = 0.9 * soundVolume;
-    master.connect(ctx.destination);
+    master.connect(audioContext.destination);
 
     // 1. Angelic WHOOSH sweep
-    const whoosh = ctx.createOscillator();
+    const whoosh = audioContext.createOscillator();
     whoosh.type = 'triangle';
     whoosh.frequency.setValueAtTime(300, now);
     whoosh.frequency.exponentialRampToValueAtTime(30, now + 0.5);
 
-    const whooshFilter = ctx.createBiquadFilter();
+    const whooshFilter = audioContext.createBiquadFilter();
     whooshFilter.type = 'highpass';
     whooshFilter.frequency.setValueAtTime(200, now);
     whooshFilter.frequency.exponentialRampToValueAtTime(800, now + 0.5);
 
-    const whooshGain = ctx.createGain();
+    const whooshGain = audioContext.createGain();
     whooshGain.gain.setValueAtTime(0, now);
     whooshGain.gain.linearRampToValueAtTime(1.2, now + 0.03);
     whooshGain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
@@ -2484,12 +2480,12 @@ function playScourgeSpin() {
         const t = now + i * 0.09;
 
         // Deep punch – sine
-        const thud = ctx.createOscillator();
+        const thud = audioContext.createOscillator();
         thud.type = 'sine';
         thud.frequency.setValueAtTime(120, t);
         thud.frequency.exponentialRampToValueAtTime(40, t + 0.15);
 
-        const thudGain = ctx.createGain();
+        const thudGain = audioContext.createGain();
         thudGain.gain.setValueAtTime(1.0, t);
         thudGain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
 
@@ -2498,21 +2494,21 @@ function playScourgeSpin() {
         thud.stop(t + 0.18);
 
         // Metallic CLANG – layered
-        const clang = ctx.createOscillator();
+        const clang = audioContext.createOscillator();
         clang.type = 'square';
         clang.frequency.setValueAtTime(380 + i * 90, t);
         clang.frequency.exponentialRampToValueAtTime(120, t + 0.08);
 
-        const clang2 = ctx.createOscillator();
+        const clang2 = audioContext.createOscillator();
         clang2.type = 'square';
         clang2.frequency.setValueAtTime((380 + i * 90) * 1.5 + 5, t);
         clang2.frequency.exponentialRampToValueAtTime(180, t + 0.08);
 
-        const clangGain = ctx.createGain();
+        const clangGain = audioContext.createGain();
         clangGain.gain.setValueAtTime(0.45, t);
         clangGain.gain.exponentialRampToValueAtTime(0.02, t + 0.12);
 
-        const clangFilter = ctx.createBiquadFilter();
+        const clangFilter = audioContext.createBiquadFilter();
         clangFilter.type = 'bandpass';
         clangFilter.frequency.value = 900;
         clangFilter.Q.value = 10;
@@ -2528,17 +2524,17 @@ function playScourgeSpin() {
     }
 
     // Longer, smoother reverb tail
-    const convolver = ctx.createConvolver();
-    const impulse = ctx.createBuffer(2, ctx.sampleRate * 0.4, ctx.sampleRate);
+    const convolver = audioContext.createConvolver();
+    const impulse = audioContext.createBuffer(2, audioContext.sampleRate * 0.4, audioContext.sampleRate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
     for (let i = 0; i < impulse.length; i++) {
-        const decay = Math.exp(-i / (ctx.sampleRate * 0.3));
+        const decay = Math.exp(-i / (audioContext.sampleRate * 0.3));
         left[i] = (Math.random() * 2 - 1) * decay;
         right[i] = (Math.random() * 2 - 1) * decay;
     }
     convolver.buffer = impulse;
-    master.connect(convolver).connect(ctx.destination);
+    master.connect(convolver).connect(audioContext.destination);
 }
 
 // CAT TRACKER v16
@@ -2546,13 +2542,15 @@ function playCatPurr() {
   // Cat purr is a sound effect — play even when music is muted
   if (typeof soundVolume === 'undefined') soundVolume = 1;
   if (soundVolume === 0) return;
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator(); osc.type = 'sawtooth';
-  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass';
+if (audioContext.state === 'suspended') {
+    audioContext.resume().catch(e => console.error('Failed to resume AudioContext for cat purr:', e));
+}
+const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator(); osc.type = 'sawtooth';
+  const filter = audioContext.createBiquadFilter(); filter.type = 'lowpass';
   filter.frequency.setValueAtTime(3000, now);
   filter.frequency.exponentialRampToValueAtTime(1500, now + 1.0);
-  const gain = ctx.createGain();
+  const gain = audioContext.createGain();
   gain.gain.setValueAtTime(0.001, now);
   gain.gain.linearRampToValueAtTime(0.7 * soundVolume, now + 0.08);
 
@@ -2570,56 +2568,50 @@ function playCatPurr() {
   t += 0.4056;
   gain.gain.setValueAtTime(0.7 * soundVolume, t - 0.25);
   gain.gain.exponentialRampToValueAtTime(0.001, t);
-  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.connect(filter).connect(gain).connect(audioContext.destination);
   osc.start(now); osc.stop(t + 0.3);
 }
 
-// POURING RAIN AMBIENCE v3 – true infinite loop (no stop/start needed)
+// POURING RAIN AMBIENCE v4 – IOS fix
 function startRainAmbience() {
-    if (rainAmbienceTimer) return;  // already running
+    if (rainAmbienceTimer) return; // already running
 
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    rainAudioCtx = ctx;
-
-    // Resume if suspended
-    if (ctx.state !== 'running') {
-        ctx.resume();
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for rain:', e));
     }
 
-    const now = ctx.currentTime;
+    const now = audioContext.currentTime;
 
     // White noise buffer
-    const bufferSize = 4 * ctx.sampleRate;  // longer buffer = truly seamless
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const bufferSize = 4 * audioContext.sampleRate;
+    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
         data[i] = Math.random() * 2 - 1;
     }
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = noiseBuffer;
-    noise.loop = true;  // this alone makes it infinite
+    rainNoiseSource = audioContext.createBufferSource();
+    rainNoiseSource.buffer = noiseBuffer;
+    rainNoiseSource.loop = true;
 
-    const filter1 = ctx.createBiquadFilter();
+    const filter1 = audioContext.createBiquadFilter();
     filter1.type = 'lowpass';
     filter1.frequency.setValueAtTime(1400, now);
 
-    const filter2 = ctx.createBiquadFilter();
+    const filter2 = audioContext.createBiquadFilter();
     filter2.type = 'bandpass';
     filter2.frequency.setValueAtTime(1800, now);
     filter2.Q.setValueAtTime(1.5, now);
 
-    const gain = ctx.createGain();
+    const gain = audioContext.createGain();
     gain.gain.setValueAtTime(0.001, now);
-    gain.gain.exponentialRampToValueAtTime(0.40 * soundVolume, now + 1.5);  // +15%
-    gain.gain.setValueAtTime(0.38 * soundVolume, now + 30);  // +15%
+    gain.gain.exponentialRampToValueAtTime(0.40 * soundVolume, now + 1.5);
+    gain.gain.setValueAtTime(0.38 * soundVolume, now + 30);
 
-    noise.connect(filter1).connect(filter2).connect(gain).connect(ctx.destination);
-    noise.start(now);
+    rainNoiseSource.connect(filter1).connect(filter2).connect(gain).connect(audioContext.destination);
+    rainNoiseSource.start(now);
 
-    // No interval needed anymore — loop = true handles it perfectly
-    // We keep the timer reference only for cleanup on theme change
-    rainAmbienceTimer = true;  // simple flag
+    rainAmbienceTimer = true;
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -3211,13 +3203,13 @@ const newTheme = selectNewTheme(currentTheme);
         snowflakes = [];
         raindrops = [];
         floorSplashes = [];
-    if (rainAmbienceTimer) {
-        rainAmbienceTimer = null;
-    }
-    if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
-        rainAudioCtx.close().catch(() => {});
-        rainAudioCtx = null;
-    }
+if (rainAmbienceTimer) {
+    rainAmbienceTimer = null;
+}
+if (rainNoiseSource) {
+    rainNoiseSource.stop();
+    rainNoiseSource = null;
+}
         currentTheme = newTheme;
     }
 } else {
@@ -3234,13 +3226,13 @@ const newTheme = selectNewTheme(currentTheme);
         ruinsRainActive = false;
         raindrops = [];
         floorSplashes = [];
-    if (rainAmbienceTimer) {
-        rainAmbienceTimer = null;
-    }
-    if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
-        rainAudioCtx.close().catch(() => {});
-        rainAudioCtx = null;
-    }
+if (rainAmbienceTimer) {
+    rainAmbienceTimer = null;
+}
+if (rainNoiseSource) {
+    rainNoiseSource.stop();
+    rainNoiseSource = null;
+}
     }
 }
 
@@ -9701,13 +9693,13 @@ if (currentTheme === 'ruins') {
         raindrops = [];
         floorSplashes = [];
         // Stop ambience if it was running
-        if (rainAmbienceTimer) {
-            rainAmbienceTimer = null;
-        }
-        if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
-            rainAudioCtx.close().catch(() => {});
-            rainAudioCtx = null;
-        }
+if (rainAmbienceTimer) {
+    rainAmbienceTimer = null;
+}
+if (rainNoiseSource) {
+    rainNoiseSource.stop();
+    rainNoiseSource = null;
+}
     }
 }
 
@@ -10016,13 +10008,13 @@ p.curseActive = false;  // Lift lingering curse
     raindrops = [];
     floorSplashes = [];
     rainAmbiencePlayed = false;  // ← add this line
-    if (rainAmbienceTimer) {
-        rainAmbienceTimer = null;
-    }
-    if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
-        rainAudioCtx.close().catch(() => {});
-        rainAudioCtx = null;
-    }
+if (rainAmbienceTimer) {
+    rainAmbienceTimer = null;
+}
+if (rainNoiseSource) {
+    rainNoiseSource.stop();
+    rainNoiseSource = null;
+}
 // Restore a random immunity on restart
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
 p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
@@ -10381,13 +10373,13 @@ if (wardenFlashStart > 0) {
         if (ruinsRainActive) ruinsRainActive = false;
         if (raindrops.length) raindrops = [];
         if (floorSplashes.length) floorSplashes = [];
-        if (rainAmbienceTimer) {
-            rainAmbienceTimer = null;
-        }
-        if (rainAudioCtx && rainAudioCtx.state !== 'closed') {
-            rainAudioCtx.close().catch(() => {});
-            rainAudioCtx = null;
-        }
+if (rainAmbienceTimer) {
+    rainAmbienceTimer = null;
+}
+if (rainNoiseSource) {
+    rainNoiseSource.stop();
+    rainNoiseSource = null;
+}
     }
 
     const radius = 4;
