@@ -5515,11 +5515,9 @@ if (currentTheme === 'dungeon' && floor >= 50) {
 // UNIQUE MONSTER SOUND END
                
         playWebAudioSound(sounds.secret);
-        // Kill all normal enemies instantly
-        enemies.forEach(e => {
-            if (!e.uniqueName) e.hp = 0;
-        });
-        enemies = enemies.filter(e => e.hp > 0);
+// Kill ALL enemies instantly (including invisible Cursed Trader)
+enemies.forEach(e => e.hp = 0);
+enemies = [];
         redMazeActive = true;
         redMazeLastFloor = floor;           // lock out for next 50 floors
         musicManager.mute(true);            // pause music
@@ -9499,6 +9497,8 @@ function startPuzzleRoom() {
     puzzleReturnPos = { x: p.x, y: p.y };
     puzzlePreviousTheme = currentTheme;
     enemies = [];
+    // Kill ALL enemies instantly (including invisible Cursed Trader) — ensures death effects/drops if any carry over
+    enemies.forEach(e => e.hp = 0);
     isFetchingTxs = true;
     exit = null;
 
@@ -11679,6 +11679,14 @@ if (minimapVisible && zoomEnabled) {
         c.fillStyle = '#F7931A';
         c.fillRect(mx + 0.5, my + 0.5, MINI_S * 0.8, MINI_S * 0.8); // same size as player
     });
+
+// Red Maze boss eye on minimap (bright orange square like enemies)
+if (redMazeActive && redMaze) {
+    const mx = redMaze.x * MINI_S;
+    const my = redMaze.y * MINI_S;
+    c.fillStyle = '#FF0000'; // red boss marker
+    c.fillRect(mx + 0.5, my + 0.5, MINI_S * 0.8, MINI_S * 0.8);
+}
 
     // Player (white dot)
     const px = p.x * MINI_S + 0.5;
