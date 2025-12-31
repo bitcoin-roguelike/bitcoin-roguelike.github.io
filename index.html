@@ -5503,10 +5503,25 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
 
 // ——— RED MAZE BOSS CHECK (corrected logic) ———
 // Activate on dungeon floors once ≥50 floors have passed since last Red Maze (or run start)
-if (currentTheme === 'dungeon' && floor >= 50) {
+if (currentTheme === 'dungeon' && floor >= 2) {
     const floorsSinceLast = floor - (redMazeLastFloor || 0);
-    if (floorsSinceLast >= 50) {
+    if (floorsSinceLast >= 2) {
         logBattleEvent('RED MAZE HAS ARRIVED!');
+
+// UNIQUE MONSTER SOUND START        
+    if (isIOSorSafari()) {
+        // iOS/Safari version - use existing audio handling
+        const audio = sounds.unique_monster;
+        if (audio && audio.src) {
+            audio.currentTime = 0;
+            audio.play().catch(e => console.error('Unique monster sound error:', e));
+        }
+    } else {
+        // Non-iOS version - use Web Audio
+        playWebAudioSound(sounds.unique_monster);
+    }
+// UNIQUE MONSTER SOUND END
+               
         playWebAudioSound(sounds.secret);
         // Kill all normal enemies instantly
         enemies.forEach(e => {
@@ -9239,7 +9254,7 @@ F............#
 #..#...C...#.#
 S..#.B...B.#.#
 F............#
-##############`
+##############`,
     ],
     rare: [
 `##############
@@ -9294,8 +9309,8 @@ F............#
 ##############
 #..#HLBHLLH#.#
 #..#.LL#LLL..#
-#..#vB.B.Bv..#
-#............#
+#..#v..B..v..#
+#....B...B...#
 #............#
 #............#
 #.....C.@....#
@@ -9305,20 +9320,20 @@ F............#
 `##############
 #LLLLLLLLLLLL#
 #L>.^......<L#
-#L>@^...B..<L#
+#L>@^......<.#
 #L>.^......<H#
-#L>.^......<L#
+#L>........<L#
 #L>.^......<L#
 #L>.^...###<L#
-#L>.^...#...L#
-S.>.^...#.B<L#
-F.CL^......LL#
+#...^...#.B.L#
+S.LLL...#...L#
+F.LCL......LL#
 ##############`,
 `##############
 #............#
 #.####LBL###.#
 #.#........#.#
-#.#..##^##.#.#
+#.#..##L##.#.#
 #.#..#.C.#.#.#
 #.#.H#LLL#H#.#
 #.#LL#.###.#.#
@@ -9361,7 +9376,7 @@ F............#
 #......B.....#
 S.........@..#
 F............#
-##############`
+##############`,
     ],
     legendary: [
 `##############
@@ -9404,13 +9419,13 @@ F..LLLLLLLLLL#
 #....LvHL....#
 #....Lv^L....#
 #....Lv^L....#
-#.B.BLv^L....#
+#.B..Lv^L....#
 #....Lv^L....#
 #....Lv^L....#
 #..B.Lv^L....#
 #....Lv^L....#
 S..@.Lv^L..C.#
-F....LH^L....#
+F....<H^L....#
 ##############`,
 `##############
 #............#
@@ -9418,7 +9433,7 @@ F....LH^L....#
 #LLL......LLL#
 #vvvv^LLLLvvv#
 #...L^LLLL...#
-#.B.LC>HL..B.#
+#.B.LC>H>..B.#
 #...LLLLL....#
 #.L........L.#
 S.LL...@..LL.#
@@ -9426,13 +9441,13 @@ F............#
 ##############`,
 `##############
 #............#
-#L#...B....#L#
-#LL<<<<<<<<<L#
-#L..#LLLL#..L#
-#L...LC#L...L#
-#L@..L#H....L#
-#L..#LLLL#..L#
-#L>>>>>>>>>>.#
+#.#...B....#L#
+#.LL<<<<<<<<L#
+#...#LLLL#..L#
+#....LC#L...L#
+#.@..L#H....L#
+#...#LLLL#..L#
+#.>>>>>>>>>>.#
 S.#....B...#.#
 F............#
 ##############`,
@@ -9450,21 +9465,21 @@ F............#
 ##############`,
 `##############
 #............#
-#....##...B..#
+#....##......#
 #...#HL#.....#
-#..#..L.#....#
+#..#LLLL#....#
 #.#LLBCLL#...#
-#..#..^B..#..#
-#...#H^..#...#
+#..<..^B..#..#
+#...#H^..>...#
 #....#^.#....#
-S.@...#v.....#
+S.@...#v..B..#
 F............#
 ##############`,
 `##############
-#HLLL........#
-#LHvL........#
 #LLLL........#
-#............#
+#HLvL........#
+##LLL........#
+###..........#
 #....B..B.B..#
 #............#
 #.........@..#
@@ -9483,8 +9498,8 @@ F............#
 #.L.L.L.L.L..#
 S.L.L.L.L.L..#
 F.L.L.L.L.L..#
-##############`
-    ]
+##############`,
+    ],
 };
 
 function startPuzzleRoom() {
