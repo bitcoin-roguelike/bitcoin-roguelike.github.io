@@ -6580,11 +6580,19 @@ if (sounds.secret) {
     sounds.secret.play().catch(() => {});
 }
 
-        // Deal 1% HP damage
-        const dmg = Math.ceil(p.hp * 0.01);
+        // Deal 2% HP damage
+        const dmg = Math.ceil(p.hp * 0.02);
         p.hp -= dmg;
-        logBattleEvent(`Red Maze eye lazer hits! -${dmg} HP (1%)`);
+        logBattleEvent(`Red Maze floor eye lazer hits! -${dmg} HP (2%)`);
         updatePlayerState();
+
+// Flash player tile on lazer hit
+highlightTiles.push({
+    x: p.x,
+    y: p.y,
+    highlightStart: Date.now(),
+    color: 'rgba(255, 0, 0, 0.6)' // red flash for lazer hit
+});
 
         redMazeLazerTime = now + 3000;
     }
@@ -10723,7 +10731,7 @@ highlightTiles.forEach(tile => {
         const isVisible = fogMap[tile.y][tile.x] === 1 || dist <= radius;
         if (isVisible) {
             c.save();
-            c.fillStyle = 'rgba(247, 147, 26, 0.5)'; // Bitcoin orange flash
+            c.fillStyle = tile.color || 'rgba(247, 147, 26, 0.5)'; // use custom color if provided, else orange
             c.fillRect(tile.x * S, tile.y * S, S, S);
             c.restore();
         }
@@ -11074,38 +11082,6 @@ wisps.forEach(wisp => {
         c.restore();
     }
 });
-
-// Draw single Red Maze eye lazer (instant thick beam with glow)
-if (redMazeActive && activeLazers.length > 0) {
-    const l = activeLazers[0];
-    const age = Date.now() - l.startTime;
-    if (age >= 300) return;
-    const alpha = 1 - (age / 300);
-
-    c.save();
-
-    // Outer intense pink glow
-    c.shadowColor = '#ff1493';
-    c.shadowBlur = 25;
-    c.strokeStyle = `rgba(255, 20, 147, ${alpha * 0.9})`;
-    c.lineWidth = 12;
-    c.lineCap = 'round';
-    c.beginPath();
-    c.moveTo(l.wallX * S + S/2, l.wallY * S + S/2);
-    c.lineTo(l.px * S + S/2, l.py * S + S/2);
-    c.stroke();
-
-    // Bright white-hot core
-    c.shadowBlur = 15;
-    c.strokeStyle = `rgba(255, 220, 255, ${alpha})`;
-    c.lineWidth = 6;
-    c.beginPath();
-    c.moveTo(l.wallX * S + S/2, l.wallY * S + S/2);
-    c.lineTo(l.px * S + S/2, l.py * S + S/2);
-    c.stroke();
-
-    c.restore();
-}
 
 // Draw fog overlay — SKIP IN PUZZLE ROOMS (mobile performance fix!)
 if (!inPuzzleRoom) {
