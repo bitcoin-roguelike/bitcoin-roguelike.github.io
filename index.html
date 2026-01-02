@@ -11021,21 +11021,21 @@ wisps.forEach(wisp => {
     if (wisp.x >= 0 && wisp.x < W && wisp.y >= 0 && wisp.y < H) {
         const dist = Math.sqrt((wisp.x - p.x) ** 2 + (wisp.y - p.y) ** 2);
         const alpha = 1.0; // Force full vis for debug (revert to fade later)
-     
+    
         // Auto-sync if too far
         if (dist > 6) {
             wisp.x = p.x; wisp.y = p.y;
             wisp.currentX = p.x * S; wisp.currentY = p.y * S;
-            console.log('Wisp synced'); // Debug: Check console
+            //console.log('Wisp synced'); // Debug: Check console
         }
-     
+    
         const now = performance.now();
         const bobOffset = Math.floor(Math.sin(now / 400) * 2 + 1); // Snaps to 0,1,2px (prominent, pixel-perfect)
         let drawY = wisp.currentY + bobOffset;
-     
+    
         c.save();
         c.globalAlpha = alpha;
-    
+   
         // Trail (keep for path vis)
         if (wisp.lastPos) {
             c.strokeStyle = `rgba(255,255,255,${0.3 * alpha})`;
@@ -11046,39 +11046,13 @@ wisps.forEach(wisp => {
             c.stroke();
         }
         wisp.lastPos = {x: wisp.currentX + S/2, y: drawY + S/2};
-    
-        // Color tint based on HP ratio (white to red)
-        const hpRatio = wisp.hp / wisp.maxHP;
-        c.save(); // Inner tint isolation
-        c.globalCompositeOperation = 'multiply';
-        const tintColor = `rgb(${Math.floor(255 * (1 - hpRatio))}, ${Math.floor(255 * hpRatio)}, ${Math.floor(255 * hpRatio)})`;
-        const tintGradient = c.createLinearGradient(0, 0, S, S);
-        tintGradient.addColorStop(0, tintColor);
-        tintGradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
-        c.fillStyle = tintGradient;
-        c.fillRect(wisp.currentX, drawY, S, S);
-        c.globalCompositeOperation = 'source-over'; // Reset after multiply
-        c.restore(); // End inner tint
+   
         const frames = assets.wispFrames[wisp.type.name];
         const frame = frames[wisp.anim.frameIndex];
         if (frame.complete) {
             c.drawImage(frame, wisp.currentX, drawY, S, S);
         }
-    
-        c.restore();
-     
-        // Subtle always-visible HP bar (green outline, scales with HP)
-        c.save();
-        c.strokeStyle = 'rgba(0, 255, 0, 0.9)'; // Live green (50% more opaque)
-        c.lineWidth = 1.5; // 50% thicker
-        c.lineCap = 'round';
-        const ratio = wisp.hp / wisp.maxHP;
-        const sensitiveRatio = Math.max(0, Math.min(1, ratio * 1.5)); // 1.5x sensitivity (shrinks 50% faster, clamped 0-1)
-        const barWidth = S * sensitiveRatio; // No min needed—stays 0-S
-        c.beginPath();
-        c.moveTo(wisp.currentX, drawY - 3);
-        c.lineTo(wisp.currentX + barWidth, drawY - 3);
-        c.stroke();
+   
         c.restore();
     }
 });
