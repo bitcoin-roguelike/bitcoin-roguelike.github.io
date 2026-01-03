@@ -5502,9 +5502,9 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
 
 // ——— RED MAZE BOSS CHECK (corrected logic) ———
 // Activate on dungeon floors once ≥50 floors have passed since last Red Maze (or run start)
-if (currentTheme === 'dungeon' && floor >= 5) {
+if (currentTheme === 'dungeon' && floor >= 50) {
     const floorsSinceLast = floor - (redMazeLastFloor || 0);
-    if (floorsSinceLast >= 5) {
+    if (floorsSinceLast >= 50) {
         logBattleEvent('RED MAZE HAS ARRIVED!');
 
 // UNIQUE MONSTER SOUND START        
