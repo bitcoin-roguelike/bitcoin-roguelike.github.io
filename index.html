@@ -3997,6 +3997,7 @@ else {
         p.hasCursedRing = false;
         p.auraMax = 0;
         p.auraShield = 0;
+        redMazeAuraGiven = false; // Reset so next Red Maze boss can grant aura again
         // Keep curseActive true until pond dispel
         // Restore a random immunity
         const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
@@ -4955,6 +4956,7 @@ if (map[ny][nx] === 6 && !inHideout) {
         p.curseActive = false;
         p.auraMax = 0;
         p.auraShield = 0;
+        redMazeAuraGiven = false; // Reset for next Red Maze boss
         p.armorImmunity = null;
         logBattleEvent(`Floor ${floor} - Pond dispels Cursed Aura! Resistances restored.`);
         playWebAudioSound(sounds.pond);
@@ -4963,16 +4965,9 @@ if (map[ny][nx] === 6 && !inHideout) {
         p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
     }
     // Only restore HP if we're below the threshold
-        if (p.hp < 24) {  // Or use p.hp < 36 if that's your desired cutoff
+        if (p.hp < 36) {
             const oldHP = p.hp;
-            p.hp = 24 + (p.hasArmor ? 12 : 0); // Full health (24 or 36 with armor)
-            logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
-            playWebAudioSound(sounds.pond);
-        }
-        // Additional condition for armor users with less than 36 HP
-        else if (p.hasArmor && p.hp < 36) {
-            const oldHP = p.hp;
-            p.hp = 36; // Fill up to 36 HP for armor-wearing players
+            p.hp = 36 + (p.hasArmor ? 12 : 0); // Full health (36 or 48 with armor)
             logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
             playWebAudioSound(sounds.pond);
         }
@@ -5507,9 +5502,9 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
 
 // ——— RED MAZE BOSS CHECK (corrected logic) ———
 // Activate on dungeon floors once ≥50 floors have passed since last Red Maze (or run start)
-if (currentTheme === 'dungeon' && floor >= 50) {
+if (currentTheme === 'dungeon' && floor >= 5) {
     const floorsSinceLast = floor - (redMazeLastFloor || 0);
-    if (floorsSinceLast >= 50) {
+    if (floorsSinceLast >= 5) {
         logBattleEvent('RED MAZE HAS ARRIVED!');
 
 // UNIQUE MONSTER SOUND START        
@@ -6055,7 +6050,12 @@ if (inPuzzleRoom) {
 }
 
 if (map[ny][nx] === 23) { // Cursed ring
-    if (p.hasCursedRing) {
+    if (redMazeAuraGiven) {
+        // Red Maze Aura destroys the ring – no pickup, no curse
+        map[ny][nx] = 0;
+        playWebAudioSound(sounds.hit); // strong feedback (or sounds.buzz if you prefer)
+        logBattleEvent(`Floor ${floor} - Red Maze Aura destroys the cursed ring!`);
+    } else if (p.hasCursedRing) {
         logBattleEvent(`Floor ${floor} - Cannot equip another Cursed Ring!`);
     } else {
         const originalHP = p.hp; // Store pre-halving HP for aura calc
@@ -6064,9 +6064,9 @@ if (map[ny][nx] === 23) { // Cursed ring
         p.hp = Math.floor(p.hp / 2); // Halve current HP too
         p.auraMax = originalHP * 2; // Double original (pre-halving) HP for aura
         p.auraShield = p.auraMax;
-	p.hasCursedRing = true;
-	p.curseActive = true;  // Lingering curse effects
-	p.elementImmunity = null;
+        p.hasCursedRing = true;
+        p.curseActive = true;  // Lingering curse effects
+        p.elementImmunity = null;
         p.armorImmunity = null;
         p.hasArmor = false; // Remove armor
         p.hasDiamondArmor = false;
@@ -8268,37 +8268,6 @@ if (redMazeActive && redMaze) {
             highlightStart: Date.now(),
             color: 'rgba(247, 147, 26, 0.8)'
         });
-
-        // Immediate boss defeat check
-        if (redMaze.hp <= 0) {
-            logBattleEvent('RED MAZE defeated!');
-            redMazeActive = false;
-            redMaze = null;
-
-            if (!redMazeAuraGiven) {
-                const baseHP = p.hp;
-                p.auraMax = baseHP * 2;
-                p.auraShield = p.auraMax;
-                p.hasCursedRing = true; // visual flag
-                redMazeAuraGiven = true;
-                logBattleEvent(`Red Aura gained! Shield: ${p.auraShield}/${p.auraMax}`);
-            }
-
-            musicManager.mute(false);
-            musicManager.play(currentTheme);
-
-            redMazeLastFloor = floor;
-            
-// Force stairs to spawn immediately after boss defeat
-if (!exit) {
-    placeStairs();
-    wave++;
-    waveActive = false;
-    document.getElementById('wave').textContent = wave;
-    logBattleEvent(`Floor ${floor} - RED MAZE defeated! Stairs appeared!`);
-}
-
-        }
     }
 }
     
