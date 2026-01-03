@@ -2001,6 +2001,17 @@ assets.swap.onerror = () => console.error('Failed to load swap.png');
 assets.coolROI = new Image();
 assets.coolROI.src = 'Cool_ROI.png';
 assets.coolROI.onerror = () => console.error('Failed to load Cool_ROI.png');
+
+assets.coolROI.src = 'Cool_ROI.png';
+	
+assets.guiHP = new Image();
+assets.guiHP.src = 'GUI-HP.png';
+assets.guiHPglobe = new Image();
+assets.guiHPglobe.src = 'GUI-HP-globe.png';
+assets.guiSC = new Image();
+assets.guiSC.src = 'GUI-SC.png';
+assets.guiSCglobe = new Image();
+assets.guiSCglobe.src = 'GUI-SC-globe.png';
 	
 Object.values(assets.runes).forEach(rune => {
     rune.onerror = () => console.error(`Failed to load rune asset: ${rune.src}`);
@@ -7320,6 +7331,9 @@ let ripBlastActive = false; // Flag for RIP blast gradient overlay effect
 let ripBlastStartTime = 0; // Timestamp for RIP blast start
 let columnProgress = 0; // Progress of gradient columns (0 to 1)
 
+let previousHP = 36;
+let hpOverfillFlashStart = 0;
+
 let enemyTempCanvas = document.createElement('canvas');
 enemyTempCanvas.width = S;
 enemyTempCanvas.height = S;
@@ -8306,15 +8320,15 @@ if (p.curseActive) {
         sounds.potion.play().catch(e => console.error('Potion sound error:', e));
         return; // Block and play sound for feedback
     }
-    if (p.hp >= 24) {
-        logBattleEvent(`Floor ${floor} - Potion Returned: HP already at ${p.hp}!`);
+    if (p.hp >= 36) {
+        logBattleEvent(`Floor ${floor} - Potion Returned: HP already at max (36)!`);
         sounds.potion.play().catch(e => console.error('Potion sound error:', e));
-        return; // Refund potion by not decrementing p.potions
+        return; // Do not consume potion
     }
     p.potions--;
     const oldHP = p.hp;
-    p.hp = Math.min(24, p.hp + 12);
-    logBattleEvent(`Floor ${floor} - Potion Used: +${p.hp - oldHP} HP (now ${p.hp})`);
+    p.hp = Math.min(36, p.hp + 12);
+    logBattleEvent(`Floor ${floor} - Potion Used: +${p.hp - oldHP} HP (now ${p.hp}/36)`);
     sounds.potion.play().catch(e => console.error('Potion sound error:', e));
     moveEnemies();
 updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
@@ -10087,7 +10101,7 @@ p.farmLockedSats = 0;
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
     wave = 1;
     document.getElementById('wave').textContent = wave;
-    p.hp = 36;
+    p.hp = 36;    
     p.potions = 0;
     p.pickaxes = 0;
     diamonds = 0;
@@ -10098,7 +10112,8 @@ p.farmLockedSats = 0;
     wardenUses = 0;  // reset echo warden tracker
     wardenRollPending = false;
     wardenFlashStart = 0; // Clear flash on restart
-    
+    previousHP = 36;
+    hpOverfillFlashStart = 0;
     p.runes = [];
     runeDrops = runeDrops.filter(r => !r.specific);			// maybe
     for (let y = 0; y < H; y++) {					// \
@@ -11414,55 +11429,6 @@ c.restore();
 // Draw fading dangerous spell areas after enemies
 drawFadingDangerousAreas();
 
-// Low-health warning — full border for non-zoom, camera-following inner frame for zoom
-if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
-    const pulse = Math.sin(Date.now() / 100);
-    let alpha, color;
-
-    if (p.hp <= 4) {
-        alpha = 0.5 + 0.1 * pulse;
-        color = `rgba(255, 0, 0, ${alpha})`; // Critical red
-    } else {
-        alpha = 0.5 + 0.1 * pulse;
-        color = `rgba(255, 165, 0, ${alpha})`; // Warning orange
-    }
-
-    c.strokeStyle = color;
-    c.lineWidth = 8;
-
-    if (!zoomEnabled) {
-        // Full-canvas border (non-zoom)
-        c.beginPath();
-        c.moveTo(0, 0);
-        c.lineTo(W * S, 0);
-        c.lineTo(W * S, H * S);
-        c.lineTo(0, H * S);
-        c.closePath();
-        c.stroke();
-    } else {
-        // Zoom mode: inner warning frame that follows the camera
-        c.save();
-        // Undo the zoom scale and translation so we draw in screen space
-        c.restore(); // temporarily exit zoom context
-        c.setTransform(1, 0, 0, 1, 0, 0); // reset to identity
-
-        const padding = 0;
-        c.beginPath();
-        c.moveTo(padding, padding);
-        c.lineTo(320 - padding, padding);
-        c.lineTo(320 - padding, 320 - padding);
-        c.lineTo(padding, 320 - padding);
-        c.closePath();
-        c.stroke();
-
-        // Re-enter zoom context for the rest of the frame
-        c.save();
-        c.translate(160, 160);
-        c.scale(2, 2);
-        c.translate(Math.floor(camera.x + 0.5), Math.floor(camera.y + 0.5));
-    }
-}
-
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
 
@@ -11641,6 +11607,97 @@ if (exit) {
     c.restore();
 }
 
+    // GUI for health and soul charges – crisp & screen-space ready
+    if (assets.guiHP?.complete && assets.guiHPglobe?.complete &&
+        assets.guiSC?.complete && assets.guiSCglobe?.complete) {
+
+        // Force crisp pixel rendering for HUD
+        c.imageSmoothingEnabled = false;
+
+        const padding = 0;
+        const bgY = 320 - 37; // top of the 37px tall backgrounds
+        const hpBgX = padding; // left background
+        const scBgX = 320 - 45 - padding; // right background
+
+        // Draw backgrounds
+        c.drawImage(assets.guiHP, hpBgX, bgY);
+        c.drawImage(assets.guiSC, scBgX, bgY);
+
+        // Globe positioning (centered on backgrounds) – YOUR OFFSETS PRESERVED
+        const globeW = 31;
+        const globeH = 30;
+        const hpOffsetX = Math.floor((46 - globeW) - 2); // = ?
+        const scOffsetX = Math.floor((45 - globeW) / 7); // = ?
+        const globeOffsetY = Math.floor((37 - globeH) / 4); // = 4
+
+        const hpGlobeX = Math.floor(hpBgX + hpOffsetX);
+        const scGlobeX = Math.floor(scBgX + scOffsetX);
+        const globeY   = Math.floor(bgY + globeOffsetY);
+
+        // HP globe – clipped fill from bottom (integer height → no blur)
+        const hpPercent = Math.max(0, Math.min(1, p.hp / 36));
+        const hpFillH   = Math.floor(globeH * hpPercent + 0.0001); // crisp edge
+
+        c.save();
+        c.beginPath();
+        c.rect(hpGlobeX, globeY + globeH - hpFillH, globeW, hpFillH);
+        c.clip();
+        c.drawImage(assets.guiHPglobe, hpGlobeX, globeY);
+        c.restore();
+
+        // Soul Charges globe – same crisp logic
+        const scPercent = Math.max(0, Math.min(1, p.soulStormCharges / 256));
+        const scFillH   = Math.floor(globeH * scPercent + 0.0001);
+
+        c.save();
+        c.beginPath();
+        c.rect(scGlobeX, globeY + globeH - scFillH, globeW, scFillH);
+        c.clip();
+        c.drawImage(assets.guiSCglobe, scGlobeX, globeY);
+        c.restore();
+
+        // Overfill damage flash on HP globe (when hit but fill level doesn't drop yet)
+        if (hpOverfillFlashStart > 0) {
+            const elapsed = Date.now() - hpOverfillFlashStart;
+            if (elapsed < 300) { // 300ms flash
+                const alpha = 0.6 * (1 - elapsed / 300);
+                c.save();
+                // Higher base opacity + slight overflow (~3px bleed)
+                const baseAlpha = 0.75; // was 0.6 → less transparent
+                const flashAlpha = baseAlpha * (1 - elapsed / 300);
+
+                c.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
+                c.beginPath();
+                c.arc(
+                    hpGlobeX + globeW / 2,
+                    globeY + globeH / 2,
+                    Math.min(globeW, globeH) / 2 + 3,  // +3px radius → ~3px overflow all sides
+                    0, Math.PI * 2
+                );
+                c.fill();
+                c.restore();
+            } else {
+                hpOverfillFlashStart = 0;
+            }
+        }
+
+        // Restore default smoothing (safe)
+//        c.imageSmoothingEnabled = true;
+    }
+
+    // Low-health warning – full screen pulsing border (drawn on top of GUI, works in both zoom/non-zoom)
+    if ((p.hp <= 4 || (p.hp > 4 && p.hp < 9)) && !gameOver && !splashActive) {
+        const pulse = Math.sin(Date.now() / 100);
+        const alpha = 0.5 + 0.1 * pulse;
+        const color = p.hp <= 4 ? `rgba(255, 0, 0, ${alpha})` : `rgba(255, 165, 0, ${alpha})`;
+
+        c.strokeStyle = color;
+        c.lineWidth = 8;
+        c.beginPath();
+        c.rect(0, 0, 320, 320); // full logical canvas border
+        c.stroke();
+    }
+
 // ───── ZELDA-ISH RADAR MINIMAP – TOP-LEFT BELOW FLOOR TEXT (PERFECTION) ─────
 if (minimapVisible && zoomEnabled) {
     const MINI_W = 64;
@@ -11695,6 +11752,12 @@ function gameLoop(timestamp) {
         initMap();
         needsRedraw = true;
     }
+
+    // Detect HP damage while overfilled (>36) for globe flash
+    if (p.hp < previousHP && p.hp > 36) {
+        hpOverfillFlashStart = Date.now();
+    }
+    previousHP = p.hp;
     
 if (gameOver) {
     musicManager.mute(true);
