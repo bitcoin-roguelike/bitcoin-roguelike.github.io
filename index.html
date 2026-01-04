@@ -3239,7 +3239,9 @@ function updateXPBar() {
     const fill = document.getElementById('xp-bar-fill');
     const text = document.getElementById('xp-text');
     if (fill) fill.style.width = percent + '%';
-    if (text) text.textContent = `LVL ${playerLevel} • ${current.toFixed(0)} / ${needed.toFixed(0)} XP`;
+    
+    const nextThreshold = getXPForLevel(playerLevel + 1);
+    if (text) text.textContent = `LVL ${playerLevel} • ${playerXP.toFixed(0)} / ${nextThreshold.toFixed(0)} XP`;
 }
 
 function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer) {
