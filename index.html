@@ -2745,9 +2745,9 @@ function showSkillTree() {
         html += `<div id="druid-option" class="class-option" style="width:clamp(200px, 40vw, 260px);height:clamp(180px, 35vw, 220px);padding:clamp(10px, 3vw, 20px);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;">`;
         html += `<strong style="font-size:clamp(24px, 5vw, 32px);margin-bottom:clamp(8px, 2vw, 12px);text-align:left;">Druid</strong>`;
         html += `<div style="font-size:clamp(14px, 3.2vw, 18px);line-height:1.4;text-align:left;flex-grow:1;">`;
-        html += `> Shrine +2 HP<br>`;
-        html += `> Thorns damage<br>`;
-        html += `> Ensnare root<br>`;
+        html += `> Shrine +2<br>`;
+        html += `> Thorns<br>`;
+        html += `> Ensnare<br>`;
         html += `> 20% block<br>`;
         html += `> Farm unlock`;
         html += `</div>`;
@@ -2768,7 +2768,7 @@ function showSkillTree() {
         html += `<div style="text-align:center;margin:40px 0;">`;
         html += `<h3>${playerClass.charAt(0).toUpperCase() + playerClass.slice(1)} Perk Unlocked!</h3>`;
         const perks = {
-            druid: {10:'> Thorns: Enemies lose 0.2 HP attacking you',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose 0.4 HP attacking you',40:'> Birch Shield: 20% block chance',50:'> Farm unlocked +1 Cool ROI'},
+            druid: {10:'> Thorns: Enemies lose 0.2 HP on attack',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose 0.4 HP on attack',40:'> Birch Shield: 20% block chance',50:'> Farm unlocked +1 Cool ROI'},
             degen: {10:'> +1 Cool ROI',20:'> +1 Cool ROI',30:'> +1 Cool ROI',40:'> +1 Cool ROI',50:'> Soul charges +1 every 2 steps'}
         };
         html += `<div style="font-size:24px;padding:20px;background:rgba(0,255,0,0.2);border:4px solid #00ff00;border-radius:8px;margin:20px 0;">`;
