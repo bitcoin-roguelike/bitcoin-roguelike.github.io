@@ -37,7 +37,7 @@
         }
 #whale-log { 
             width: 618px; 
-            height: 24px; 
+            height: 18px; 
             overflow-y: auto;
             scroll-behavior: smooth; 
             background: #111; 
@@ -414,6 +414,16 @@ button:hover {
     /* Windows 95 Screensaver Styles */
 #screensaver-overlay { position: fixed; inset: 0; z-index: 99999; background: black; display: none; }   
 #screensaver-canvas { position: absolute; top:0; left:0; width:100%; height:100%; display:block; }
+
+#skill-tree-overlay {
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+#skill-tree-overlay.visible {
+    opacity: 1;
+    transform: scale(1);
+}
     
 .star {
     position: absolute;
@@ -423,6 +433,29 @@ button:hover {
     /* Add these new properties for better visual effect */
     filter: blur(0.5px);
     animation: pulse 2s infinite alternate;
+}
+
+.class-option {
+    display: inline-block;
+    margin: 20px;
+    padding: 20px;
+    width: 220px;
+    cursor: pointer;
+    border: 3px solid #666;
+    background: rgba(0,0,0,0.3);
+    transition: all 0.2s ease;
+}
+.class-option.selected {
+    border: 6px solid #00ff00 !important;
+    background: rgba(0,255,0,0.2) !important;
+    box-shadow: 0 0 20px #00ff00;
+}
+
+.class-option.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    border-color: #666 !important;
+    background: rgba(0,0,0,0.1) !important;
 }
 
 @keyframes pulse {
@@ -450,7 +483,7 @@ button:hover {
     }
     #whale-log {
         width: 100%;
-        height: 24px;
+        height: 18px;
         overflow-y: auto;
         scroll-behavior: smooth;
         font-size: 9px;
@@ -617,7 +650,7 @@ button:hover {
     }
     #whale-log {
         width: 100%;
-        height: 24px;
+        height: 18px;
         overflow-y: auto;
         scroll-behavior: smooth;
         font-size: 1.2rem;
@@ -768,8 +801,16 @@ button:hover {
 </head>
 <body>
     <div id="console">
-        <div id="whale-log">
-            <div id="whale-hash-ids">Whale Transactions:</div>
+        <div id="whale-log" style="position:relative;height:18px;overflow:hidden;">
+            <!-- Scrollable whale transactions (full 18px) -->
+            <div id="whale-hash-ids" style="height:18px;overflow-y:auto;padding:0 8px;font-size:14px;line-height:18px;box-sizing:border-box;color:#ff8c00;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;white-space:nowrap;">
+                Whale Transactions:
+            </div>
+            <!-- XP bar overlaid on top half - transparent -->
+            <div id="xp-bar-container" tabindex="-1" style="position:absolute;top:0;left:0;width:100%;height:12px;background:transparent;pointer-events:none;z-index:10;">
+                <div id="xp-bar-fill" style="height:100%;width:0%;background:#007b7e;transition:width 0.3s ease;opacity:0.8;"></div>
+                <div id="xp-text" style="position:absolute;top:0;left:0;width:100%;text-align:center;color:#ff8c00;font-size:12px;line-height:12px;text-shadow:1px 1px 1px #000;font-weight:bold;">LVL 1 • 0 / 10 XP</div>
+            </div>
         </div>
         <div id="game-container">
             <canvas id="game" width="320" height="320"></canvas>
@@ -824,6 +865,15 @@ button:hover {
         </div>
     </div>
 </div>
+
+<div id="skill-tree-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000;display:none;flex-direction:column;align-items:center;justify-content:center;color:#ff8c00;font-size:24px;text-align:center;">
+    <div style="border:4px solid #ff8c00;padding:20px;background:#111;max-width:90%;">
+        <h1>Skill Tree</h1>
+        <div id="skill-tree-content"></div>
+        <div style="margin-top:20px;font-size:18px;">Use ← → or gamepad to choose • B / Tap to confirm</div>
+    </div>
+</div>
+
 <div id="controller">
             <div id="dpad">
                 <button id="up" onclick="move('up')">↑</button>
@@ -840,6 +890,15 @@ button:hover {
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.10.0/dist/axios.min.js"></script>
     <script>
+
+// Auto-scroll whale log to bottom when new transaction added
+const whaleObserver = new MutationObserver(() => {
+    const whaleIds = document.getElementById('whale-hash-ids');
+    if (whaleIds) {
+        whaleIds.scrollTop = whaleIds.scrollHeight;
+    }
+});
+whaleObserver.observe(document.getElementById('whale-hash-ids'), { childList: true, subtree: true });
 
 const names = [
     "Alan-Soul",
@@ -1487,6 +1546,8 @@ camera.lastDeltaY = 0;
 let puzzleStaticCanvas = null;
 let puzzleStaticCtx = null;
 
+let ensnareActive = false;
+
 let map = [],
 p = {
 x: 2,
@@ -1648,6 +1709,86 @@ let soulStashPos = null; // Position of soul stash on current floor
 let catPos = null; // {x, y}
 let catVisible = false; // Fade in/out
 let catAnimStart = 0; // Timestamp for fade cycle
+
+// Skill tree system
+let playerXP = 0;
+let playerLevel = 1;
+let playerClass = null; // null | 'druid' | 'degen'
+let pendingSkillTreeLevel = null; // level to show tree at (null = none)
+let skillTreeActive = false;
+let skillTreeSelectedOption = 0; // 0 = Druid, 1 = Degen (only at lvl 3)
+
+const LEVEL_XP = [
+    0,     // lvl 1
+    10, // 2
+    25, // 3 → tree
+    45,
+    70,
+    100,
+    135,
+    175,
+    220,
+    270, // 10 → tree
+    325,
+    385,
+    450,
+    520,
+    595,
+    675,
+    760,
+    850,
+    945,
+    1045, // 20 → tree
+    1150,
+    1260,
+    1375,
+    1495,
+    1620,
+    1750,
+    1885,
+    2025,
+    2170,
+    2320, // 30 → tree
+    2475,
+    2635,
+    2800,
+    2970,
+    3145,
+    3325,
+    3510,
+    3700,
+    3895,
+    4095, // 40 → tree
+    4300,
+    4510,
+    4725,
+    4945,
+    5170,
+    5400,
+    5635,
+    5875,
+    6120,
+    6370 // 50 → tree
+];
+function getXPForLevel(lvl) { 
+    if (lvl < 1) return 0;
+    if (lvl > 50) return LEVEL_XP[49] + 10000; // Cap at lvl 50
+    return LEVEL_XP[lvl-1] || 0; 
+}
+function checkLevelUp() {
+    while (playerXP >= getXPForLevel(playerLevel + 1)) {
+        playerLevel++;
+        logBattleEvent(`Level up! Now level ${playerLevel}`);
+        if ([3,10,20,30,40,50].includes(playerLevel)) {
+            pendingSkillTreeLevel = playerLevel;
+            // Show immediately — no need to wait for move()
+            if (!skillTreeActive) {
+                showSkillTree();
+            }
+        }
+    }
+    // Only update XP bar after kills (not every frame)
+}
 
 let soulTerminalActive = false; // Whether soul terminal is currently open
 let soulTerminalCommand = ''; // Current command input
@@ -2584,6 +2725,146 @@ const now = audioContext.currentTime;
   osc.start(now); osc.stop(t + 0.3);
 }
 
+function showSkillTree() {
+    if (skillTreeActive) return;
+    skillTreeActive = true;
+    skillTreeSelectedOption = playerClass ? 0 : 0; // only choice at lvl 3
+    const overlay = document.getElementById('skill-tree-overlay');
+    const content = document.getElementById('skill-tree-content');
+    overlay.style.display = 'flex';
+    // Trigger reflow to enable transition
+    overlay.offsetHeight;
+    overlay.classList.add('visible');
+
+    let html = `<h2>Level ${pendingSkillTreeLevel} Reached!</h2>`;
+    if (pendingSkillTreeLevel === 3 && !playerClass) {
+        html += `<div style="margin:40px 0;text-align:center;display:flex;justify-content:center;align-items:flex-start;gap:60px;">`;
+        html += `<div id="druid-option" class="class-option" style="width:240px;height:200px;padding:15px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;">`;
+        html += `<strong style="font-size:28px;margin-bottom:12px;text-align:left;">Druid</strong>`;
+        html += `<div style="font-size:15px;line-height:1.35;text-align:left;flex-grow:1;">`;
+        html += `> Shrine +2 HP<br>`;
+        html += `> Thorns 0.2→0.4 dmg<br>`;
+        html += `> Ensnare root<br>`;
+        html += `> 20% block<br>`;
+        html += `> Farm unlock`;
+        html += `</div>`;
+        html += `</div>`;
+        html += `<div id="degen-option" class="class-option" style="width:240px;height:200px;padding:15px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;">`;
+        html += `<strong style="font-size:28px;margin-bottom:12px;text-align:left;">Degen</strong>`;
+        html += `<div style="font-size:15px;line-height:1.35;text-align:left;flex-grow:1;">`;
+        html += `> Farm unlock<br>`;
+        html += `> +1 ROI (x5)<br>`;
+        html += `> Soul regen`;
+        html += `</div>`;
+        html += `</div>`;
+        html += `</div>`;
+    } else {
+        html += `<div style="text-align:center;margin:40px 0;">`;
+        html += `<h3>${playerClass.charAt(0).toUpperCase() + playerClass.slice(1)} Perk Unlocked!</h3>`;
+        const perks = {
+            druid: {10:'> Thorns: Enemies lose 0.2 HP attacking you',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose 0.4 HP attacking you',40:'> Birch Shield: 20% block chance',50:'> Farm unlocked +1 Cool ROI'},
+            degen: {10:'> +1 Cool ROI',20:'> +1 Cool ROI',30:'> +1 Cool ROI',40:'> +1 Cool ROI',50:'> Soul charges +1 every 2 steps'}
+        };
+        html += `<div style="font-size:24px;padding:20px;background:rgba(0,255,0,0.2);border:4px solid #00ff00;border-radius:8px;margin:20px 0;">`;
+        html += `<strong>${perks[playerClass][pendingSkillTreeLevel]}</strong>`;
+        html += `</div>`;
+        html += `</div>`;
+    }
+    content.innerHTML = html;
+    inputBlocked = false; // we keep input allowed for navigation
+
+    // Grey-out buttons + disable gamepad/keyboard selection for first 1 second
+    if (pendingSkillTreeLevel === 3 && !playerClass) {
+        const druidBox = document.getElementById('druid-option');
+        const degenBox = document.getElementById('degen-option');
+        if (druidBox && degenBox) {
+            druidBox.classList.add('disabled');
+            degenBox.classList.add('disabled');
+
+            // Global flag to block gamepad/keyboard selection
+            window.skillTreeInputBlocked = true;
+
+            setTimeout(() => {
+                druidBox.classList.remove('disabled');
+                degenBox.classList.remove('disabled');
+                window.skillTreeInputBlocked = false;
+            }, 1000);
+        }
+    }
+
+    // Get elements AFTER inserting HTML
+    const druidBox = document.getElementById('druid-option');
+    const degenBox = document.getElementById('degen-option');
+
+    // Click/tap support for class choice
+    if (druidBox && degenBox) {
+        const selectDruid = () => {
+            if (pendingSkillTreeLevel === 3 && !playerClass) {
+                skillTreeSelectedOption = 0;
+                updateClassHighlight();   // instant highlight update (no full rebuild)
+                needsRedraw = true;
+            }
+        };
+        const selectDegen = () => {
+            if (pendingSkillTreeLevel === 3 && !playerClass) {
+                skillTreeSelectedOption = 1;
+                updateClassHighlight();
+                needsRedraw = true;
+            }
+        };
+
+        druidBox.onclick = selectDruid;
+        degenBox.onclick = selectDegen;
+
+        // Touch support
+        druidBox.ontouchend = selectDruid;
+        degenBox.ontouchend = selectDegen;
+        
+    // Auto-confirm after 200 ms click/touch
+    let autoConfirmTimer = null;
+    
+    const setupAutoConfirm = (element, option) => {
+        const onSelect = () => {
+            if (autoConfirmTimer) clearTimeout(autoConfirmTimer);
+            skillTreeSelectedOption = option;
+            updateClassHighlight();
+            needsRedraw = true;
+            
+            // Auto-confirm and close after 200 ms
+            autoConfirmTimer = setTimeout(() => {
+                selectSkillTreeOption();
+                autoConfirmTimer = null;
+            }, 200);
+        };
+        
+        element.onclick = onSelect;
+        element.ontouchend = onSelect;
+    };
+
+    // Replace old handlers with auto-confirm versions
+    if (druidBox) setupAutoConfirm(druidBox, 0);
+    if (degenBox) setupAutoConfirm(degenBox, 1);
+        
+    }
+
+    updateClassHighlight();
+    needsRedraw = true;
+}
+
+function updateClassHighlight() {
+    const druid = document.getElementById('druid-option');
+    const degen = document.getElementById('degen-option');
+    if (!druid || !degen) return;
+
+    if (skillTreeSelectedOption === 0) {
+        druid.classList.add('selected');
+        degen.classList.remove('selected');
+    } else {
+        druid.classList.remove('selected');
+        degen.classList.add('selected');
+    }
+}
+
 // POURING RAIN AMBIENCE v4 – IOS fix
 function startRainAmbience() {
     if (rainAmbienceTimer) return; // already running
@@ -2916,6 +3197,21 @@ function updateSatsDisplay() {
             }
         }
     }
+}
+
+function updateXPBar() {
+    if (splashActive || gameOver) return;
+
+    const currentReq = getXPForLevel(playerLevel);
+    const nextReq = getXPForLevel(playerLevel + 1);
+    const current = Math.max(0, playerXP - currentReq);
+    const needed = nextReq - currentReq;
+    const percent = needed > 0 ? Math.min(100, (current / needed) * 100) : 100;
+
+    const fill = document.getElementById('xp-bar-fill');
+    const text = document.getElementById('xp-text');
+    if (fill) fill.style.width = percent + '%';
+    if (text) text.textContent = `LVL ${playerLevel} • ${current.toFixed(0)} / ${needed.toFixed(0)} XP`;
 }
 
 function spawnItemWithChance(item, chance, maxItems, proximityRange, avoidPlayer) {
@@ -4529,6 +4825,22 @@ logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); //
                 enemy.hp = 0; // Instant kill
                 handleUniqueMonsterReward(enemy);
                 kills[enemy.type.name]++;
+
+                let xp = 0;
+                if (enemy.type.name === 'Shrimp') xp = 1;
+                else if (enemy.type.name === 'Crab') xp = 2;
+                else if (enemy.type.name === 'Squid') xp = 3;
+                else if (enemy.type.name === 'Dolphin') xp = 4;
+                else if (enemy.type.name === 'Shark') xp = 5;
+                else if (enemy.type.name === 'Whale') xp = 15;
+                else if (enemy.type.name === 'Cursed Trader') xp = 10;
+                if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+                playerXP += xp;
+                if (xp > 0) logBattleEvent(`+${xp} XP`);
+                checkLevelUp();
+                updateXPBar(); // Only called on kills - super efficient
+
 if (enemy.type.name === 'Cursed Trader') {
         dropSoulStone(enemy.x, enemy.y);
     }
@@ -4687,8 +4999,8 @@ function isSolid(x, y) {
 }
 
 function move(dir) {
-    if (gameOver || splashActive || inputBlocked) return;
-    
+    if (gameOver || splashActive || inputBlocked || skillTreeActive) return;
+
     // Check if player is in hideout and trying to pause from waypoint tile
     if (inHideout && map[p.y][p.x] === 16) {
         // Allow pausing when on waypoint in hideout
@@ -4719,16 +5031,22 @@ function move(dir) {
 
 // In the move function, after updating position:
 p.moveCounter++;
+if (playerClass === 'degen' && playerLevel >= 50 && p.moveCounter >= 2) {
+    p.soulStormCharges = Math.min(256, p.soulStormCharges + 1);
+}
 p.auraMoveCounter++;
 if (p.moveCounter >= 2) {
-    if (p.shrineCharges > 0) {
-        p.hp++;
-        p.shrineCharges--;
-        // Log only every 8 charges spent to reduce spam
-        if ((p.maxShrineCharges - p.shrineCharges) % 8 === 0) {
-            logBattleEvent(`Floor ${floor} - Shrine refills health! (${p.shrineCharges}/${p.maxShrineCharges})`);
-        }
+if (p.shrineCharges > 0) {
+    const regenAmount = (playerClass === 'druid' ? 2 : 1);
+    p.hp += regenAmount;
+    p.shrineCharges--;
+    // Log only every 8 charges spent to reduce spam
+    if ((p.maxShrineCharges - p.shrineCharges) % 8 === 0) {
+        const effectiveMax = p.maxShrineCharges * regenAmount;
+        const effectiveCurrent = (p.maxShrineCharges - p.shrineCharges) * regenAmount;
+        logBattleEvent(`Floor ${floor} - Shrine refills health! (${effectiveCurrent}/${effectiveMax} HP)`);
     }
+}
     p.moveCounter = 0;  // Reset only shrine counter
     updatePlayerState();  // Call every 2 moves (shrine tick) to check aura too
 }
@@ -4852,26 +5170,6 @@ if (enemies.some(e => e.x === nx && e.y === ny) ||
 
     // Update direction and position (will be interpolated during draw)
     p.anim.direction = newDirection;
-    
-    if (!map[ny] || map[ny][nx] === undefined) {
-        console.error('Invalid map access: nx=', nx, 'ny=', ny);
-        initMap();
-        needsRedraw = true;
-        return;
-    }
-    
-    // Always update direction for rendering, even if blocked by enemy
-    if (enemies.some(e => e.x === nx && e.y === ny)) {
-        needsRedraw = true; // Ensure redraw to reflect new direction
-        return;
-    }
-    
-    if (!map[ny] || map[ny][nx] === undefined) {
-        console.error('Invalid map access: nx=', nx, 'ny=', ny);
-        initMap();
-        needsRedraw = true;
-        return;
-    }
     
     // Always update direction for rendering, even if blocked by enemy
     if (enemies.some(e => e.x === nx && e.y === ny)) {
@@ -5811,7 +6109,7 @@ if (map[ny][nx] === 22 && !inHideout) { // Shrine tile
     if (!p.shrineUsedThisFloor) {
         p.shrineCharges = 24; // Give 24 charges immediately
         p.shrineUsedThisFloor = true; // Mark that shrine was used on this floor
-        logBattleEvent(`Floor ${floor} - Shrine charges activated! (24/24 charges)`);
+        logBattleEvent(`Floor ${floor} - Shrine charges activated!`);
         playWebAudioSound(sounds.pond);
     } else {
         logBattleEvent(`Floor ${floor} - Shrine already used this floor!`);
@@ -6401,22 +6699,117 @@ dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
                     }
                 }
                 
-                // Apply damage to aura first if cursed ring active
+                // Calculate base damage
                 const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) + 3 : e.type.atk;
-                if (p.hasCursedRing && p.auraShield > 0) {
-                    const oldAura = p.auraShield;
-                    p.auraShield -= damage;
-                    if (p.auraShield < 0) {
-                        p.hp += p.auraShield; // Overflow to HP
-                        logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks Aura! ${damage} DMG (overflow ${Math.abs(p.auraShield)} to HP; Aura now 0/${p.auraMax})`);
-                        p.auraShield = 0;
+
+                // Birch Shield block (Druid lvl 40+)
+                let damageTaken = true;
+                if (playerClass === 'druid' && playerLevel >= 40 && Math.random() < 0.20) {
+                    logBattleEvent(`Birch Shield blocks the attack!`);
+                    highlightTiles.push({x: p.x, y: p.y, highlightStart: Date.now(), color: 'rgba(255,255,255,0.6)'});
+                    damageTaken = false; // fully block damage and skip thorns
+                }
+
+                if (damageTaken) {
+                    // Aura absorbs first if active
+                    if (p.hasCursedRing && p.auraShield > 0) {
+                        const oldAura = p.auraShield;
+                        p.auraShield -= damage;
+                        if (p.auraShield < 0) {
+                            p.hp += p.auraShield; // overflow to HP
+                            logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks Aura! ${damage} DMG (overflow ${Math.abs(p.auraShield)} to HP; Aura now 0/${p.auraMax})`);
+                            p.auraShield = 0;
+                        } else {
+                            logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks Aura! ${damage} DMG (now ${p.auraShield}/${p.auraMax})`);
+                        }
+                        auraHitStartTime = Date.now();
                     } else {
-                        logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks Aura! ${damage} DMG (now ${p.auraShield}/${p.auraMax})`);
+                        // Normal HP damage
+                        p.hp -= damage;
                     }
-                    // Trigger visual flash
-                    auraHitStartTime = Date.now();
-                } else {
-p.hp -= damage;
+
+                    // Standard attack log
+                    logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
+
+// Thorns only if damage was actually taken (not blocked by shield) AND enemy is adjacent (1 tile away)
+if (playerClass === 'druid' && playerLevel >= 10) {
+    const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
+    if (dist === 1) { // Only enemies directly adjacent (cardinal, not diagonal)
+        let thornDmg = playerLevel >= 30 ? 0.4 : 0.2; // Back to integer damage (feels better)
+        if (e.type.name === 'Shrimp' || (playerLevel >= 30 && e.type.name === 'Crab')) {
+            thornDmg = Math.ceil(thornDmg / 2); // 50% on small enemies → 1 or 0.5 → 1
+        }
+        if (thornDmg > 0) {
+            const oldHp = e.hp;
+            e.hp -= thornDmg;
+            logBattleEvent(`${e.type.name} takes ${thornDmg} thorn damage!`);
+
+            if (e.hp <= 0 && oldHp > 0) {
+                // Immediate kill handling for thorns (same as normal attack)
+                kills[e.type.name]++;
+                handleUniqueMonsterReward(e);
+                tryDropScroll(e.x, e.y);
+
+                // Drop sats if not unique or Cursed Trader
+                if (!e.uniqueName && e.type.name !== 'Cursed Trader') {
+                    if (map[e.y][e.x] === 0) {
+                        map[e.y][e.x] = 3;
+                        satoshiDrops.push({x: e.x, y: e.y, sats: e.sats, type: e.type.name});
+                    }
+                }
+
+                // Rune drop chance
+                if (Math.random() < (e.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                    if (map[e.y][e.x] === 0 || map[e.y][e.x] === 3) {
+                        map[e.y][e.x] = 8;
+                        const runeLetter = 'r'; // placeholder
+                        runeDrops.push({x: e.x, y: e.y, letter: runeLetter});
+                    }
+                }
+
+                // 5% soul stone drop chance
+                if (Math.random() < 0.05) {
+                    dropSoulStone(e.x, e.y);
+                }
+
+                // Guaranteed Soul Stone drop for Cursed Trader
+                if (e.type.name === 'Cursed Trader') {
+                    let placed = false;
+                    if (map[e.y][e.x] === 0) {
+                        map[e.y][e.x] = 20;
+                        placed = true;
+                    } else {
+                        const adjDirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+                        for (let ad of adjDirs) {
+                            let nx = e.x + ad.dx, ny = e.y + ad.dy;
+                            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(en => en.x === nx && en.y === ny)) {
+                                map[ny][nx] = 20;
+                                placed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (placed) {
+                        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Soul Stone!`);
+                        playWebAudioSound(sounds.pickup);
+                    }
+                }
+
+                logBattleEvent(`${e.type.name} killed by thorns!`);
+                enemies = enemies.filter(en => en !== e);
+                highlightTiles.push({
+                    x: e.x,
+                    y: e.y,
+                    highlightStart: Date.now(),
+                    color: 'rgba(139, 69, 19, 0.6)'
+                });
+            }
+        }
+    }
+}
+
+                playWebAudioSound(sounds.hit);
+
 const auraMsg = p.hasCursedRing ? ' (Aura depleted; ' : ' ';
 logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG${auraMsg}HP now ${p.hp}${p.hasCursedRing ? ')' : ''}`);
 
@@ -6667,6 +7060,10 @@ if (redMazeSavedMuteState !== null) {
         // Reset cooldown from current floor
         redMazeLastFloor = floor;
 
+playerXP += 30;
+logBattleEvent(`+30 XP (Red Maze defeated)`);
+checkLevelUp();
+
         // Force stairs to spawn immediately after boss defeat
         if (!exit) {
             placeStairs();
@@ -6694,6 +7091,21 @@ function doScourgeSpinAttack() {
             enemy.scourgeHit = Date.now();
             if (enemy.hp <= 0) {
                 kills[enemy.type.name]++;
+
+                let xp = 0;
+                if (enemy.type.name === 'Shrimp') xp = 1;
+                else if (enemy.type.name === 'Crab') xp = 2;
+                else if (enemy.type.name === 'Squid') xp = 3;
+                else if (enemy.type.name === 'Dolphin') xp = 4;
+                else if (enemy.type.name === 'Shark') xp = 5;
+                else if (enemy.type.name === 'Whale') xp = 15;
+                else if (enemy.type.name === 'Cursed Trader') xp = 10;
+                if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+                playerXP += xp;
+                if (xp > 0) logBattleEvent(`+${xp} XP`);
+                checkLevelUp();
+                updateXPBar(); // Only called on kills - super efficient
                 handleUniqueMonsterReward(enemy);
                 tryDropScroll(enemy.x, enemy.y);
 
@@ -6759,8 +7171,22 @@ function tryDropScroll(deadX, deadY) {
 function updateWisps() {
     if (wisps.length === 0 || gameOver || splashActive) return;
     const wisp = wisps[0]; // Only 1 wisp
-
     wisp.attackCounter++;
+
+    // Define inRangeEnemies once for both Ensnare and normal attack
+    const inRangeEnemies = enemies.filter(e => {
+        let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
+        return edist <= wisp.type.range && e.hp > 0; // allow 1-HP for Ensnare
+    });
+
+    // Ensnare (Druid lvl 20) - freeze nearest enemy in range
+    if (ensnareActive && playerClass === 'druid' && inRangeEnemies.length > 0) {
+        const target = inRangeEnemies[0];
+        target.frozen = true;
+        target.frozenTurns = 2;
+        logBattleEvent(`Ensnare entangles ${target.type.name}!`);
+        playWebAudioSound(sounds.attack);
+    }
 
     // Move close to player (realtime, random bob within 1-2 tiles)
     let dx = p.x - wisp.x, dy = p.y - wisp.y;
@@ -6789,14 +7215,11 @@ function updateWisps() {
         }
     }
 
-    // Attack every 2nd enemy turn if enemy in range
+    // Normal wisp attack every 2nd turn (skip 1-HP enemies for mercy rule)
     if (wisp.attackCounter % 2 === 0) {
-        const inRangeEnemies = enemies.filter(e => {
-            let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
-            return edist <= wisp.type.range && e.hp > 1; // ignore 1-HP enemies
-        });
-        if (inRangeEnemies.length > 0) {
-            const target = inRangeEnemies[0];
+        const attackTargets = inRangeEnemies.filter(e => e.hp > 1);
+        if (attackTargets.length > 0) {
+            const target = attackTargets[0];
             applyWispAttack(wisp, target);
         }
     }
@@ -7055,7 +7478,20 @@ function updateProjectiles() {
                     }
 
                     if (hit.hp <= 0) {
-                        kills[hit.type.name]++;
+kills[hit.type.name]++;
+let xp = 0;
+if (hit.type.name === 'Shrimp') xp = 1;
+else if (hit.type.name === 'Crab') xp = 2;
+else if (hit.type.name === 'Squid') xp = 3;
+else if (hit.type.name === 'Dolphin') xp = 4;
+else if (hit.type.name === 'Shark') xp = 5;
+else if (hit.type.name === 'Whale') xp = 15;
+else if (hit.type.name === 'Cursed Trader') xp = 10;
+if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
+playerXP += xp;
+if (xp > 0) logBattleEvent(`+${xp} XP`);
+checkLevelUp();
+updateXPBar(); // Only called on kills - super efficient
                         tryDropScroll(hit.x, hit.y);
 
                         // Handle unique monster rewards
@@ -7832,6 +8268,21 @@ if (hit) {
                     
                     if (enemy.hp <= 0) {
                         kills[enemy.type.name]++;
+
+                        let xp = 0;
+                        if (enemy.type.name === 'Shrimp') xp = 1;
+                        else if (enemy.type.name === 'Crab') xp = 2;
+                        else if (enemy.type.name === 'Squid') xp = 3;
+                        else if (enemy.type.name === 'Dolphin') xp = 4;
+                        else if (enemy.type.name === 'Shark') xp = 5;
+                        else if (enemy.type.name === 'Whale') xp = 15;
+                        else if (enemy.type.name === 'Cursed Trader') xp = 10;
+                        if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+                        playerXP += xp;
+                        if (xp > 0) logBattleEvent(`+${xp} XP`);
+                        checkLevelUp();
+                        updateXPBar(); // Only called on kills - super efficient
                         let dropPlaced = false;
 
 handleUniqueMonsterReward(enemy);
@@ -8000,7 +8451,20 @@ if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y -
         }
         
                     if (hit.hp <= 0) {
-                        kills[hit.type.name]++;
+kills[hit.type.name]++;
+let xp = 0;
+if (hit.type.name === 'Shrimp') xp = 1;
+else if (hit.type.name === 'Crab') xp = 2;
+else if (hit.type.name === 'Squid') xp = 3;
+else if (hit.type.name === 'Dolphin') xp = 4;
+else if (hit.type.name === 'Shark') xp = 5;
+else if (hit.type.name === 'Whale') xp = 15;
+else if (hit.type.name === 'Cursed Trader') xp = 10;
+if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
+playerXP += xp;
+if (xp > 0) logBattleEvent(`+${xp} XP`);
+checkLevelUp();
+updateXPBar(); // Only called on kills - super efficient
                         tryDropScroll(hit.x, hit.y);
 
                         // Handle unique monster rewards
@@ -8961,6 +9425,20 @@ if (enemy) {
     // FULL DEATH — no mercy rule, no 1 HP leftovers
     if (enemy.hp <= 0) {
         kills[enemy.type.name]++;
+        let xp = 0;
+        if (enemy.type.name === 'Shrimp') xp = 1;
+        else if (enemy.type.name === 'Crab') xp = 2;
+        else if (enemy.type.name === 'Squid') xp = 3;
+        else if (enemy.type.name === 'Dolphin') xp = 4;
+        else if (enemy.type.name === 'Shark') xp = 5;
+        else if (enemy.type.name === 'Whale') xp = 15;
+        else if (enemy.type.name === 'Cursed Trader') xp = 10;
+        else if (enemy.type.name === 'Red Maze') xp = 30; // just in case
+        if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+        playerXP += xp;
+        if (xp > 0) logBattleEvent(`+${xp} XP`);
+        checkLevelUp();
+        updateXPBar(); // Only called on kills - super efficient
         handleUniqueMonsterReward(enemy);
         tryDropScroll(enemy.x, enemy.y);
 
@@ -9993,7 +10471,7 @@ function initTouchControls() {
         currentTouchDir = null;
         isMoving = false;
         lastMoveTime = 0;
-        initTouchControls(); // Re-attach listeners
+        initTouchControls(); // Re-attach listeners     
     });
 }
 
@@ -10060,7 +10538,15 @@ farmSpot = null;
 p.farmLocked = false;
 p.farmLockedFloor = 0;
 p.farmLockedSats = 0;
-   
+
+playerXP = 0;
+playerLevel = 1;
+updateXPBar();
+
+playerClass = null;
+pendingSkillTreeLevel = null;
+skillTreeActive = false;
+  
     redMazeSavedMuteState = null; 
     // Reset shrine tracking
     p.shrineCharges = 0;
@@ -10263,6 +10749,49 @@ function dropSoulStone(x, y) {
     }
 }
 
+function selectSkillTreeOption() {
+    if (pendingSkillTreeLevel === 3 && !playerClass) {
+        playerClass = skillTreeSelectedOption === 0 ? 'druid' : 'degen';
+        logBattleEvent(`Class chosen: ${playerClass.charAt(0).toUpperCase() + playerClass.slice(1)}`);
+        if (playerClass === 'degen') {
+            p.farmLocked = false; // unlock farm
+            p.coolROI = (p.coolROI || 0) + 1;
+        } else if (playerClass === 'druid') {
+            // shrine +1 handled below
+        }
+    }
+
+    // Apply level-specific perks
+    if (playerClass === 'druid') {
+    if (pendingSkillTreeLevel === 20) ensnareActive = true;
+        if (pendingSkillTreeLevel === 40) p.blockChance = 0.20;
+        if (pendingSkillTreeLevel === 50 && !p.farmLocked) {
+            p.farmLocked = false;
+            p.coolROI = (p.coolROI || 0) + 1;
+        }
+    } else if (playerClass === 'degen') {
+        if ([10,20,30,40].includes(pendingSkillTreeLevel)) {
+            p.coolROI = (p.coolROI || 0) + 1;
+        }
+        if (pendingSkillTreeLevel === 50) p.soulChargeEveryTwoMoves = true;
+    }
+
+    closeSkillTree(); // existing call
+    pendingSkillTreeLevel = null; // ← add this line to clear flag
+}
+
+function closeSkillTree() {
+    const overlay = document.getElementById('skill-tree-overlay');
+    overlay.classList.remove('visible');
+    setTimeout(() => {
+        overlay.style.display = 'none';
+        skillTreeActive = false;
+        pendingSkillTreeLevel = null;
+        inputBlocked = false;
+        needsRedraw = true;
+    }, 400); // match transition duration
+}
+
 function draw() {
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
@@ -10396,6 +10925,12 @@ if (wardenFlashStart > 0) {
         return;
     }
     if (splashActive) { needsRedraw = false; return; }
+
+    // Show/hide XP bar
+    const xpContainer = document.getElementById('xp-bar-container');
+    if (xpContainer) {
+        xpContainer.style.display = (splashActive || gameOver) ? 'none' : 'block';
+    }
 
     // Safety: stop rain visuals/sound if not in ruins
     if (currentTheme !== 'ruins') {
@@ -11576,71 +12111,70 @@ if (exit) {
     c.restore();
 }
 
-    // GUI for health and soul charges – crisp & screen-space ready
+    // GUI for health and soul charges – crisp & screen-space ready (2x on zoom)
     if (assets.guiHP?.complete && assets.guiHPglobe?.complete &&
         assets.guiSC?.complete && assets.guiSCglobe?.complete) {
 
-        // Force crisp pixel rendering for HUD
         c.imageSmoothingEnabled = false;
 
-        const padding = 0;
-        const bgY = 320 - 37; // top of the 37px tall backgrounds
-        const hpBgX = padding; // left background
-        const scBgX = 320 - 45 - padding; // right background
+        const scale = zoomEnabled ? 2 : 1;
+        const padding = 0 * scale;
+        const bgY = (320 - 37 * scale); // bottom-aligned
+        const hpBgX = padding;
+        // SC background: compensate for canvas scaling from top-left (extra shift left by full canvas width)
+        const scBgX = zoomEnabled 
+            ? (320 * scale - 45 * scale - padding) - (320 * (scale - 1)) 
+            : (320 - 45 - padding);
 
-        // Draw backgrounds
-        c.drawImage(assets.guiHP, hpBgX, bgY);
-        c.drawImage(assets.guiSC, scBgX, bgY);
+        // Draw backgrounds (scaled)
+        c.drawImage(assets.guiHP, hpBgX, bgY, 46 * scale, 37 * scale);
+        c.drawImage(assets.guiSC, scBgX, bgY, 45 * scale, 37 * scale);
 
-        // Globe positioning (centered on backgrounds) – YOUR OFFSETS PRESERVED
-        const globeW = 31;
-        const globeH = 30;
-        const hpOffsetX = Math.floor((46 - globeW) - 2); // = ?
-        const scOffsetX = Math.floor((45 - globeW) / 7); // = ?
-        const globeOffsetY = Math.floor((37 - globeH) / 4); // = 4
+        // Globe size & positioning
+        const globeW = 31 * scale;
+        const globeH = 30 * scale;
+        const hpOffsetX = Math.floor((46 * scale - globeW) - 2 * scale);
+        const scOffsetX = Math.floor((45 * scale - globeW) / 7);
+        const globeOffsetY = Math.floor((37 * scale - globeH) / 4);
 
         const hpGlobeX = Math.floor(hpBgX + hpOffsetX);
         const scGlobeX = Math.floor(scBgX + scOffsetX);
-        const globeY   = Math.floor(bgY + globeOffsetY);
+        const globeY = Math.floor(bgY + globeOffsetY);
 
-        // HP globe – clipped fill from bottom (integer height → no blur)
+        // HP globe fill
         const hpPercent = Math.max(0, Math.min(1, p.hp / 36));
-        const hpFillH   = Math.floor(globeH * hpPercent + 0.0001); // crisp edge
+        const hpFillH = Math.floor(globeH * hpPercent + 0.0001);
 
         c.save();
         c.beginPath();
         c.rect(hpGlobeX, globeY + globeH - hpFillH, globeW, hpFillH);
         c.clip();
-        c.drawImage(assets.guiHPglobe, hpGlobeX, globeY);
+        c.drawImage(assets.guiHPglobe, hpGlobeX, globeY, globeW, globeH);
         c.restore();
 
-        // Soul Charges globe – same crisp logic
+        // Soul Charges globe fill
         const scPercent = Math.max(0, Math.min(1, p.soulStormCharges / 256));
-        const scFillH   = Math.floor(globeH * scPercent + 0.0001);
+        const scFillH = Math.floor(globeH * scPercent + 0.0001);
 
         c.save();
         c.beginPath();
         c.rect(scGlobeX, globeY + globeH - scFillH, globeW, scFillH);
         c.clip();
-        c.drawImage(assets.guiSCglobe, scGlobeX, globeY);
+        c.drawImage(assets.guiSCglobe, scGlobeX, globeY, globeW, globeH);
         c.restore();
 
-        // Overfill damage flash on HP globe (when hit but fill level doesn't drop yet)
+        // HP overfill flash (scaled)
         if (hpOverfillFlashStart > 0) {
             const elapsed = Date.now() - hpOverfillFlashStart;
-            if (elapsed < 300) { // 300ms flash
-                const alpha = 0.6 * (1 - elapsed / 300);
+            if (elapsed < 300) {
+                const flashAlpha = 0.75 * (1 - elapsed / 300);
                 c.save();
-                // Higher base opacity + slight overflow (~3px bleed)
-                const baseAlpha = 0.75; // was 0.6 → less transparent
-                const flashAlpha = baseAlpha * (1 - elapsed / 300);
-
                 c.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
                 c.beginPath();
                 c.arc(
                     hpGlobeX + globeW / 2,
                     globeY + globeH / 2,
-                    Math.min(globeW, globeH) / 2 + 3,  // +3px radius → ~3px overflow all sides
+                    Math.min(globeW, globeH) / 2 + 3 * scale,
                     0, Math.PI * 2
                 );
                 c.fill();
@@ -11649,9 +12183,6 @@ if (exit) {
                 hpOverfillFlashStart = 0;
             }
         }
-
-        // Restore default smoothing (safe)
-//        c.imageSmoothingEnabled = true;
     }
 
     // Low-health warning – full screen pulsing border (drawn on top of GUI, works in both zoom/non-zoom)
@@ -11907,6 +12438,21 @@ if (gameOver && hasPlayedOnce) {
     }
     if (gameOver || splashActive) return;
 
+    if (skillTreeActive) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            if (pendingSkillTreeLevel === 3 && !playerClass && !window.skillTreeInputBlocked) {
+                skillTreeSelectedOption = (e.key === 'ArrowLeft') ? 0 : 1;
+                updateClassHighlight();
+                needsRedraw = true;
+            }
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+            selectSkillTreeOption();
+        }
+        e.preventDefault();
+        return;
+    }
+
     // Handle terminal input when active
     if (p.inSoulTerminal && p.soulTerminalActive) {
         handleTerminalInput(e);
@@ -11960,7 +12506,7 @@ if (gameOver && hasPlayedOnce) {
                 }
             }
         }, 50); // Poll frequently, moves capped at 200ms
-    }
+    } 
 });
 
 // Add this after the main document.addEventListener('keydown', ... line
@@ -12403,29 +12949,29 @@ if (!splashActive && !gameOver && inputBlocked) {
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-// B Button (1) - attack or submit score during game over
-if (buttons[1].pressed && !lastButtonsState[1]) {
-    if (!splashActive && !gameOver) {
-        // Normal gameplay B button action
-        attack();
-        lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
-    } else if (gameOver && gamepadIndex !== null && !inputBlocked) {  // ← Add !inputBlocked check here
-        if (!gameOverBPressed) {
-            if (!scoreSubmitted && floor >= 3) {
-                // Submit score if eligible
-                submitScoreWithRandomName();
-            } else if (floor < 3) {
-                // Show message for low floors
-                document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
-                document.getElementById('leaderboard-output').style.display = 'block';
-            } // If already submitted, do nothing on first press
-            gameOverBPressed = true;
-        } else {
-            // Second press always restarts to splash
-            restart();
+    // B Button (1) - attack, skill tree confirm, or game over actions
+    if (buttons[1].pressed && !lastButtonsState[1]) {
+        if (skillTreeActive && !window.skillTreeInputBlocked) {
+            selectSkillTreeOption();  // Confirm class choice (ONLY after 1 second)
+        } else if (!splashActive && !gameOver) {
+            // Normal gameplay B button action
+            attack();
+            lastMoveTime = nowTime;
+        } else if (gameOver && gamepadIndex !== null && !inputBlocked) {
+            if (!gameOverBPressed) {
+                if (!scoreSubmitted && floor >= 3) {
+                    submitScoreWithRandomName();
+                } else if (floor < 3) {
+                    document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
+                    document.getElementById('leaderboard-output').style.display = 'block';
+                }
+                gameOverBPressed = true;
+            } else {
+                // Second press restarts
+                restart();
+            }
         }
     }
-}
 
     // Select Button (2) - toggleMute
     if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
@@ -12453,6 +12999,18 @@ if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime >
 
     // Update movement direction using the new axes class
     if (!splashActive && !gameOver) {
+    
+            // Skill tree left/right navigation for gamepad D-pad / analog
+            if (skillTreeActive && pendingSkillTreeLevel === 3 && !playerClass && !window.skillTreeInputBlocked) {
+                const dir = currentAxes.getDirection();
+                if (dir === 'left') skillTreeSelectedOption = 0;
+                else if (dir === 'right') skillTreeSelectedOption = 1;
+                if (dir === 'left' || dir === 'right') {
+                    updateClassHighlight();
+                    needsRedraw = true;
+                }
+            }
+    
         let newMoveDir = currentAxes.getDirection();
         gamepadMoveDir = newMoveDir; // Always update gamepadMoveDir
         
