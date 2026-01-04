@@ -2778,13 +2778,25 @@ function showSkillTree() {
     }
     content.innerHTML = html;
 
-    // Auto-close non-choice perk screens after 5 seconds
+    // Auto-close non-choice perk screens after 20 seconds
     if (pendingSkillTreeLevel !== 3) {
         setTimeout(() => {
             if (skillTreeActive && pendingSkillTreeLevel === pendingSkillTreeLevel) { // still same screen
                 closeSkillTree();
             }
-        }, 5000);
+        }, 20000);
+    }
+    
+    // Allow tap/click anywhere to close perk info early (with 1-second protection)
+    if (pendingSkillTreeLevel !== 3) {
+        // Block closing for first 1 second
+        overlay.style.pointerEvents = 'none';
+        setTimeout(() => {
+            overlay.style.pointerEvents = 'auto';
+        }, 1000);
+
+        overlay.onclick = () => closeSkillTree();
+        overlay.ontouchend = () => closeSkillTree();
     }
     
     inputBlocked = false; // we keep input allowed for navigation
