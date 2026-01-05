@@ -4524,6 +4524,10 @@ if (p.hp <= 0 && !gameOver) {
                 p.farmLockedSats = 0;
             }
 
+            playerXP = 0;          // reset XP meter on death
+            playerLevel = 1;           // reset level to 1
+            updateXPBar();         // immediately update the bar to 0
+            
             logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
             gameOver = true;
             inputBlocked = true;
@@ -4552,6 +4556,10 @@ if (p.hp <= 0 && !gameOver) {
             p.farmLockedFloor = 0;
             p.farmLockedSats = 0;
         }
+
+            playerXP = 0;          // reset XP meter on death
+            playerLevel = 1;           // reset level to 1
+            updateXPBar();         // immediately update the bar to 0
 
         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
         gameOver = true;
@@ -5460,6 +5468,11 @@ if (map[ny][nx] === 6 && !inHideout) {
                     } else if (p.hp <= 0) {
                         p.hp = 0;
                         diamonds = 0;                // ← reset diamonds
+                        
+            playerXP = 0;          // reset XP meter on death
+            playerLevel = 1;           // reset level to 1
+            updateXPBar();         // immediately update the bar to 0                        
+                        
                         updatePlayerState();          // ← update display
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
                     }
@@ -5482,6 +5495,11 @@ if (map[ny][nx] === 6 && !inHideout) {
                     } else if (p.hp <= 0) {
                         p.hp = 0;
                         diamonds = 0;
+                        
+            playerXP = 0;          // reset XP meter on death
+            playerLevel = 1;           // reset level to 1
+            updateXPBar();         // immediately update the bar to 0                        
+                        
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
                     }
@@ -5506,6 +5524,11 @@ if (map[ny][nx] === 6 && !inHideout) {
                     } else if (p.hp <= 0) {
                         p.hp = 0;
                         diamonds = 0;
+                        
+            playerXP = 0;          // reset XP meter on death
+            playerLevel = 1;           // reset level to 1
+            updateXPBar();         // immediately update the bar to 0                        
+                        
                         updatePlayerState();
                         logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
                     }
@@ -7123,6 +7146,11 @@ if (p.hp <= 0 && p.immortal) {
 } else if (p.hp <= 0) {
     p.hp = 0;
     diamonds = 0;                // reset diamonds
+    
+            playerXP = 0;          // reset XP meter on death
+            playerLevel = 1;           // reset level to 1
+            updateXPBar();         // immediately update the bar to 0    
+    
     updatePlayerState();          // update inventory
     logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
 }
