@@ -4299,11 +4299,11 @@ needsRedraw = true;
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
 if (gameOver) return; // Prevent spam calls post-death
-if (p.hp <= 48 && p.hasDiamondArmor) {  // Tie to <= 48 HP
+if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
     p.hasDiamondArmor = false;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity
-    p.maxHP = 48;  // Revert to leather max
+    p.maxHP = 36;  // Revert to leather max
     logBattleEvent(`Floor ${floor} - Diamond Armor lost! Found Leather Armor beneath.`);
     document.getElementById('armorStatus').textContent = 'Leather';
 } else if (p.hp <= 24 && p.hasArmor) {
@@ -4645,14 +4645,7 @@ if (redMazeActive) {
     return; // Red Maze boss
 }
 
-    // 1. Cancel any pending scheduled call first
-    // Prevent concurrent calls to the same function
-    if (apiTimeoutId) {
-        clearTimeout(apiTimeoutId);
-        apiTimeoutId = null;
-    }
-
-    // 2. Then check the rate-limit    
+    // Check the rate-limit    
     const now = Date.now();
     // Prevent duplicate calls within API_INTERVAL
     if (nextApiCallTime && now < nextApiCallTime) {
@@ -4661,7 +4654,12 @@ if (redMazeActive) {
         return;
     }
     
-
+    // Cancel any pending scheduled call first
+    // Prevent concurrent calls to the same function
+    if (apiTimeoutId) {
+        clearTimeout(apiTimeoutId);
+        apiTimeoutId = null;
+    }
     
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
@@ -5562,23 +5560,23 @@ if (map[ny][nx] === 7) {
         }
     } else {
         // Remove excess health and adjust armor
-        let currentMaxHP = 36; // Base HP
+        let currentMaxHP = 24; // Base HP
         let newArmorStatus = 'Cloth';
         if (p.hp > 1000) {
             currentMaxHP = 1000; // Diamond armor max
             newArmorStatus = 'Diamond';
-        } else if (p.hp > 48) {
-            currentMaxHP = 48; // Leather armor max
-            newArmorStatus = 'Leather';
         } else if (p.hp > 36) {
-            currentMaxHP = 36; // Cloth max
+            currentMaxHP = 36; // Leather armor max
+            newArmorStatus = 'Leather';
+        } else if (p.hp > 24) {
+            currentMaxHP = 24; // Cloth max
             newArmorStatus = 'Cloth';
         }
         if (p.hp > currentMaxHP) {
             const healthLost = p.hp - currentMaxHP;
             p.hp = currentMaxHP;
             p.hasDiamondArmor = currentMaxHP >= 1000;
-            p.hasArmor = currentMaxHP === 48;
+            p.hasArmor = currentMaxHP === 36;
             document.getElementById('armorStatus').textContent = newArmorStatus;
             logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
         } else {
@@ -5613,10 +5611,10 @@ if (map[ny][nx] === 7) {
         
         if (map[ny][nx] === 5) {
             // Cursed Aura now stacks with armor (no dispel)
-            if (p.hp >= 36) {
+            if (p.hp >= 24) {
                 p.hp += 12;
             } else {
-                p.hp = 36 + 12;
+                p.hp = 24 + 12;
             }
 p.hasArmor = true;
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
@@ -11135,7 +11133,7 @@ skillTreeActive = false;
     p.shrineCharges = 0;
     p.shrineUsedThisFloor = false;
     currentTheme = 'dungeon';            // default theme
-    p.maxHP = 36;                       // default max HP
+    p.maxHP = 24;                       // default max HP
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
     wave = 1;
     document.getElementById('wave').textContent = wave;
