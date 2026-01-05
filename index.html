@@ -446,8 +446,8 @@ button:hover {
     transition: all 0.2s ease;
 }
 .class-option.selected {
-    border: 6px solid #00ff00 !important;
-    background: rgba(0,255,0,0.2) !important;
+    border: 6px solid #00e8d8 !important;
+    background: rgba(0,123,126,1) !important;
     box-shadow: 0 0 20px #00ff00;
 }
 
@@ -2123,6 +2123,37 @@ assets.enemyBg[2].src = 'red-bg3.png';
 	p.anim.frames.diamond_armor_right[0].src = 'player_diamond_armor-right1.png';
 	p.anim.frames.diamond_armor_right[1].src = 'player_diamond_armor-right2.png';
 
+// DRUID class frames
+p.anim.frames.druid_front = [new Image(), new Image()];
+p.anim.frames.druid_back = [new Image(), new Image()];
+p.anim.frames.druid_right = [new Image(), new Image()];
+p.anim.frames.druid_armor_front = [new Image(), new Image()];
+p.anim.frames.druid_armor_back = [new Image(), new Image()];
+p.anim.frames.druid_armor_right = [new Image(), new Image()];
+p.anim.frames.druid_diamond_armor_front = [new Image(), new Image()];
+p.anim.frames.druid_diamond_armor_back = [new Image(), new Image()];
+p.anim.frames.druid_diamond_armor_right = [new Image(), new Image()];
+
+// Load Druid assets
+p.anim.frames.druid_front[0].src = 'druid-front1.png';
+p.anim.frames.druid_front[1].src = 'druid-front2.png';
+p.anim.frames.druid_back[0].src = 'druid-back1.png';
+p.anim.frames.druid_back[1].src = 'druid-back2.png';
+p.anim.frames.druid_right[0].src = 'druid-right1.png';
+p.anim.frames.druid_right[1].src = 'druid-right2.png';
+p.anim.frames.druid_armor_front[0].src = 'druid_armor-front1.png';
+p.anim.frames.druid_armor_front[1].src = 'druid_armor-front2.png';
+p.anim.frames.druid_armor_back[0].src = 'druid_armor-back1.png';
+p.anim.frames.druid_armor_back[1].src = 'druid_armor-back2.png';
+p.anim.frames.druid_armor_right[0].src = 'druid_armor-right1.png';
+p.anim.frames.druid_armor_right[1].src = 'druid_armor-right2.png';
+p.anim.frames.druid_diamond_armor_front[0].src = 'druid_diamond_armor-front1.png';
+p.anim.frames.druid_diamond_armor_front[1].src = 'druid_diamond_armor-front2.png';
+p.anim.frames.druid_diamond_armor_back[0].src = 'druid_diamond_armor-back1.png';
+p.anim.frames.druid_diamond_armor_back[1].src = 'druid_diamond_armor-back2.png';
+p.anim.frames.druid_diamond_armor_right[0].src = 'druid_diamond_armor-right1.png';
+p.anim.frames.druid_diamond_armor_right[1].src = 'druid_diamond_armor-right2.png';
+
 assets.satoshi_scourge = new Image();
 assets.satoshi_scourge.src = 'satoshi_scourge.png';
 assets.satoshi_scourge.onerror = () => console.error('Failed to load satoshi_scourge.png');
@@ -2130,6 +2161,13 @@ assets.satoshi_scourge.onerror = () => console.error('Failed to load satoshi_sco
 assets.cat = new Image();
 assets.cat.src = 'black_cat.png';
 assets.cat.onerror = () => console.error('Failed to load black_cat.png');
+
+assets.shrimp_huge_1 = new Image();
+assets.shrimp_huge_2 = new Image();
+assets.shrimp_huge_3 = new Image();
+assets.shrimp_huge_1.src = 'shrimp_1_HUGE.png';
+assets.shrimp_huge_2.src = 'shrimp_2_HUGE.png';
+assets.shrimp_huge_3.src = 'shrimp_3_HUGE.png';
 
 assets.red_maze = new Image();
 assets.red_maze.src = 'red_maze.png';
@@ -2175,6 +2213,10 @@ types.forEach(t => {
         });
     }
 });
+
+//
+// we use 'hit', 'enemy' and 'e' as the same thing in the game. It is all enemies, this is a reminder of that. :D
+//
 
 function placeStairs() {
     if (inHideout) {
@@ -2742,21 +2784,21 @@ function showSkillTree() {
         html += `<div style="margin:40px 0;text-align:center;display:flex;justify-content:center;align-items:flex-start;gap:clamp(30px, 8vw, 60px);">`;
 
         // Druid button
-        html += `<div id="druid-option" class="class-option" style="width:clamp(200px, 40vw, 260px);height:clamp(180px, 35vw, 220px);padding:clamp(10px, 3vw, 20px);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;">`;
-        html += `<strong style="font-size:clamp(24px, 5vw, 32px);margin-bottom:clamp(8px, 2vw, 12px);text-align:left;">Druid</strong>`;
-        html += `<div style="font-size:clamp(14px, 3.2vw, 18px);line-height:1.4;text-align:left;flex-grow:1;">`;
-        html += `> Shrine +2<br>`;
+        html += `<div id="druid-option" class="class-option" style="width:clamp(200px, 40vw, 260px);height:clamp(180px, 35vw, 220px);padding:clamp(10px, 3vw, 20px);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;background:#000;border:3px solid #f7931a;box-shadow:0 0 10px #f7931a;color:#f7931a;">`;
+        html += `<strong style="font-size:clamp(24px, 5vw, 32px);margin-bottom:clamp(8px, 2vw, 12px);text-align:left;color:#f7931a;text-shadow:0 0 10px #00e8d8;">Druid</strong>`;
+        html += `<div style="font-size:clamp(14px, 3.2vw, 18px);line-height:1.4;text-align:left;flex-grow:1;color:#f7931a">`;
+        html += `> Birch shield<br>`;
         html += `> Thorns<br>`;
         html += `> Ensnare<br>`;
-        html += `> 20% block<br>`;
+        html += `> Shrine +2<br>`;
         html += `> Farm unlock`;
         html += `</div>`;
         html += `</div>`;
 
         // Degen button
-        html += `<div id="degen-option" class="class-option" style="width:clamp(200px, 40vw, 260px);height:clamp(180px, 35vw, 220px);padding:clamp(10px, 3vw, 20px);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;">`;
-        html += `<strong style="font-size:clamp(24px, 5vw, 32px);margin-bottom:clamp(8px, 2vw, 12px);text-align:left;">Degen</strong>`;
-        html += `<div style="font-size:clamp(14px, 3.2vw, 18px);line-height:1.4;text-align:left;flex-grow:1;">`;
+        html += `<div id="degen-option" class="class-option" style="width:clamp(200px, 40vw, 260px);height:clamp(180px, 35vw, 220px);padding:clamp(10px, 3vw, 20px);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;background:#000;border:3px solid #f7931a;box-shadow:0 0 10px #f7931a;color:#f7931a;">`;
+        html += `<strong style="font-size:clamp(24px, 5vw, 32px);margin-bottom:clamp(8px, 2vw, 12px);text-align:left;color:#f7931a;text-shadow:0 0 10px #00e8d8;">Degen</strong>`;
+        html += `<div style="font-size:clamp(14px, 3.2vw, 18px);line-height:1.4;text-align:left;flex-grow:1;color:#f7931a">`;
         html += `> Farm unlock<br>`;
         html += `> +1 ROI (x5)<br>`;
         html += `> Soul regen`;
@@ -2765,15 +2807,12 @@ function showSkillTree() {
 
         html += `</div>`;
     } else {
-        html += `<div style="text-align:center;margin:40px 0;">`;
-        html += `<h3>${playerClass.charAt(0).toUpperCase() + playerClass.slice(1)} Perk Unlocked!</h3>`;
         const perks = {
-            druid: {10:'> Thorns: Enemies lose 0.2 HP on attack',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose 0.4 HP on attack',40:'> Birch Shield: 20% block chance',50:'> Farm unlocked +1 Cool ROI'},
+            druid: {10:'> Thorns: Enemies lose 0.25 HP on attack',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose 0.5 HP on attack',40:'> Shrine regenerate HP +2',50:'> Farm unlocked +1 Cool ROI'},
             degen: {10:'> +1 Cool ROI',20:'> +1 Cool ROI',30:'> +1 Cool ROI',40:'> +1 Cool ROI',50:'> Soul charges +1 every 2 steps'}
         };
-        html += `<div style="font-size:24px;padding:20px;background:rgba(0,255,0,0.2);border:4px solid #00ff00;border-radius:8px;margin:20px 0;">`;
+        html += `<div style="font-size:28px;padding:30px;background:#000;border:4px solid #f7931a;border-radius:0;box-shadow:0 0 20px #f7931a;margin:40px 0;text-align:center;color:#f7931a">`;
         html += `<strong>${perks[playerClass][pendingSkillTreeLevel]}</strong>`;
-        html += `</div>`;
         html += `</div>`;
     }
     content.innerHTML = html;
@@ -2787,17 +2826,16 @@ function showSkillTree() {
         }, 20000);
     }
     
-    // Allow tap/click anywhere to close perk info early (with 1-second protection)
-    if (pendingSkillTreeLevel !== 3) {
-        // Block closing for first 1 second
-        overlay.style.pointerEvents = 'none';
-        setTimeout(() => {
-            overlay.style.pointerEvents = 'auto';
-        }, 1000);
-
+    // For ALL skill tree screens: 1-second protection against accidental B button / tap
+    overlay.style.pointerEvents = 'none';
+    // Block gamepad B button for first 1 second (ALL levels)
+    window.skillTreeInputBlocked = true;
+    setTimeout(() => {
+        overlay.style.pointerEvents = 'auto';
         overlay.onclick = () => closeSkillTree();
         overlay.ontouchend = () => closeSkillTree();
-    }
+        window.skillTreeInputBlocked = false;
+    }, 1000);
     
     inputBlocked = false; // we keep input allowed for navigation
 
@@ -2933,6 +2971,67 @@ function startRainAmbience() {
     rainNoiseSource.start(now);
 
     rainAmbienceTimer = true;
+}
+
+function playShrimpRageGrowl() {
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for rage growl:', e));
+    }
+    const duration = 0.6;
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+        const t = i / sampleRate;
+        // Deep angry growl with vibration
+        const freq = 80 + 30 * Math.sin(2 * Math.PI * 3 * t);
+        let wave = Math.sin(2 * Math.PI * freq * t);
+        // Add harmonics and grit
+        wave += 0.5 * Math.sin(2 * Math.PI * freq * 2 * t);
+        wave += 0.3 * (Math.random() - 0.5);
+        // Sharp attack, slow decay
+        const envelope = Math.min(1, t * 8) * Math.exp(-3 * t);
+        data[i] = wave * envelope * 0.6;
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = soundVolume;
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    source.start(0);
+}
+
+function playShrimpTrollDeathScream() {
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for troll scream:', e));
+    }
+    const duration = 1.2; // longer for maximum drama
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+        const t = i / sampleRate;
+        // Ultra-distorted, high-pitched troll rage with random glitches
+        let freq = 200 + 150 * Math.sin(2 * Math.PI * 8 * t) + 300 * Math.sin(2 * Math.PI * 15 * t);
+        let wave = Math.sin(2 * Math.PI * freq * t);
+        // Overdrive harmonics + bitcrush
+        wave += 0.4 * Math.sin(2 * Math.PI * freq * 2 * t);           // softer harmonic
+        wave += 0.3 * Math.sin(2 * Math.PI * freq * 3 * t);           // reduced
+        wave += 0.15 * (Math.random() - 0.5) * 2;                     // much less noise
+        // Softer distortion instead of extreme clipping
+        wave = Math.tanh(wave * 1.8); // reduced overdrive (was *4)
+        // Envelope: explosive attack, chaotic decay
+        const envelope = Math.min(1, t * 10) * Math.exp(-3.5 * t) * (1 + 0.15 * Math.sin(2 * Math.PI * 12 * t));
+        data[i] = wave * envelope * 0.8;
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = soundVolume * 0.9; // calmer volume
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    source.start(0);
 }
 
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
@@ -3328,6 +3427,7 @@ function initMap() {
             });
             enemies = [];
             enemiesSpawnedThisFloor = 0;
+            window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
             whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
             initialSpawnDoneThisFloor = false;
             initialWaveSpawned = false;
@@ -3598,6 +3698,7 @@ updateSnowState(); // keeps snowflakes in sync
         // Reset enemy spawning variables
         enemies = [];
         enemiesSpawnedThisFloor = 0;
+                window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
         whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
         initialSpawnDoneThisFloor = false;
         initialWaveSpawned = false;
@@ -4374,7 +4475,7 @@ if (p.hp <= 0 && !gameOver) {
             // ----- clear enemies & spawn Echo Warden -----
             enemies.forEach(enemy => {
                 kills[enemy.type.name]++;
-                if (enemy.type.name !== 'Cursed Trader' && !enemy.uniqueName) {
+                if (enemy.type.name !== 'Cursed Trader' && !enemy.uniqueName && !enemy.isHuge) {
                     if (map[enemy.y][enemy.x] === 0) {
                         map[enemy.y][enemy.x] = 3;
                         satoshiDrops.push({
@@ -4502,6 +4603,7 @@ let lastKeyMoveTime = 0; // Track last keyboard move time
 let pendingKeyDir = null; // Track latest keyboard direction
 let isKeyHeld = false; // Track if a key is held
 let enemiesSpawnedThisFloor = 0;
+        window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
 let uniqueMonstersSpawnedThisFloor = 0; // Track unique monsters spawned this floor
 let scrollDroppedThisFloor = false; // Track if a scroll has dropped on this floor
 let nextApiCallTime = null;
@@ -4515,6 +4617,8 @@ function shouldSpawn() {
 }
 
 async function fetchTxs() {
+
+
     if (gameOver || splashActive || floor === 0 || inHideout || screensaverActive) {
         console.log(`Skipping fetchTxs: gameOver=${gameOver}, splashActive=${splashActive}, floor=${floor}, inHideout=${inHideout}, screensaverActive=${screensaverActive}`);
         return;
@@ -4529,10 +4633,18 @@ async function fetchTxs() {
     isFetchingTxs = true; // Set flag
 
 if (redMazeActive) {
-    isFetchingTxs = false;
-    return; // No enemies during Red Maze boss
+    isFetchingTxs = false; // QUICK HACK! look away :)
+    return; // Red Maze boss
 }
-    
+
+    // 1. Cancel any pending scheduled call first
+    // Prevent concurrent calls to the same function
+    if (apiTimeoutId) {
+        clearTimeout(apiTimeoutId);
+        apiTimeoutId = null;
+    }
+
+    // 2. Then check the rate-limit    
     const now = Date.now();
     // Prevent duplicate calls within API_INTERVAL
     if (nextApiCallTime && now < nextApiCallTime) {
@@ -4541,11 +4653,7 @@ if (redMazeActive) {
         return;
     }
     
-    // Prevent concurrent calls to the same function
-    if (apiTimeoutId) {
-        clearTimeout(apiTimeoutId);
-        apiTimeoutId = null;
-    }
+
     
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
@@ -4615,8 +4723,9 @@ if (redMazeActive) {
               if (type.name !== 'Whale' && exit) {
                   continue;
               }
-              //console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`);
-              console.log('Initial Spawn Tx: Checking 10 transactions for Enemies spawns'); // less bloat means win in the long run
+              //console.log(`Initial Spawn Tx: ${tx.txid}, BTC: ${btc}, Type: ${type.name}, Address: ${address}, Value: ${value}`); // ORIGINAL
+              console.log(`Spawn > Type: ${type.name}, BTC: ${btc}`);
+              //console.log('Initial Spawn Tx: Checking 10 transactions for Enemies spawns'); // less bloat means win in the long run // TO LITTLE INFORMATION
               const r = rooms[Math.floor(Math.random() * rooms.length)];
               let x, y, attempts = 50;
               const auraRadius = 2; // 5x5 grid
@@ -4867,7 +4976,7 @@ logBattleEvent(`Floor ${floor} - ${type.name} Spawn: ${btc.toFixed(2)} BTC`); //
                 if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
                 playerXP += xp;
-                if (xp > 0) logBattleEvent(`+${xp} XP`);
+                //if (xp > 0) logBattleEvent(`+${xp} XP`);
                 checkLevelUp();
                 updateXPBar(); // Only called on kills - super efficient
 
@@ -4878,7 +4987,7 @@ if (enemy.type.name === 'Cursed Trader') {
 let dropPlaced = false;
 
 // No sats/BTC drop for uniques OR Cursed Trader — they are not blockchain natives
-if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
+if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge) {
     if (map[enemy.y][enemy.x] === 0) {
         map[enemy.y][enemy.x] = 3;
         satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -4983,8 +5092,41 @@ dropPlaced = dropPlaced || false; // ensure defined if no drop
                 }
             });
             
-const deadEnemies = enemies.filter(e => e.hp <= 0);
-enemies = enemies.filter(e => e.hp > 0);
+            const deadEnemies = enemies.filter(e => e.hp <= 0);
+            enemies = enemies.filter(e => e.hp > 0);
+            deadEnemies.forEach(dead => {
+                enemyBgFrameTimes.delete(dead);
+
+                // Mark death time + rewards for huge shrimp
+                if (dead.isHuge) {
+                    if (!dead.deathTime) dead.deathTime = performance.now();
+                    dropSoulStone(dead.x, dead.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[dead.y][dead.x] === 0) {
+            map[dead.y][dead.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = dead.x + d.dx, ny = dead.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
+            });
+            
 deadEnemies.forEach(dead => enemyBgFrameTimes.delete(dead)); // Clear bg tracking for dead
             // Delay stairs placement until fire wave animation completes
             if (enemies.length === 0 && !exit && waveActive) {
@@ -5067,7 +5209,7 @@ if (playerClass === 'degen' && playerLevel >= 50 && p.moveCounter >= 2) {
 p.auraMoveCounter++;
 if (p.moveCounter >= 2) {
 if (p.shrineCharges > 0) {
-    const regenAmount = (playerClass === 'druid' ? 2 : 1);
+    const regenAmount = (playerClass === 'druid' && playerLevel >= 40 ? 2 : 1); // Druid lvl 40+
     p.hp += regenAmount;
     p.shrineCharges--;
     // Log only every 8 charges spent to reduce spam
@@ -5808,6 +5950,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     }
    
     enemiesSpawnedThisFloor = 0;
+            window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
     uniqueMonstersSpawnedThisFloor = 0; // Reset unique monster spawn counter
     initialSpawnDoneThisFloor = false;
     enemies = [];
@@ -5871,6 +6014,7 @@ musicManager.mute(true); // force mute during boss
     initialWaveSpawned = false;
     initialSpawnDoneThisFloor = false;
     enemiesSpawnedThisFloor = 0;
+            window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
     uniqueMonstersSpawnedThisFloor = 0;
     whalesSpawnedThisFloor = 0;
     enemies = [];
@@ -5883,6 +6027,9 @@ musicManager.mute(true); // force mute during boss
     
     // Spawn wisp on floor 3
     if (floor === 3 && wisps.length === 0) {
+    
+        // DEBUG
+        //const wispType = WISP_TYPES[1]; // FIRE wisp (index 1)
         const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
         wisps.push({
             x: p.x, y: p.y,
@@ -6653,6 +6800,45 @@ function moveEnemies() {
     });    
 
 enemies.forEach(e => {
+    e.playerPushedThisTurn = false; // reset push flag each turn
+
+
+    // Dolphin push (one-time, smooth interpolated)
+    if (e.type.name === 'Dolphin' && !e.pushUsed && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1) {
+        e.pushUsed = true;
+        const pushX = p.x + (p.x - e.x); // opposite direction
+        const pushY = p.y + (p.y - e.y);
+        
+        // Validate push path
+        const dx = pushX - p.x;
+        const dy = pushY - p.y;
+        const steps = Math.max(Math.abs(dx), Math.abs(dy));
+        let valid = true;
+        for (let i = 1; i <= steps; i++) {
+            const checkX = Math.round(p.x + (dx / steps) * i);
+            const checkY = Math.round(p.y + (dy / steps) * i);
+            if (checkX < 0 || checkX >= W || checkY < 0 || checkY >= H || map[checkY][checkX] !== 0) {
+                valid = false;
+                break;
+            }
+        }
+        
+        if (valid) {
+            // Start smooth push animation (same as huge shrimp)
+            p.startX = p.x; p.startY = p.y;
+            p.x = pushX; p.y = pushY;
+            p.targetTileX = pushX; p.targetTileY = pushY;
+            p.deltaX = (pushX - p.startX) * 2;
+            p.deltaY = (pushY - p.startY) * 2;
+            p.stepsLeft = 8;
+            p.moving = true;
+            p.moveStartTime = performance.now();
+            p.moveDuration = 200;
+            logBattleEvent(`Floor ${floor} - Dolphin pushes you away!`);
+            needsRedraw = true;
+        }
+    }
+    
     if (e.frozen && e.frozenTurns > 0) {
         e.frozenTurns--;
         if (e.frozenTurns <= 0) e.frozen = false;
@@ -6667,6 +6853,8 @@ enemies.forEach(e => {
             let moves = e.type.move, steps = 0;
 let startX = e.x, startY = e.y;
 let finalX = e.x, finalY = e.y;
+moves = e.type.move;
+if (e.isHuge) moves = 2; // huge shrimp gets 2 moves (move + attack)
 let numTileSteps = 0;
 let tempDx = dx, tempDy = dy;
 while (steps < moves) {
@@ -6707,8 +6895,36 @@ if (numTileSteps > 0) {
     e.targetTileY = finalY;
     e.currentX = startX * S;
     e.currentY = startY * S;
+    
+    // Rage scream every ~2 moves for huge shrimp
+    if (e.isHuge && numTileSteps > 0 && performance.now() - e.lastRageScream > 1800) {
+        playShrimpRageGrowl();
+        e.lastRageScream = performance.now();
+    }
+    
 }
 dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
+
+// Smooth huge shrimp player push (interpolated like normal movement)
+if (e.isHuge && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1) {
+    const pushX = p.x + (p.x - e.x);
+    const pushY = p.y + (p.y - e.y);
+    if (pushX >= 0 && pushX < W && pushY >= 0 && pushY < H && map[pushY][pushX] === 0 && !enemies.some(en => en.x === pushX && en.y === pushY)) {
+        // Start smooth push animation (same as player/enemy movement)
+        p.startX = p.x; p.startY = p.y;
+        p.x = pushX; p.y = pushY;
+        p.targetTileX = pushX; p.targetTileY = pushY;
+        p.deltaX = (pushX - p.startX) * 2;
+        p.deltaY = (pushY - p.startY) * 2;
+        p.stepsLeft = 8;
+        p.moving = true;
+        p.moveStartTime = performance.now();
+        p.moveDuration = 200;
+        logBattleEvent(`Enraged Huge Shrimp pushes you!`);
+        needsRedraw = true;
+    }
+}
+
             }
             if (
                 (e.type.name === 'Shrimp' || e.type.name === 'Crab' || e.type.name === 'Dolphin' || e.type.name === 'Shark' || e.type.name === 'Cursed Trader') ?
@@ -6732,11 +6948,11 @@ dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
                 // Calculate base damage
                 const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) + 3 : e.type.atk;
 
-                // Birch Shield block (Druid lvl 40+)
+                // Birch Shield block
                 let damageTaken = true;
-                if (playerClass === 'druid' && playerLevel >= 40 && Math.random() < 0.20) {
+                if (playerClass === 'druid' && Math.random() < 0.10) {
                     logBattleEvent(`Birch Shield blocks the attack!`);
-                    highlightTiles.push({x: p.x, y: p.y, highlightStart: Date.now(), color: 'rgba(255,255,255,0.6)'});
+                    highlightTiles.push({x: p.x, y: p.y, highlightStart: Date.now(), color: 'circle-white'});
                     damageTaken = false; // fully block damage and skip thorns
                 }
 
@@ -6765,9 +6981,9 @@ dx = p.x - e.x; dy = p.y - e.y;  // Update for attack
 if (playerClass === 'druid' && playerLevel >= 10) {
     const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
     if (dist === 1) { // Only enemies directly adjacent (cardinal, not diagonal)
-        let thornDmg = playerLevel >= 30 ? 0.4 : 0.2; // Back to integer damage (feels better)
+        let thornDmg = playerLevel >= 30 ? 0.5 : 0.25; // fractional damage
         if (e.type.name === 'Shrimp' || (playerLevel >= 30 && e.type.name === 'Crab')) {
-            thornDmg = Math.ceil(thornDmg / 2); // 50% on small enemies → 1 or 0.5 → 1
+            thornDmg *= 0.5; // 50% on small enemies
         }
         if (thornDmg > 0) {
             const oldHp = e.hp;
@@ -6781,7 +6997,7 @@ if (playerClass === 'druid' && playerLevel >= 10) {
                 tryDropScroll(e.x, e.y);
 
                 // Drop sats if not unique or Cursed Trader
-                if (!e.uniqueName && e.type.name !== 'Cursed Trader') {
+                if (!e.uniqueName && e.type.name !== 'Cursed Trader' && !e.isHuge) {
                     if (map[e.y][e.x] === 0) {
                         map[e.y][e.x] = 3;
                         satoshiDrops.push({x: e.x, y: e.y, sats: e.sats, type: e.type.name});
@@ -6825,8 +7041,38 @@ if (playerClass === 'druid' && playerLevel >= 10) {
                     }
                 }
 
-                logBattleEvent(`${e.type.name} killed by thorns!`);
+                logBattleEvent(`${e.type.name} killed by thorns!`);                
+                // Cleanup + huge shrimp rewards
+
+                if (e.isHuge) {
+                    if (!e.deathTime) e.deathTime = performance.now();
+                    dropSoulStone(e.x, e.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[e.y][e.x] === 0) {
+            map[e.y][e.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = e.x + d.dx, ny = e.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
                 enemies = enemies.filter(en => en !== e);
+                
                 highlightTiles.push({
                     x: e.x,
                     y: e.y,
@@ -6964,6 +7210,123 @@ updatePlayerState(); // Check HP and armor state after damage
             }
             
     });
+
+    // Never spawn huge shrimp in hell theme
+    if (currentTheme === 'hell') return;
+    
+    // DEBUG: Enraged Huge Shrimp summon - once per floor when 3+ shrimps exist
+    if (!window.hugeShrimpSpawnedThisFloor && enemies.filter(e => e.type.name === 'Shrimp' && !e.isHuge).length >= 3) {
+        // Find shrimp cluster center
+        let clusterX = 0, clusterY = 0, shrimpCount = 0;
+        enemies.forEach(e => {
+            if (e.type.name === 'Shrimp' && !e.isHuge && fogMap[e.y][e.x] === 1) { // visible only
+                clusterX += e.x; clusterY += e.y; shrimpCount++;
+            }
+        });
+        if (shrimpCount >= 3) {
+            const hx = Math.floor(clusterX / shrimpCount);
+            const hy = Math.floor(clusterY / shrimpCount);
+            
+            // Try 8 adjacent tiles for spawn
+            const dirs = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]];
+            for (let d of dirs) {
+                const tx = hx + d[0], ty = hy + d[1];
+                if (tx >= 0 && tx < W && ty >= 0 && ty < H && map[ty][tx] === 0 && 
+                    !enemies.some(e => e.x === tx && e.y === ty)) {
+                    
+                    // DRAMATIC CRUSH: Push 2 nearby shrimps into walls → explode
+                    const nearbyShrimps = enemies.filter(e => 
+                        e.type.name === 'Shrimp' && !e.isHuge && 
+                        Math.abs(e.x - tx) <= 2 && Math.abs(e.y - ty) <= 2
+                    ).slice(0, 2);
+                    
+                    nearbyShrimps.forEach(shrimp => {
+                        // Find nearest wall to push into
+                        const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+                        let pushX = shrimp.x, pushY = shrimp.y;
+                        for (let d of dirs) {
+                            const wallX = shrimp.x + d[0];
+                            const wallY = shrimp.y + d[1];
+                            if (wallX >= 0 && wallX < W && wallY >= 0 && wallY < H && map[wallY][wallX] === 1) {
+                                pushX = wallX; pushY = wallY;
+                                break;
+                            }
+                        }
+                        
+                        // Drop sats at original position
+                        // Safe drop: use real sats if available, else 1 sat
+                        // Safe drop: blockchain sats → real value, else use EnemyType reward (fallback 1 sat)
+                        const dropSats = (shrimp.sats !== undefined && Number.isFinite(shrimp.sats) && shrimp.sats > 0)
+                            ? shrimp.sats
+                            : (shrimp.type.reward > 0 ? shrimp.type.reward : 1);
+
+                        if (map[shrimp.y][shrimp.x] === 0) {
+                            map[shrimp.y][shrimp.x] = 3;
+                            satoshiDrops.push({x: shrimp.x, y: shrimp.y, sats: dropSats, type: shrimp.type.name});
+                        }
+
+                        // Also add to global run tracker (for game-over stats)
+                        satsEarned.Shrimp = (satsEarned.Shrimp || 0) + dropSats;
+                        
+                        // VISUAL: Mark shrimp for wall-crush death flash
+                        shrimp.crushedToWall = { targetX: pushX, targetY: pushY, startTime: performance.now() };
+                        shrimp.hp = 0; // Kill it
+                    });
+                    
+                    // SPAWN HUGE SHRIMP
+                    const huge = {
+                        x: tx, y: ty,
+                        currentX: tx * S, currentY: ty * S,
+                        moving: false, stepsLeft: 0, deltaX: 0, deltaY: 0,
+                        targetTileX: tx, targetTileY: ty,
+                            type: types[0],
+                            sats: 0, // Explicitly no blockchain value
+                        hp: cursedTraderType.hp,
+                        atk: 2,
+                        move: 2,
+                        isHuge: true,
+                        anim: {
+                            frames: [assets.shrimp_huge_1, assets.shrimp_huge_2, assets.shrimp_huge_1], // cycle 1-2-1 as requested
+                            frameIndex: 0,
+                            lastFrameTime: performance.now(),
+                            frameDuration: 400 // slightly slower for big boi
+                        },
+                        ragePulseStart: performance.now(),
+                        lastRageScream: performance.now() - 2000, // so it can scream on first move
+                        bits: 0, bitAmmo: 0
+                    };
+                    enemies.push(huge);
+
+                    // VAPORIZE ALL nearby normal shrimps (not just 2) with obscene troll scream
+                    const vaporizeRange = 3; // tiles
+                    const vaporized = enemies.filter(en => 
+                        en.type.name === 'Shrimp' && !en.isHuge &&
+                        Math.abs(en.x - tx) <= vaporizeRange && Math.abs(en.y - ty) <= vaporizeRange
+                    );
+
+                    vaporized.forEach(shrimp => {
+                        // Drop sats
+                        if (map[shrimp.y][shrimp.x] === 0) {
+                            map[shrimp.y][shrimp.x] = 3;
+                            satoshiDrops.push({x: shrimp.x, y: shrimp.y, sats: shrimp.sats, type: shrimp.type.name});
+                        }
+                        // Mark for vaporize death animation
+                        shrimp.vaporizeDeath = { startTime: performance.now() };
+                        shrimp.hp = 0;
+                    });
+
+                    // Play the most obscene, rage-infused troll scream possible
+                    playShrimpTrollDeathScream();
+
+                    window.hugeShrimpSpawnedThisFloor = true;
+                    logBattleEvent(`MASS SHRIMP FUSION! ALL NEARBY SHRIMPS VAPORIZED IN RAGE!`);
+                    needsRedraw = true;
+                    needsRedraw = true;
+                    break;
+                }
+            }
+        }
+    }
         
     // Single death/surge check after all enemy actions
     updatePlayerState();
@@ -7133,14 +7496,14 @@ function doScourgeSpinAttack() {
                 if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
                 playerXP += xp;
-                if (xp > 0) logBattleEvent(`+${xp} XP`);
+                //if (xp > 0) logBattleEvent(`+${xp} XP`);
                 checkLevelUp();
                 updateXPBar(); // Only called on kills - super efficient
                 handleUniqueMonsterReward(enemy);
                 tryDropScroll(enemy.x, enemy.y);
 
                 // Normal sats drop for non-unique enemies (skip Cursed Trader to avoid bitcoin glitch)
-                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && map[y][x] === 0) {
+                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge && map[y][x] === 0) {
                     map[y][x] = 3;
                     satoshiDrops.push({x, y, sats: enemy.sats, type: enemy.type.name});
                 }
@@ -7168,7 +7531,36 @@ function doScourgeSpinAttack() {
                     }
                 }
 
+
+                if (enemy.isHuge) {
+                    if (!enemy.deathTime) enemy.deathTime = performance.now();
+                    dropSoulStone(enemy.x, enemy.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[enemy.y][enemy.x] === 0) {
+            map[enemy.y][enemy.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = enemy.x + d.dx, ny = enemy.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
                 enemies = enemies.filter(e => e !== enemy);
+                
             }
         }
     });
@@ -7202,7 +7594,13 @@ function updateWisps() {
     if (wisps.length === 0 || gameOver || splashActive) return;
     const wisp = wisps[0]; // Only 1 wisp
     wisp.attackCounter++;
-
+        // Paralyzed wisp skips turn
+        if (wisp.paralyzed && wisp.paralyzedTurns > 0) {
+            wisp.paralyzedTurns--;
+            if (wisp.paralyzedTurns <= 0) wisp.paralyzed = false;
+            return; // Skip entire turn
+        }
+        
     // Define inRangeEnemies once for both Ensnare and normal attack
     const inRangeEnemies = enemies.filter(e => {
         let edist = Math.abs(e.x - wisp.x) + Math.abs(e.y - wisp.y);
@@ -7289,9 +7687,6 @@ function applyWispAttack(wisp, primaryTarget) {
                 }
                 logBattleEvent(`Wisp ${verb} ${primaryTarget.type.name} for ${actualDmg} damage! ${effect}`);
                 playWebAudioSound(sounds.attack);
-            }
-            if (primaryTarget.hp === 1) {
-                logBattleEvent(`Wisp spares ${primaryTarget.type.name}!`);
             }
         }
         hitEnemies.add(primaryTarget);
@@ -7416,8 +7811,23 @@ function applySpellDamage(x, y) {
             logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
         } else {
             p.hp -= damage;
-            logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
-            playWebAudioSound(sounds.hit);
+        // 20% chance to paralyze wisp on spell damage
+        if (wisps.length > 0 && Math.random() < 0.20) {
+            const wisp = wisps[0];
+            wisp.paralyzed = true;
+            wisp.paralyzedTurns = 2;
+            logBattleEvent(`Floor ${floor} - Spell paralyzes your wisp!`);
+        }
+            // Throttled spell log (every 1 second max)
+            if (Date.now() - (window.lastSpellLogTime || 0) > 1000) {
+                logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
+                window.lastSpellLogTime = Date.now();
+            }
+            // Throttled sound (every 1 second max)
+            if (Date.now() - (window.lastSpellSoundTime || 0) > 1000) {
+                playWebAudioSound(sounds.hit);
+                window.lastSpellSoundTime = Date.now();
+            }
         }
         updatePlayerState(); // Centralized: surge if eligible, no early gameOver
     }
@@ -7519,7 +7929,7 @@ else if (hit.type.name === 'Whale') xp = 15;
 else if (hit.type.name === 'Cursed Trader') xp = 10;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
 playerXP += xp;
-if (xp > 0) logBattleEvent(`+${xp} XP`);
+//if (xp > 0) logBattleEvent(`+${xp} XP`);
 checkLevelUp();
 updateXPBar(); // Only called on kills - super efficient
                         tryDropScroll(hit.x, hit.y);
@@ -7560,7 +7970,7 @@ updateXPBar(); // Only called on kills - super efficient
                             }
                         } else {
                             // Normal enemies only (including uniques — they get handled in handleUniqueMonsterReward)
-                            if (!hit.uniqueName && hit.type.name !== 'Cursed Trader') {
+                            if (!hit.uniqueName && hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
                                 let dropPlaced = false;
                                 if (map[hit.y][hit.x] === 0) {
                                     map[hit.y][hit.x] = 3;
@@ -7587,7 +7997,7 @@ updateXPBar(); // Only called on kills - super efficient
                         }
 
                         // Rune drop (20% Hell Shrimp, 10% others) — applies to all except Cursed Trader
-                        if (hit.type.name !== 'Cursed Trader' && Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
+                        if (hit.type.name !== 'Cursed Trader' && !hit.isHuge && Math.random() < (hit.type.name === 'Shrimp' && currentTheme === 'hell' ? 0.2 : 0.1)) {
                             let runeLetter;
                             if (hit.type.name === 'Shrimp' && currentTheme === 'hell') {
                                 const hellShrimpRunes = ['r', 'i', 'p', 'h', 'o', 'd', 'l'];
@@ -7624,7 +8034,36 @@ updateXPBar(); // Only called on kills - super efficient
                             }
                         }
 
-                        enemies = enemies.filter(e => e !== hit);
+
+                if (hit.isHuge) {
+                    if (!hit.deathTime) hit.deathTime = performance.now();
+                    dropSoulStone(hit.x, hit.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[hit.y][hit.x] === 0) {
+            map[hit.y][hit.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = hit.x + d.dx, ny = hit.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
+                enemies = enemies.filter(e => e !== hit);
+                        
                     }
                     needsRedraw = true;
                     return false; // sword stops on hit
@@ -7979,7 +8418,7 @@ function handleUniqueMonsterReward(hit) {
     
     // Add bitcoin drops around the monster position (skip for Cursed Trader)
     let dropPlaced = false;
-    if (hit.type.name !== 'Cursed Trader') {
+    if (hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
         if (map[hit.y][hit.x] === 0) {
             map[hit.y][hit.x] = 3;
             satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
@@ -8030,7 +8469,7 @@ function handleUniqueMonsterReward(hit) {
 
     activeUniqueMonsterName = null; // Also clear any lingering visible name
     // Add reward to earned stats (skip Cursed Trader)
-    if (hit.type.name !== 'Cursed Trader') {
+    if (hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
         satsEarned[hit.type.name] = (satsEarned[hit.type.name] || 0) + reward;
     }
     // Clear harbinger if it was this monster
@@ -8310,7 +8749,7 @@ if (hit) {
                         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
                         playerXP += xp;
-                        if (xp > 0) logBattleEvent(`+${xp} XP`);
+                        //if (xp > 0) logBattleEvent(`+${xp} XP`);
                         checkLevelUp();
                         updateXPBar(); // Only called on kills - super efficient
                         let dropPlaced = false;
@@ -8319,7 +8758,7 @@ handleUniqueMonsterReward(enemy);
 tryDropScroll(enemy.x, enemy.y);
                         
                         // Drop satoshi — ONLY for normal blockchain enemies (not uniques or Cursed Trader)
-                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
+                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge) {
                             if (map[enemy.y][enemy.x] === 0) {
                                 map[enemy.y][enemy.x] = 3;
                                 satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -8430,7 +8869,36 @@ tryDropScroll(enemy.x, enemy.y);
 if (enemy.type.name === 'Cursed Trader') {
         dropSoulStone(enemy.x, enemy.y);
     }
-                        enemies = enemies.filter(en => en !== enemy);
+
+                if (enemy.isHuge) {
+                    if (!enemy.deathTime) enemy.deathTime = performance.now();
+                    dropSoulStone(enemy.x, enemy.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[enemy.y][enemy.x] === 0) {
+            map[enemy.y][enemy.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = enemy.x + d.dx, ny = enemy.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
+                enemies = enemies.filter(en => en !== enemy);
+                        
                         enemiesHit++;
                     }
                     totalDamage += damage;
@@ -8492,7 +8960,7 @@ else if (hit.type.name === 'Whale') xp = 15;
 else if (hit.type.name === 'Cursed Trader') xp = 10;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
 playerXP += xp;
-if (xp > 0) logBattleEvent(`+${xp} XP`);
+//if (xp > 0) logBattleEvent(`+${xp} XP`);
 checkLevelUp();
 updateXPBar(); // Only called on kills - super efficient
                         tryDropScroll(hit.x, hit.y);
@@ -8531,7 +8999,7 @@ updateXPBar(); // Only called on kills - super efficient
                                     playWebAudioSound(sounds.pickup);
                                 }
                             }
-                        } else if (!hit.uniqueName && hit.type.name !== 'Cursed Trader') {
+                        } else if (!hit.uniqueName && hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
                             // Normal enemies only — drop sats visually
                             if (map[hit.y][hit.x] === 0) {
                                 map[hit.y][hit.x] = 3;
@@ -8555,7 +9023,7 @@ updateXPBar(); // Only called on kills - super efficient
                         }
 
                         // Soul stone drop logic (5% chance) — all enemies except Cursed Trader
-                        if (hit.type.name !== 'Cursed Trader' && Math.random() < 0.05) {
+                        if (hit.type.name !== 'Cursed Trader' && !hit.isHuge && Math.random() < 0.05) {
                             let stonePlaced = false;
                             if (map[hit.y][hit.x] === 0) {
                                 map[hit.y][hit.x] = 20;
@@ -8621,7 +9089,35 @@ updateXPBar(); // Only called on kills - super efficient
                             }
                         }
 
-                        enemies = enemies.filter(en => en !== hit);
+
+                if (hit.isHuge) {
+                    if (!hit.deathTime) hit.deathTime = performance.now();
+                    dropSoulStone(hit.x, hit.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[hit.y][hit.x] === 0) {
+            map[hit.y][hit.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = hit.x + d.dx, ny = hit.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
+                enemies = enemies.filter(e => e !== hit);
                     }
     }
 } else if (initialPickaxes > 0 && isWallNearby) {
@@ -9466,14 +9962,14 @@ if (enemy) {
         else if (enemy.type.name === 'Red Maze') xp = 30; // just in case
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
         playerXP += xp;
-        if (xp > 0) logBattleEvent(`+${xp} XP`);
+        //if (xp > 0) logBattleEvent(`+${xp} XP`);
         checkLevelUp();
         updateXPBar(); // Only called on kills - super efficient
         handleUniqueMonsterReward(enemy);
         tryDropScroll(enemy.x, enemy.y);
 
         // Drop satoshi (skip uniques & Cursed Trader)
-        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader') {
+        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge) {
             let dropPlaced = false;
             if (map[enemy.y][enemy.x] === 0) {
                 map[enemy.y][enemy.x] = 3;
@@ -9532,7 +10028,36 @@ if (enemy) {
         }
 
         // Remove the dead enemy
-        enemies = enemies.filter(en => en !== enemy);
+
+                if (enemy.isHuge) {
+                    if (!enemy.deathTime) enemy.deathTime = performance.now();
+                    dropSoulStone(enemy.x, enemy.y);
+                    
+// 50% potion drop
+    if (Math.random() < 0.5) {
+        if (map[enemy.y][enemy.x] === 0) {
+            map[enemy.y][enemy.x] = 2;
+        } else {
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = enemy.x + d.dx, ny = enemy.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 2;
+                    break;
+                }
+            }
+        }
+        logBattleEvent(`Huge Shrimp dropped a Potion!`);
+        playWebAudioSound(sounds.pickup);
+    }                    
+                    
+                    playerXP += 15;
+                    logBattleEvent(`+15 XP`);
+                    checkLevelUp();
+                    updateXPBar();
+                }
+                enemies = enemies.filter(en => en !== enemy);
+        
         enemiesHit++;
     }
 
@@ -10623,6 +11148,7 @@ enemyBgFrameTimes.clear(); // Clear bg animation tracking
     gameOverSoundPlayed = false;
     autoSubmitTriggered = false;
 enemiesSpawnedThisFloor = 0;
+        window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
 uniqueMonstersSpawnedThisFloor = 0; // Reset unique monster spawn counter
 whalesSpawnedThisFloor = 0;
 scrollDroppedThisFloor = false;
@@ -11317,8 +11843,19 @@ highlightTiles.forEach(tile => {
         const isVisible = fogMap[tile.y][tile.x] === 1 || dist <= radius;
         if (isVisible) {
             c.save();
-            c.fillStyle = tile.color || 'rgba(247, 147, 26, 0.5)'; // use custom color if provided, else orange
-            c.fillRect(tile.x * S, tile.y * S, S, S);
+            if (tile.color === 'circle-white') {
+                // Circular white Birch Shield flash
+                const elapsed = Date.now() - tile.highlightStart;
+                const expand = 1 + (elapsed / 100); // expand over 100ms
+                c.globalAlpha = 0.8 * (1 - elapsed / 200);
+                c.fillStyle = 'rgba(255,255,255,0.9)';
+                c.beginPath();
+                c.arc(tile.x * S + S/2, tile.y * S + S/2, S * expand / 2, 0, Math.PI * 2);
+                c.fill();
+            } else {
+                c.fillStyle = tile.color || 'rgba(247, 147, 26, 0.5)';
+                c.fillRect(tile.x * S, tile.y * S, S, S);
+            }
             c.restore();
         }
     }
@@ -11436,7 +11973,23 @@ let drawY = p.currentY;
         
         const direction = p.anim.direction;
         const baseDirection = direction === 'left' ? 'right' : direction;
-let frameKey = p.hasDiamondArmor ? `diamond_armor_${baseDirection}` : (p.hasArmor ? `armor_${baseDirection}` : baseDirection);
+let frameKey;
+if (playerClass === 'druid') {
+    frameKey = p.hasDiamondArmor ? `druid_diamond_armor_${baseDirection}` : 
+               (p.hasArmor ? `druid_armor_${baseDirection}` : `druid_${baseDirection}`);
+} else {
+    frameKey = p.hasDiamondArmor ? `diamond_armor_${baseDirection}` : 
+               (p.hasArmor ? `armor_${baseDirection}` : baseDirection);
+}
+
+// Error handling for Druid frames
+['druid_front', 'druid_back', 'druid_right', 'druid_armor_front', 'druid_armor_back', 'druid_armor_right', 
+ 'druid_diamond_armor_front', 'druid_diamond_armor_back', 'druid_diamond_armor_right'].forEach(key => {
+    p.anim.frames[key].forEach((frame, i) => {
+        frame.onerror = () => console.error(`Failed to load ${key}[${i}]: ${frame.src}`);
+    });
+});
+
 if (p.isFalling) {
     frameKey = 'fall';
 }
@@ -11717,13 +12270,16 @@ enemies.forEach(e => {
 
         // Draw animated red bg circle before enemy (only if visible)
         if (isVisible) {
-            const bgStartTime = enemyBgFrameTimes.get(e) || performance.now();
-            enemyBgFrameTimes.set(e, bgStartTime);
-            const now = performance.now();
-            const frameIndex = Math.floor((now - bgStartTime) / 200) % 3; // Cycle every 200ms
-            const bgImg = assets.enemyBg[frameIndex];
-            if (bgImg.complete) {
-                c.drawImage(bgImg, e.currentX, e.currentY, S, S);
+            // Red pulsing bg circles — skip for huge shrimp
+            if (!e.isHuge) {
+                const bgStartTime = enemyBgFrameTimes.get(e) || performance.now();
+                enemyBgFrameTimes.set(e, bgStartTime);
+                const now = performance.now();
+                const frameIndex = Math.floor((now - bgStartTime) / 200) % 3;
+                const bgImg = assets.enemyBg[frameIndex];
+                if (bgImg.complete) {
+                    c.drawImage(bgImg, e.currentX, e.currentY, S, S);
+                }
             }
         }
 
@@ -11878,7 +12434,7 @@ enemies.forEach(e => {
                 }
                 
                 // Special handling for unique monsters (poison green with red eyes) - skip Cursed Trader
-                if (isUniqueMonster && e.type.name !== 'Cursed Trader') {
+                if (isUniqueMonster && e.type.name !== 'Cursed Trader' && !e.isHuge) {
                     const imageData = spriteCtx.getImageData(0, 0, S, S);
                     const data = imageData.data;
                     punchHoleThroughRed(imageData); // Mark eye pixels
@@ -11910,9 +12466,112 @@ enemies.forEach(e => {
             const imageData = enemyTempCtx.getImageData(0, 0, S, S);
             enemyTempCtx.putImageData(imageData, 0, 0);
         }
+
+        // Pulsating red soulstorm circle under enraged huge shrimp
+        if (e.isHuge && e.ragePulseStart) {
+            const pulseTime = (performance.now() - e.ragePulseStart) / 400;
+            const pulseAlpha = 0.4 + 0.3 * Math.sin(pulseTime * Math.PI);
+            const radius = S * (1 + 0.3 * Math.sin(pulseTime * Math.PI)); // gently breathing size
+            c.save();
+            c.globalAlpha = pulseAlpha;
+            c.fillStyle = 'rgba(255, 0, 0, 0.7)';
+            c.beginPath();
+            c.arc(e.currentX + S, e.currentY + S, radius, 0, Math.PI * 2);
+            c.fill();
+            c.restore();
+        }
         
                         // Draw the processed sprite to the main canvas
-                        c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);
+                        if (e.isHuge) {
+                            c.drawImage(enemyTempCanvas, e.currentX - S/2, e.currentY - S/2, S*2, S*2); // 32x32 centered
+                        } else {
+                            c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);                            
+                        }
+
+                        // DRAMATIC WALL-CRUSH DEATH — show even if already dead
+                        if (!e.isHuge && e.crushedToWall) {
+                            const crushTime = performance.now() - e.crushedToWall.startTime;
+                            if (crushTime < 400) { // 400ms death animation
+                                const progress = crushTime / 400;
+                                const crushX = e.x * S + (e.crushedToWall.targetX - e.x) * S * progress;
+                                const crushY = e.y * S + (e.crushedToWall.targetY - e.y) * S * progress;
+                                
+                                // Slide to wall
+                                c.save();
+                                c.translate(crushX, crushY);
+                                c.globalAlpha = 1 - progress; // fade out
+                                c.scale(1 + progress * 0.5, 1 + progress * 0.5); // explode scale
+                                c.drawImage(enemyTempCanvas, -S/2, -S/2, S, S);
+                                c.restore();
+                                
+                                // Wall impact flash
+                                if (crushTime > 300) {
+                                    const flashAlpha = (400 - crushTime) / 100;
+                                    c.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
+                                    // Bigger centered flash on wall tile
+                                    c.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
+                                    c.fillRect(e.crushedToWall.targetX * S - S/2, e.crushedToWall.targetY * S - S/2, S*2, S*2);
+                                }
+                            } else {
+                                // Animation done → clean up and let normal death removal handle it
+                                delete e.crushedToWall;
+                                // Optional: force removal if somehow still alive (safety)
+                                if (e.hp <= 0) {
+                                    enemies = enemies.filter(en => en !== e);
+                                }
+                            }
+                            
+                        // VAPORIZE DEATH for small shrimps on huge spawn
+                        if (e.vaporizeDeath && e.hp <= 0) {
+                            const deathTime = performance.now() - e.vaporizeDeath.startTime;
+                            if (deathTime < 600) {
+                                const progress = deathTime / 600;
+                                c.save();
+                                c.globalAlpha = 1 - progress;
+                                c.translate(e.currentX + S/2, e.currentY + S/2);
+                                c.scale(1 + progress * 3, 1 + progress * 3);
+                                c.globalAlpha = 0.8 * (1 - progress);
+                                c.drawImage(enemyTempCanvas, -S/2, -S/2, S, S);
+                                c.restore();
+                                
+                                // Green/purple glitch flash
+                                c.fillStyle = `rgba(${progress < 0.5 ? 0 : 255}, 255, ${progress < 0.5 ? 255 : 0}, ${0.7 * (1 - progress)})`;
+                                c.fillRect(e.currentX - S, e.currentY - S, S*3, S*3);
+                            } else {
+                                delete e.vaporizeDeath;
+                            }
+                        }
+                            
+                        }
+
+                        // Huge shrimp death explosion
+                        if (e.isHuge && e.hp <= 0 && e.deathTime) {
+                            const deathTime = performance.now() - e.deathTime;
+                            if (deathTime < 600) { // 600ms explosion
+                                const progress = deathTime / 600;
+                                c.save();
+                                c.globalAlpha = 1 - progress;
+                                // Expanding fade
+                                c.translate(e.currentX + S, e.currentY + S);
+                                c.scale(1 + progress * 2, 1 + progress * 2);
+                                c.drawImage(enemyTempCanvas, -S, -S, S*2, S*2);
+                                c.restore();
+                                
+                                // Massive orange shockwave flash
+                                const flashRadius = S * 2 * progress;
+                                c.save();
+                                c.globalAlpha = 0.7 * (1 - progress);
+                                c.fillStyle = 'rgba(255, 80, 0, 0.8)';
+                                c.beginPath();
+                                c.arc(e.currentX + S, e.currentY + S, flashRadius, 0, Math.PI * 2);
+                                c.fill();
+                                c.restore();
+                                
+                                needsRedraw = true;
+                            } else {
+                                delete e.deathTime; // cleanup
+                            }
+                        }
 
                         // SCOURGE HIT FLASH (bright orange-red)
                         if (e.scourgeHit && Date.now() - e.scourgeHit < 200) {
@@ -11974,7 +12633,7 @@ let nameToShow = null;
 let isHarbinger = false;
 
 // Visible unique blockchain monsters (exclude Cursed Trader)
-const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && fogMap[e.y][e.x] === 1);
+const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader'  && !e.isHuge && fogMap[e.y][e.x] === 1);
 if (visibleUniques.length > 0) {
     nameToShow = visibleUniques[0].uniqueName;
 }
