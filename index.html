@@ -11987,16 +11987,18 @@ if (currentTheme === 'ruins') {
 // Draw player
 // Add this to the existing draw function for player rendering
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
-const now = performance.now();
-// Animation frame update logic here
-// PERFECTLY SYNCED PLAYER ANIM – 200ms full cycle (half visual speed), no drift
-let frameIndex = 0;
-if (p.moving) {
-    const progress = Math.min((performance.now() - p.moveStartTime) / p.moveDuration, 1);
-    const eased = 0.5 + 0.5 * Math.sin(Math.PI * progress - Math.PI / 2);
-    frameIndex = Math.floor(eased * 2);  // frame0: first half tile, frame1: second half
-}
-p.anim.frameIndex = frameIndex;  // Update for consistency
+    const now = performance.now();
+
+    // 200 ms full cycle → 2 frames (0 → 1 → 0)
+    let frameIndex = 0;
+    if (p.moving) {
+        const elapsed = now - p.moveStartTime;
+        const progress = Math.min(elapsed / p.moveDuration, 1); // 0‑1
+        // sinusoidal ease‑in/out gives a smooth half‑step motion
+        const eased = 0.5 + 0.5 * Math.sin(Math.PI * progress - Math.PI / 2);
+        frameIndex = Math.floor(eased * 2); // 0 or 1
+    }
+    p.anim.frameIndex = frameIndex; // keep state consistent
         
 let drawX = p.currentX;
 let drawY = p.currentY;
