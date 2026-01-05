@@ -1721,54 +1721,54 @@ let skillTreeSelectedOption = 0; // 0 = Druid, 1 = Degen (only at lvl 3)
 const LEVEL_XP = [
     0,     // lvl 1
     10, // 2
-    25, // 3 → tree
-    45,
-    70,
-    100,
-    135,
-    175,
-    220,
-    270, // 10 → tree
-    325,
-    385,
-    450,
-    520,
-    595,
-    675,
-    760,
-    850,
-    945,
-    1045, // 20 → tree
-    1150,
-    1260,
-    1375,
-    1495,
-    1620,
-    1750,
-    1885,
-    2025,
-    2170,
-    2320, // 30 → tree
-    2475,
-    2635,
-    2800,
-    2970,
-    3145,
-    3325,
-    3510,
-    3700,
-    3895,
-    4095, // 40 → tree
-    4300,
-    4510,
-    4725,
-    4945,
-    5170,
-    5400,
-    5635,
-    5875,
-    6120,
-    6370 // 50 → tree
+    25, // 3 → tree
+    45,
+    70,
+    100,
+    135,
+    175,
+    220,
+    270, // 10 → tree
+    325,
+    385,
+    450,
+    520,
+    595,
+    675,
+    760,
+    850,
+    945,
+    1045, // 20 → tree
+    1150,
+    1260,
+    1375,
+    1495,
+    1620,
+    1750,
+    1885,
+    2025,
+    2170,
+    2320, // 30 → tree
+    2475,
+    2635,
+    2800,
+    2970,
+    3145,
+    3325,
+    3510,
+    3700,
+    3895,
+    4095, // 40 → tree
+    4300,
+    4510,
+    4725,
+    4945,
+    5170,
+    5400,
+    5635,
+    5875,
+    6120,
+    6370 // 50 → tree
 ];
 function getXPForLevel(lvl) { 
     if (lvl < 1) return 0;
@@ -4299,11 +4299,11 @@ needsRedraw = true;
 // Modified updatePlayerState to ensure immortality works correctly
 function updatePlayerState() {
 if (gameOver) return; // Prevent spam calls post-death
-if (p.hp <= 36 && p.hasDiamondArmor) {  // Tie to <= 36 HP
+if (p.hp <= 48 && p.hasDiamondArmor) {  // Tie to <= 48 HP
     p.hasDiamondArmor = false;
     p.hasArmor = true;
     p.armorImmunity = null; // Reset armor immunity
-    p.maxHP = 36;  // Revert to leather max
+    p.maxHP = 48;  // Revert to leather max
     logBattleEvent(`Floor ${floor} - Diamond Armor lost! Found Leather Armor beneath.`);
     document.getElementById('armorStatus').textContent = 'Leather';
 } else if (p.hp <= 24 && p.hasArmor) {
@@ -4645,7 +4645,14 @@ if (redMazeActive) {
     return; // Red Maze boss
 }
 
-    // Check the rate-limit    
+    // 1. Cancel any pending scheduled call first
+    // Prevent concurrent calls to the same function
+    if (apiTimeoutId) {
+        clearTimeout(apiTimeoutId);
+        apiTimeoutId = null;
+    }
+
+    // 2. Then check the rate-limit    
     const now = Date.now();
     // Prevent duplicate calls within API_INTERVAL
     if (nextApiCallTime && now < nextApiCallTime) {
@@ -4654,12 +4661,7 @@ if (redMazeActive) {
         return;
     }
     
-    // Cancel any pending scheduled call first
-    // Prevent concurrent calls to the same function
-    if (apiTimeoutId) {
-        clearTimeout(apiTimeoutId);
-        apiTimeoutId = null;
-    }
+
     
     try {
         console.log(`fetchTxs: floor=${floor}, wave=${wave}, enemiesSpawnedThisFloor=${enemiesSpawnedThisFloor}, initialSpawnDoneThisFloor=${initialSpawnDoneThisFloor}, initialWaveSpawned=${initialWaveSpawned}, waveActive=${waveActive}, exit=${exit ? `(${exit.x}, ${exit.y})` : 'null'}, enemies=${enemies.length}`);
@@ -5560,23 +5562,23 @@ if (map[ny][nx] === 7) {
         }
     } else {
         // Remove excess health and adjust armor
-        let currentMaxHP = 24; // Base HP
+        let currentMaxHP = 36; // Base HP
         let newArmorStatus = 'Cloth';
         if (p.hp > 1000) {
             currentMaxHP = 1000; // Diamond armor max
             newArmorStatus = 'Diamond';
-        } else if (p.hp > 36) {
-            currentMaxHP = 36; // Leather armor max
+        } else if (p.hp > 48) {
+            currentMaxHP = 48; // Leather armor max
             newArmorStatus = 'Leather';
-        } else if (p.hp > 24) {
-            currentMaxHP = 24; // Cloth max
+        } else if (p.hp > 36) {
+            currentMaxHP = 36; // Cloth max
             newArmorStatus = 'Cloth';
         }
         if (p.hp > currentMaxHP) {
             const healthLost = p.hp - currentMaxHP;
             p.hp = currentMaxHP;
             p.hasDiamondArmor = currentMaxHP >= 1000;
-            p.hasArmor = currentMaxHP === 36;
+            p.hasArmor = currentMaxHP === 48;
             document.getElementById('armorStatus').textContent = newArmorStatus;
             logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
         } else {
@@ -5611,10 +5613,10 @@ if (map[ny][nx] === 7) {
         
         if (map[ny][nx] === 5) {
             // Cursed Aura now stacks with armor (no dispel)
-            if (p.hp >= 24) {
+            if (p.hp >= 36) {
                 p.hp += 12;
             } else {
-                p.hp = 24 + 12;
+                p.hp = 36 + 12;
             }
 p.hasArmor = true;
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
@@ -7237,11 +7239,8 @@ updatePlayerState(); // Check HP and armor state after damage
             
     });
 
-    // Never spawn huge shrimp in hell theme
-    if (currentTheme === 'hell') return;
-    
     // DEBUG: Enraged Huge Shrimp summon - once per floor when 3+ shrimps exist
-    if (!window.hugeShrimpSpawnedThisFloor && enemies.filter(e => e.type.name === 'Shrimp' && !e.isHuge).length >= 3) {
+    if (!window.hugeShrimpSpawnedThisFloor && enemies.filter(e => e.type.name === 'Shrimp' && !e.isHuge).length >= 3 && currentTheme !== 'hell') {
         // Find shrimp cluster center
         let clusterX = 0, clusterY = 0, shrimpCount = 0;
         enemies.forEach(e => {
@@ -11133,7 +11132,7 @@ skillTreeActive = false;
     p.shrineCharges = 0;
     p.shrineUsedThisFloor = false;
     currentTheme = 'dungeon';            // default theme
-    p.maxHP = 24;                       // default max HP
+    p.maxHP = 36;                       // default max HP
     document.documentElement.style.setProperty('--text-color', '#ff8c00'); // orange
     wave = 1;
     document.getElementById('wave').textContent = wave;
