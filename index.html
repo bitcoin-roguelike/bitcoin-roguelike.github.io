@@ -2787,7 +2787,7 @@ function showSkillTree() {
         html += `<div id="druid-option" class="class-option" style="width:clamp(200px, 40vw, 260px);height:clamp(180px, 35vw, 220px);padding:clamp(10px, 3vw, 20px);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-start;background:#000;border:3px solid #f7931a;box-shadow:0 0 10px #f7931a;color:#f7931a;">`;
         html += `<strong style="font-size:clamp(24px, 5vw, 32px);margin-bottom:clamp(8px, 2vw, 12px);text-align:left;color:#f7931a;text-shadow:0 0 10px #00e8d8;">Druid</strong>`;
         html += `<div style="font-size:clamp(14px, 3.2vw, 18px);line-height:1.4;text-align:left;flex-grow:1;color:#f7931a">`;
-        html += `> Birch shield<br>`;
+        html += `> Birch guard<br>`;
         html += `> Thorns<br>`;
         html += `> Ensnare<br>`;
         html += `> Shrine +2<br>`;
@@ -11402,6 +11402,11 @@ const predY = playerCenterY + (playerIsVertical   ? p.deltaY * buffer / 2 : 0);
 // Offset from current camera center
 let offsetX = predX - (camera.x + 160);
 let offsetY = predY - (camera.y + 160);
+
+// Pixel-perfect snap for vertical movement (fixes forward/down shake)
+if (playerIsVertical) {
+    offsetY = Math.round(offsetY);
+}
 
 // Force lock to player's axis (zero the opposite component)
 if (playerIsHorizontal) {
