@@ -3031,7 +3031,7 @@ function playShrimpRageGrowl() {
         const envelope = attack * decay;
 
         // Apply envelope and a modest overall gain
-        let sample = wave * envelope * 0.8;
+        let sample = wave * envelope * 0.6;
 
         // Prevent clipping
         data[i] = Math.max(-1, Math.min(1, sample));
@@ -3644,9 +3644,9 @@ const newTheme = selectNewTheme(currentTheme);
 // DEBUG THEME
 //let newTheme;
 //if (floor === 6) {
-//    newTheme = 'dungeon'; // DEBUG: Force ruins on floor 3
+//    newTheme = 'dungeon'; // DEBUG: Force ruins on floor 3
 //} else {
-//    newTheme = selectNewTheme(currentTheme);
+//    newTheme = selectNewTheme(currentTheme);
 //}
 
     if (newTheme === 'hell') {
