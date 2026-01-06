@@ -2646,7 +2646,7 @@ function playPigSnort() {
     source.buffer = buffer;
     // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume; // uses the global soundVolume set by terminal
+    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 0.9); // uses the global soundVolume set by terminal
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -2663,7 +2663,7 @@ const now = audioContext.currentTime;
 
     // Master gain – louder epic
     const master = audioContext.createGain();
-    master.gain.value = 0.9 * soundVolume;
+    master.gain.value = 0.9 * (typeof soundVolume !== 'undefined' ? soundVolume : 0.9);
     master.connect(audioContext.destination);
 
     // 1. Angelic WHOOSH sweep
@@ -3012,7 +3012,7 @@ function playShrimpRageGrowl() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume;
+    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 0.9);
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
