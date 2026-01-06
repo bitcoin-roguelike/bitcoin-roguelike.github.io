@@ -2536,7 +2536,7 @@ function playWebAudioSound(soundObj) {
     const source = audioContext.createBufferSource();
     source.buffer = soundObj.buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume; // Use global sound volume setting
+    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1.0); // Use global sound volume setting
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
