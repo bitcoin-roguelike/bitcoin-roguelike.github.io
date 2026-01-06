@@ -5574,14 +5574,14 @@ if (map[ny][nx] === 7) {
     const coinToss = Math.random() < 0.5; // 50/50 chance
     if (coinToss) {
     if (p.hasCursedRing && !redMazeAuraGiven) {
-        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! But Cursed Aura blocks extra life!`);
+        logBattleEvent(`Floor ${floor} - Gnome flips a coin.. Heads! But Cursed Aura blocks extra life!`);
         playWebAudioSound(sounds.heads); // Play heads.wav
     } else {
             // Grant max health (original behavior)
             const healthGain = p.potions * 12;
             p.maxHP += healthGain;
             p.hp += healthGain;
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin.. Heads! Traded ${p.potions} potions for +${healthGain} max HP (new max HP: ${p.hp})`);
             playWebAudioSound(sounds.heads); // Play heads.wav
         }
     } else {
@@ -5604,9 +5604,9 @@ if (map[ny][nx] === 7) {
             p.hasDiamondArmor = currentMaxHP >= 1000;
             p.hasArmor = currentMaxHP === 48;
             document.getElementById('armorStatus').textContent = newArmorStatus;
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! A mischievous cackle echoes as ${healthLost} excess HP is whisked away! Armor set to ${newArmorStatus} (HP now: ${p.hp})`);
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin.. Tails! A mischievous cackle echoes as ${healthLost} HP is whisked away! (HP: ${p.hp})`);
         } else {
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
+            logBattleEvent(`Floor ${floor} - Gnome flips a coin.. Tails! The gnome giggles but finds no excess HP to take! (HP: ${p.hp})`);
         }
         playWebAudioSound(sounds.tails); // Play tails.wav
     }
