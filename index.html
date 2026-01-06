@@ -7424,6 +7424,25 @@ updatePlayerState(); // Check HP and armor state after damage
                         shrimp.hp = 0;
                     });
 
+                    // Dramatic wall break: exploding shrimps crack nearby walls (not outer limits)
+                    vaporized.forEach(shrimp => {
+                        const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+                        dirs.forEach(dir => {
+                            const wallX = shrimp.x + dir[0];
+                            const wallY = shrimp.y + dir[1];
+                            // Only break inner walls (not map edges)
+                            if (wallX > 0 && wallX < W-1 && wallY > 0 && wallY < H-1 && map[wallY][wallX] === 1) {
+                                map[wallY][wallX] = 0; // Crack wall → floor
+                                // Visual crack flash
+                                highlightTiles.push({
+                                    x: wallX, y: wallY,
+                                    highlightStart: performance.now(),
+                                    color: 'rgba(255,100,0,0.8)'
+                                });
+                            }
+                        });
+                    });
+
                     // Play the most obscene, rage-infused troll scream possible
                     playShrimpTrollDeathScream();
 
