@@ -2619,6 +2619,22 @@ function wispSpeak(type) {
     };
 }
 
+// ---------------------------------------------------------------
+// Helper: returns a gain factor that is higher on Android devices
+// ---------------------------------------------------------------
+function getPlatformMasterGain() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+
+    // Simple Android detection (covers Chrome, Samsung Internet, etc.)
+    const isAndroid = /android/i.test(ua);
+
+    // Base calm level (same for all platforms)
+    const calmLevel = 0.5; // 50 % of the boosted signal
+
+    // On Android we add extra headroom to overcome the compressor
+    return isAndroid ? calmLevel * 1.8 : calmLevel; // ≈ 0.9 on Android, 0.5 elsewhere
+}
+
 function playThrowSpear() {
 // Never ever do this:
 // wave += 0.2 * (Math.random() - 0.5); // random broadband component = hiss / white‑noise.
@@ -2662,13 +2678,13 @@ function playThrowSpear() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
 
-    // per‑sound boost for Android
+    // per‑sound boost for Android (keeps the raw waveform loud)
     const boostGain = audioContext.createGain();
     boostGain.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
 
-    // master (calmer) volume – adjust to your preferred overall loudness
+    // master gain – dynamic based on platform
     const masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.6; // e.g., 60 % of the boosted level
+    masterGain.gain.value = getPlatformMasterGain(); // 0.9 on Android, 0.5 elsewhere
 
     source.connect(boostGain);
     boostGain.connect(masterGain);
@@ -3013,11 +3029,11 @@ function startRainAmbience() {
     rainAmbienceTimer = true;
 }
 
+// ---------------------------------------------------------------
+// Shrimp‑Rage Growl – clean version with platform‑aware gain
+// ---------------------------------------------------------------
 function playShrimpRageGrowl() {
-// Never ever do this:
-// wave += 0.2 * (Math.random() - 0.5); // random broadband component = hiss / white‑noise.
-
-    // ---- make sure the AudioContext is running (once after a user gesture) ----
+    // ---- ensure the AudioContext is running (once after a user gesture) ----
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error(e));
     }
@@ -3038,8 +3054,6 @@ function playShrimpRageGrowl() {
         // second harmonic for a richer growl
         wave += 0.5 * Math.sin(2 * Math.PI * freq * 2 * t);
 
-        // **removed the random‑noise term** (wave += 0.3 * (Math.random() - 0.5);)
-
         // envelope – fast attack, slower decay
         const envelope = Math.min(1, t * 8) * Math.exp(-3 * t);
         data[i] = wave * envelope * 0.6;
@@ -3053,17 +3067,17 @@ function playShrimpRageGrowl() {
         for (let i = 0; i < data.length; i++) data[i] *= scale;
     }
 
-    // ---------- playback chain (boost + master volume) ----------
+    // ---------- playback chain (boost + platform‑aware master volume) ----------
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
 
-    // per‑sound boost for Android
+    // per‑sound boost for Android (keeps the raw waveform loud enough)
     const boostGain = audioContext.createGain();
     boostGain.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
 
-    // master (calmer) volume – adjust to your preferred final loudness
+    // master gain – louder on Android, calmer elsewhere
     const masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.6; // e.g., 60 % of the boosted level
+    masterGain.gain.value = getPlatformMasterGain(); // 0.6 on PC/iOS, ~1.08 on Android
 
     source.connect(boostGain);
     boostGain.connect(masterGain);
