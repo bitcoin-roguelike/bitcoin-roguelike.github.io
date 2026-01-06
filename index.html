@@ -2620,6 +2620,9 @@ function wispSpeak(type) {
 }
 
 function playThrowSpear() {
+// Never ever do this:
+// wave += 0.2 * (Math.random() - 0.5); // random broadband component = hiss / white‑noise.
+
     // Ensure the AudioContext is running (call once after a user gesture)
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error(e));
@@ -2665,7 +2668,7 @@ function playThrowSpear() {
 
     // master (calmer) volume – adjust to your preferred overall loudness
     const masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.5; // e.g., 50 % of the boosted level
+    masterGain.gain.value = 0.6; // e.g., 60 % of the boosted level
 
     source.connect(boostGain);
     boostGain.connect(masterGain);
@@ -3011,6 +3014,9 @@ function startRainAmbience() {
 }
 
 function playShrimpRageGrowl() {
+// Never ever do this:
+// wave += 0.2 * (Math.random() - 0.5); // random broadband component = hiss / white‑noise.
+
     // ---- make sure the AudioContext is running (once after a user gesture) ----
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error(e));
@@ -3057,7 +3063,7 @@ function playShrimpRageGrowl() {
 
     // master (calmer) volume – adjust to your preferred final loudness
     const masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.5; // e.g., 50 % of the boosted level
+    masterGain.gain.value = 0.6; // e.g., 60 % of the boosted level
 
     source.connect(boostGain);
     boostGain.connect(masterGain);
