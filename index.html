@@ -5564,7 +5564,7 @@ if (map[ny][nx] === 6 && !inHideout) {
         
 if (map[ny][nx] === 7) {
     if (p.curseActive) {
-        logBattleEvent(`Floor ${floor} - Gnome refuses: Lingering curse blocks extra life!`);
+        logBattleEvent(`Gnome refuses: Lingering curse blocks extra life!`);
         playWebAudioSound(sounds.buzz);
         p.potions = 0;
         map[ny][nx] = 0;
