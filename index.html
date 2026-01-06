@@ -2619,37 +2619,46 @@ function wispSpeak(type) {
     };
 }
 
-function playPigSnort() {
+function playThrowSpear() {
+    // make sure the context is running (call once on a user gesture)
     if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
+        audioContext.resume().catch(e => console.error(e));
     }
 
     const duration = 0.45;
-    const sampleRate = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+    const sr = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sr, sr);
     const data = buffer.getChannelData(0);
+
+    // generate waveform
     for (let i = 0; i < data.length; i++) {
-        const t = i / sampleRate;
-        // Base low growl with wobble
+        const t = i / sr;
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
-        // Higher piggy harmonic
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
-        // Add some roughness/noise
         wave += 0.2 * (Math.random() - 0.5);
-        // Punchy envelope: fast attack, long decay
         const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
         data[i] = wave * envelope;
     }
+
+    // **normalize to full amplitude**
+    let max = 0;
+    for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i]));
+    if (max > 0) {
+        for (let i = 0; i < data.length; i++) data[i] *= 1 / max;
+    }
+
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
+
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume; // uses the global soundVolume set by terminal
+    // boost a bit for Android
+    gainNode.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
+
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    source.start(0);
+    source.start();
 }
 
 /* ---------- AUDIO ---------- */
@@ -2991,31 +3000,40 @@ function startRainAmbience() {
 
 function playShrimpRageGrowl() {
     if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for rage growl:', e));
+        audioContext.resume().catch(e => console.error(e));
     }
+
     const duration = 0.6;
-    const sampleRate = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+    const sr = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sr, sr);
     const data = buffer.getChannelData(0);
+
     for (let i = 0; i < data.length; i++) {
-        const t = i / sampleRate;
-        // Deep angry growl with vibration
+        const t = i / sr;
         const freq = 80 + 30 * Math.sin(2 * Math.PI * 3 * t);
         let wave = Math.sin(2 * Math.PI * freq * t);
-        // Add harmonics and grit
         wave += 0.5 * Math.sin(2 * Math.PI * freq * 2 * t);
         wave += 0.3 * (Math.random() - 0.5);
-        // Sharp attack, slow decay
         const envelope = Math.min(1, t * 8) * Math.exp(-3 * t);
         data[i] = wave * envelope * 0.6;
     }
+
+    // normalize + small boost
+    let max = 0;
+    for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i]));
+    if (max > 0) {
+        for (let i = 0; i < data.length; i++) data[i] = (data[i] / max) * 1.2;
+    }
+
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
+
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume;
+    gainNode.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
+
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    source.start(0);
+    source.start();
 }
 
 function playShrimpTrollDeathScream() {
@@ -3044,7 +3062,7 @@ function playShrimpTrollDeathScream() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume * 0.9; // calmer volume
+    gainNode.gain.value = soundVolume * 0.7; // calmer volume
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -7222,7 +7240,7 @@ updatePlayerState(); // Check HP and armor state after damage
                             if (e.justSawPlayer) {
                                 e.justSawPlayer = false;
                                 logBattleEvent(`Floor ${floor} - ${e.uniqueName || e.type.name} spots you!`);
-                                playPigSnort();
+                                playThrowSpear();
                             }
 
                             // Fire the spear
