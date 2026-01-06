@@ -1914,15 +1914,6 @@ const assets = {
     shrine: new Image()
 };
 
-// Initialize sprite frames for all enemy types
-for (let i = 0; i < types.length; i++) {
-    const type = types[i];
-    if (type.name === 'Shrimp') {
-        // Hell Shrimp has special frames that need to be loaded
-        assets.themes.hell.special.onerror = () => console.error(`Failed to load hell special asset: ${assets.themes.hell.special.src}`);
-    }
-}
-
 // Load sprite frames for each enemy type
 types.forEach((type, index) => {
     // Set up default animation frames
@@ -1931,15 +1922,35 @@ types.forEach((type, index) => {
     type.anim.frames[2].src = `${type.name.toLowerCase()}_3.png`;
     
     // Special handling for Hell Shrimp
-    if (type.name === 'Shrimp') {
-        type.anim.hellFrames[0].src = 'hell_shrimp_1.png';
-        type.anim.hellFrames[1].src = 'hell_shrimp_2.png';
-        type.anim.hellFrames[2].src = 'hell_shrimp_3.png';
-        type.anim.hellFrames.forEach((frame, i) => {
-            frame.onerror = () => console.error(`Failed to load Hell Shrimp frame ${i}: ${frame.src}`);
+    // Theme-specific frames for ALL enemies (paradise, ruins, desert, hell)
+    type.anim.paradiseFrames = [new Image(), new Image(), new Image()];
+    type.anim.ruinsFrames = [new Image(), new Image(), new Image()];
+    type.anim.desertFrames = [new Image(), new Image(), new Image()];
+    type.anim.hellFrames = type.anim.hellFrames || [new Image(), new Image(), new Image()];
+
+    const prefix = type.name.toLowerCase();
+    type.anim.paradiseFrames[0].src = `p_${prefix}_1.png`;
+    type.anim.paradiseFrames[1].src = `p_${prefix}_2.png`;
+    type.anim.paradiseFrames[2].src = `p_${prefix}_3.png`;
+    type.anim.ruinsFrames[0].src = `r_${prefix}_1.png`;
+    type.anim.ruinsFrames[1].src = `r_${prefix}_2.png`;
+    type.anim.ruinsFrames[2].src = `r_${prefix}_3.png`;
+    type.anim.desertFrames[0].src = `d_${prefix}_1.png`;
+    type.anim.desertFrames[1].src = `d_${prefix}_2.png`;
+    type.anim.desertFrames[2].src = `d_${prefix}_3.png`;
+    type.anim.hellFrames[0].src = `h_${prefix}_1.png`;
+    type.anim.hellFrames[1].src = `h_${prefix}_2.png`;
+    type.anim.hellFrames[2].src = `h_${prefix}_3.png`;
+
+    // Optional error logging for all themed frames
+    ['paradiseFrames', 'ruinsFrames', 'desertFrames', 'hellFrames'].forEach(arrayName => {
+        type.anim[arrayName].forEach((frame, i) => {
+            frame.onerror = () => console.error(`Failed to load ${arrayName} ${prefix} frame ${i+1}`);
         });
-    }
+    });
 });
+
+
 
 Object.values(assets).forEach(asset => {
         if (asset instanceof Image) {
@@ -1951,18 +1962,6 @@ Object.values(assets).forEach(asset => {
         }
     });
     
-// Handle error for enemy sprite frames
-types.forEach(t => {
-    t.anim.frames.forEach((frame, i) => {
-        frame.onerror = () => console.error(`Failed to load sprite frame ${i} for ${t.name}: ${frame.src}`);
-    });
-    // Also handle Hell Shrimp frames if they exist
-    if (t.anim.hellFrames) {
-        t.anim.hellFrames.forEach((frame, i) => {
-            frame.onerror = () => console.error(`Failed to load Hell sprite frame ${i} for ${t.name}: ${frame.src}`);
-        });
-    }
-});
         assets.themes.dungeon.floor.src = 'floor.png';
         assets.themes.dungeon.wall.src = 'wall.png';
         assets.themes.desert.floor.src = 'sand_floor.png';
@@ -12390,204 +12389,90 @@ enemies.forEach(e => {
         c.save();
         const doPixelEffect = (frameCount % 1 === 0); 
 
-        // Draw animated red bg circle before enemy (only if visible)
         if (isVisible) {
-            // Red pulsing bg circles — skip for huge shrimp
-            if (!e.isHuge) {
-                const bgStartTime = enemyBgFrameTimes.get(e) || performance.now();
-                enemyBgFrameTimes.set(e, bgStartTime);
+            // Red pulsing bg circles — skip for huge shrimp (safe across variable names)
+            const currentEnemy = e || hit || enemy || dead || null;
+            if (currentEnemy && !currentEnemy.isHuge) {
+                const bgStartTime = enemyBgFrameTimes.get(currentEnemy) || performance.now();
+                enemyBgFrameTimes.set(currentEnemy, bgStartTime);
                 const now = performance.now();
                 const frameIndex = Math.floor((now - bgStartTime) / 200) % 3;
                 const bgImg = assets.enemyBg[frameIndex];
                 if (bgImg.complete) {
-                    c.drawImage(bgImg, e.currentX, e.currentY, S, S);
+                    c.drawImage(bgImg, currentEnemy.currentX, currentEnemy.currentY, S, S);
                 }
             }
         }
 
-        // Clear reusable canvas for this enemy
         enemyTempCtx.clearRect(0, 0, S, S);
-        
-        // Handle animation for enemies with anim property (e.g., Shrimp) - throttled
-        let img;
+
+        // Handle animation timing
         if (e.type.anim && e.anim) {
             const now = performance.now();
-            const numFrames = (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) ? e.type.anim.hellFrames.length : e.type.anim.frames.length;
+            const numFrames = (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) 
+                ? e.type.anim.hellFrames.length 
+                : e.type.anim.frames.length;
             if (now - e.anim.lastFrameTime >= 200) {
                 e.anim.frameIndex = (e.anim.frameIndex + 1) % numFrames;
                 e.anim.lastFrameTime = now;
             }
-            // Use Hell Shrimp frames if theme is hell, enemy is Shrimp, and visible
-            if (e.type.name === 'Shrimp' && currentTheme === 'hell' && isVisible && e.type.anim.hellFrames) {
-                img = e.type.anim.hellFrames[e.anim.frameIndex];
-            } else {
+        }
+
+            // Select frame — use themed assets when visible, dungeon black in fog
+            // Default to dungeon black enemies
+            let frames = e.type.anim.frames;
+
+            if (isVisible) {
+                // Special case: Hell Shrimp always uses hellFrames in hell theme
+                if (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) {
+                    frames = e.type.anim.hellFrames;
+                }
+                // Other enemies: use theme-specific frames if available
+                else if (currentTheme === 'paradise' && e.type.anim.paradiseFrames) {
+                    frames = e.type.anim.paradiseFrames;
+                } else if (currentTheme === 'ruins' && e.type.anim.ruinsFrames) {
+                    frames = e.type.anim.ruinsFrames;
+                } else if (currentTheme === 'desert' && e.type.anim.desertFrames) {
+                    frames = e.type.anim.desertFrames;
+                } else if (currentTheme === 'hell' && e.type.anim.hellFrames) {
+                    frames = e.type.anim.hellFrames;
+                }
+            }
+
+            img = frames[e.anim.frameIndex];
+            // Fallback to dungeon frame if themed image not loaded yet
+            if (!img.complete || img.naturalWidth === 0) {
                 img = e.type.anim.frames[e.anim.frameIndex];
             }
-        } else {
-            img = e.type.img;
-        }
-        
-        let spriteCanvas, spriteCtx;
-        if (isVisible) {
-            if (doPixelEffect && isVisible) {
-                // Reuse enemyTempCanvas for sprite processing (clear first if needed, but already cleared)
-                spriteCtx = enemyTempCtx;
-                spriteCtx.imageSmoothingEnabled = false;
-                spriteCtx.drawImage(img, 0, 0, S, S);
-                
-                // Skip theme tints for Cursed Trader
-                if (e.type.name !== 'Cursed Trader') {
-                    // Apply theme-based effects to the sprite canvas
-                    if (currentTheme === 'desert') {
-                        const imageData = spriteCtx.getImageData(0, 0, S, S);
-                        const data = imageData.data;
-                        punchHoleThroughRed(imageData); // Mark eye pixels
-                        for (let i = 0; i < data.length; i += 4) {
-                            if (data[i + 3] === 1) { // Eye pixel
-                                data[i] = 255;     // Red
-                                data[i + 1] = 0;   // Green
-                                data[i + 2] = 0;   // Blue
-                                data[i + 3] = 255; // Full opacity
-                            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                                data[i] = 255;     // Red
-                                data[i + 1] = 242; // Green
-                                data[i + 2] = 230; // Blue
-                                data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-                            }
-                        }
-                        spriteCtx.putImageData(imageData, 0, 0);
-                    } else if (currentTheme === 'ruins') {
-                        const imageData = spriteCtx.getImageData(0, 0, S, S);
-                        const data = imageData.data;
-                        punchHoleThroughRed(imageData); // Mark eye pixels
-                        for (let i = 0; i < data.length; i += 4) {
-                            if (data[i + 3] === 1) { // Eye pixel
-                                data[i] = 255;     // Red
-                                data[i + 1] = 0;   // Green
-                                data[i + 2] = 0;   // Blue
-                                data[i + 3] = 255; // Full opacity
-                            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel
-                                data[i] = 144;     // Red
-                                data[i + 1] = 126; // Green
-                                data[i + 2] = 105; // Blue
-                                data[i + 3] = 255; // Full opacity (removed 95% opacity)
-                            }
-                        }
-                        spriteCtx.putImageData(imageData, 0, 0);
-                    } else if (currentTheme === 'hell') {
-                        // Apply red tint for hell theme
-                        spriteCtx.globalCompositeOperation = 'source-atop';
-                        spriteCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-                        spriteCtx.fillRect(0, 0, S, S);
-                        spriteCtx.globalCompositeOperation = 'source-over'; // Reset
-                        
-                        // Punch white fringes after tint
-                        const imageData = spriteCtx.getImageData(0, 0, S, S);
-                        spriteCtx.putImageData(imageData, 0, 0);
-                    } else if (currentTheme === 'paradise') {
-                        // Apply purple tint for paradise theme + red eyes
-                        const imageData = spriteCtx.getImageData(0, 0, S, S);
-                        punchHoleThroughRed(imageData); // Mark eye pixels
-                        const data = imageData.data;
-                        const width = S;  // 16
-                        const height = S; // 16
-                        const threshold = 100; // Tune: higher = fewer transparencies
 
-                        // CPU-friendly neighbor diff check: zero alpha for color outliers (non-eyes)
-                        for (let i = 0; i < data.length; i += 4) {
-                            if (data[i + 3] > 0 && data[i + 3] !== 1) {  // Opaque non-eye only
-                                const row = Math.floor(i / (4 * width));
-                                const col = (i / 4) % width;
-                                const r = data[i], g = data[i + 1], b = data[i + 2];
+        // Draw base sprite
+        enemyTempCtx.imageSmoothingEnabled = false;
+        enemyTempCtx.drawImage(img, 0, 0, S, S);
 
-                                const neighbors = [];
-                                const dirs = [
-                                    { dx: 0, dy: -1 },  // up
-                                    { dx: 0, dy: 1 },   // down
-                                    { dx: -1, dy: 0 },  // left
-                                    { dx: 1, dy: 0 }    // right
-                                ];
-
-                                for (const d of dirs) {
-                                    const nr = row + d.dy;
-                                    const nc = col + d.dx;
-                                    if (nr >= 0 && nr < height && nc >= 0 && nc < width) {
-                                        const ni = (nr * width + nc) * 4;
-                                        if (data[ni + 3] > 0) {  // Only opaque neighbors
-                                            const nrgb = data[ni], ngb = data[ni + 1], nbgb = data[ni + 2];
-                                            neighbors.push([nrgb, ngb, nbgb]);
-                                        }
-                                    }
-                                }
-
-                                if (neighbors.length === 0) {
-                                    data[i + 3] = 0;  // Isolated: transparent
-                                    continue;
-                                }
-
-                                let totalDiff = 0;
-                                for (const [nrgb, ngb, nbgb] of neighbors) {
-                                    totalDiff += Math.sqrt(
-                                        (r - nrgb) ** 2 + (g - ngb) ** 2 + (b - nbgb) ** 2
-                                    );
-                                }
-                                const avgDiff = totalDiff / neighbors.length;
-
-                                if (avgDiff > threshold) {
-                                    data[i + 3] = 0;  // Outlier: transparent
-                                }
-                            }
-                        }
-                        for (let i = 0; i < data.length; i += 4) {
-                            if (data[i + 3] === 1) { // Eye pixel - make red
-                                data[i] = 255;     // Red
-                                data[i + 1] = 0;   // Green
-                                data[i + 2] = 0;   // Blue
-                                data[i + 3] = 255; // Full opacity
-                            } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - purple tint
-                                data[i] = Math.min(255, data[i] + 50); // Subtle red for violet base
-                                data[i + 1] = Math.min(255, data[i + 1] + 51); // Subtle green
-                                data[i + 2] = Math.min(255, data[i + 2] + 153); // Blue for purple
-                                data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-                            }
-                        }
-                        spriteCtx.putImageData(imageData, 0, 0);
-                    }
-                }
-                
-                // Special handling for unique monsters (poison green with red eyes) - skip Cursed Trader
-                if (isUniqueMonster && e.type.name !== 'Cursed Trader' && !e.isHuge) {
-                    const imageData = spriteCtx.getImageData(0, 0, S, S);
-                    const data = imageData.data;
-                    punchHoleThroughRed(imageData); // Mark eye pixels
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i + 3] === 1) { // Eye pixel - make red
-                            data[i] = 255;     // Red
-                            data[i + 1] = 0;   // Green
-                            data[i + 2] = 0;   // Blue
-                            data[i + 3] = 255; // Full opacity
-                        } else if (data[i + 3] > 0) { // Non-eye, non-transparent pixel - make poison green
-                            data[i] = 0;       // Red
-                            data[i + 1] = 255; // Green (poison green)
-                            data[i + 2] = 0;   // Blue
-                            data[i + 3] = Math.round(0.95 * 255); // 95% opacity
-                        }
-                    }
-                    spriteCtx.putImageData(imageData, 0, 0);
-                }
-            }
-            // Fallback draw if pixel effect skipped
-            if (!doPixelEffect || !isVisible) {
-                enemyTempCtx.drawImage(img, 0, 0, S, S);
-            }
-        } else {
-            // Outside fog of war, draw original sprite to show red eyes
-            enemyTempCtx.drawImage(img, 0, 0, S, S);
-            
-            // Punch white fringes on fog sprites too
+        // Apply unique monster poison green + red eyes overlay (safe across e/hit/enemy/dead)
+        const currentEnemy = e || hit || enemy || dead;
+        if (currentEnemy && currentEnemy.uniqueName && currentEnemy.type.name !== 'Cursed Trader' && !currentEnemy.isHuge && isVisible) {
             const imageData = enemyTempCtx.getImageData(0, 0, S, S);
+            const data = imageData.data;
+
+            punchHoleThroughRed(imageData);
+
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] === 1) { // Eye pixel
+                    data[i] = 255;
+                    data[i + 1] = 0;
+                    data[i + 2] = 0;
+                    data[i + 3] = 255;
+                } else if (data[i + 3] > 0) { // Body pixel
+                    data[i] = 0;
+                    data[i + 1] = 255;
+                    data[i + 2] = 0;
+                    data[i + 3] = Math.round(0.95 * 255);
+                }
+            }
             enemyTempCtx.putImageData(imageData, 0, 0);
         }
+        
 
         // Pulsating red soulstorm circle under enraged huge shrimp
         if (e.isHuge && e.ragePulseStart) {
