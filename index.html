@@ -2620,7 +2620,6 @@ function wispSpeak(type) {
 }
 
 function playThrowSpear() {
-    // make sure the context is running (call once on a user gesture)
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error(e));
     }
@@ -2630,40 +2629,54 @@ function playThrowSpear() {
     const buffer = audioContext.createBuffer(1, duration * sr, sr);
     const data = buffer.getChannelData(0);
 
-    // generate waveform
+    // ---- generate waveform -------------------------------------------------
     for (let i = 0; i < data.length; i++) {
         const t = i / sr;
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
+
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
-        wave += 0.2 * (Math.random() - 0.5);
+
+        // **smaller noise component (0.08 instead of 0.2)**
+        wave += 0.08 * (Math.random() - 0.5);
+
         const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
         data[i] = wave * envelope;
     }
 
-    // **normalize to full amplitude**
+    // ---- normalize to full amplitude ---------------------------------------
     let max = 0;
     for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i]));
     if (max > 0) {
         for (let i = 0; i < data.length; i++) data[i] *= 1 / max;
     }
 
+    // ---- optional low‑pass filter (simple moving‑average) ------------------
+    const cutoff = 8000;                     // Hz – keep most of the growl, cut hiss
+    const rc = 1 / (2 * Math.PI * cutoff);
+    const dt = 1 / sr;
+    const alpha = dt / (rc + dt);
+    let prev = data[0];
+    for (let i = 1; i < data.length; i++) {
+        prev = prev + alpha * (data[i] - prev);
+        data[i] = prev;
+    }
+
+    // ---- playback chain (boost + master calm) -------------------------------
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
 
-// 1️⃣ per‑sound boost (helps Android)
-const boostGain = audioContext.createGain();
-boostGain.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
+    const boostGain = audioContext.createGain();
+    boostGain.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
 
-// 2️⃣ master (overall) volume – set to whatever feels comfortable
-const masterGain = audioContext.createGain();
-masterGain.gain.value = 0.5;          // 50 % of the boosted level (adjust as needed)
+    const masterGain = audioContext.createGain();
+    masterGain.gain.value = 0.5; // adjust to your preferred overall loudness
 
-source.connect(boostGain);
-boostGain.connect(masterGain);
-masterGain.connect(audioContext.destination);
-source.start();
+    source.connect(boostGain);
+    boostGain.connect(masterGain);
+    masterGain.connect(audioContext.destination);
+    source.start();
 }
 
 /* ---------- AUDIO ---------- */
@@ -3018,34 +3031,46 @@ function playShrimpRageGrowl() {
         const freq = 80 + 30 * Math.sin(2 * Math.PI * 3 * t);
         let wave = Math.sin(2 * Math.PI * freq * t);
         wave += 0.5 * Math.sin(2 * Math.PI * freq * 2 * t);
-        wave += 0.3 * (Math.random() - 0.5);
+
+        // **reduce noise amplitude (0.12 instead of 0.3)**
+        wave += 0.12 * (Math.random() - 0.5);
+
         const envelope = Math.min(1, t * 8) * Math.exp(-3 * t);
         data[i] = wave * envelope * 0.6;
     }
 
-    // normalize + small boost
+    // ---- normalize ---------------------------------------------------------
     let max = 0;
     for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i]));
     if (max > 0) {
         for (let i = 0; i < data.length; i++) data[i] = (data[i] / max) * 1.2;
     }
 
+    // ---- simple low‑pass (cutoff ~7 kHz) ------------------------------------
+    const cutoff = 7000;
+    const rc = 1 / (2 * Math.PI * cutoff);
+    const dt = 1 / sr;
+    const alpha = dt / (rc + dt);
+    let prev = data[0];
+    for (let i = 1; i < data.length; i++) {
+        prev = prev + alpha * (data[i] - prev);
+        data[i] = prev;
+    }
+
+    // ---- playback chain ----------------------------------------------------
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
 
-// ---- per‑sound boost (keeps Android loud enough) ----
-const boostGain = audioContext.createGain();
-boostGain.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
+    const boostGain = audioContext.createGain();
+    boostGain.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
 
-// ---- master (calmer) volume ----
-const masterGain = audioContext.createGain();
-masterGain.gain.value = 0.5;          // adjust to the desired overall loudness
+    const masterGain = audioContext.createGain();
+    masterGain.gain.value = 0.5; // tweak to taste
 
-// connect the chain
-source.connect(boostGain);
-boostGain.connect(masterGain);
-masterGain.connect(audioContext.destination);
-source.start();
+    source.connect(boostGain);
+    boostGain.connect(masterGain);
+    masterGain.connect(audioContext.destination);
+    source.start();
 }
 
 function playShrimpTrollDeathScream() {
