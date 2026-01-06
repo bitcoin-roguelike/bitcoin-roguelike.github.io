@@ -210,7 +210,7 @@
 #inventory { 
     position: absolute;
     top: 10px;
-    right: -12px;
+    right: -18px;
     background: transparent;
     color: var(--text-color, #ff8c00) !important;
     text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
@@ -503,7 +503,7 @@ button:hover {
     }
     #inventory {
         width: 100px;
-        font-size: 12px;
+        font-size: 16px;
         line-height: 1.5;
         margin-right: 2px;
     }
@@ -671,9 +671,9 @@ button:hover {
     }
     #inventory {
         width: 170px;
-        font-size: 1.4rem;
+        font-size: 1.5rem;
         line-height: 1.5;
-        margin-right: 20px;
+        margin-right: 0px;
     }
     #floor-indicator {
         font-size: clamp(24px, 4.67vw, 37px);
@@ -835,19 +835,23 @@ button:hover {
         <button id="restart-game" onclick="restart()">Restart</button>
     </div>
 </div>
-            <div id="floor-indicator">Floor 1</div>
+<div id="top-right-ui" style="position:absolute;top:6px;right:8px;display:flex;align-items:center;gap:8px;z-index:20;pointer-events:none;">
+    <div id="armor-icon-container" style="width:48px;height:0px;display:flex;align-items:center;justify-content:center;image-rendering:pixelated;"></div>
+</div>
+<div id="floor-indicator">Floor 1</div>
+
 <div id="inventory" style="-webkit-nbsp-mode: normal;">
-    <span id="wave" style="display: none;">1</span>
-    Health: <span id="health">24</span><br>
-    Armor: <span id="armorStatus">Leather</span><br>
-    Potions: <span id="potions">0</span><br>
-    <span id="pickaxes" style="display: none;">0</span><br> <!-- moved to soul terminal -->
-    Floor x Bag: <span id="sats" style="display: none;">0</span>
-    <span id="sats-calc" class="calc"></span>
-    <span id="diamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
+    <span id="wave" style="display: none;">1</span>			<!-- deactivated -->
+    ><span id="sats" style="display: none;">0</span>			<!-- ACTIVE newline -->
+    <span id="sats-calc" class="calc"></span>				<!-- ACTIVE -->
+    Potions: <span id="potions">0</span><br>				<!-- ACTIVE -->
+    <span id="armorStatus" style="display: none;">Leather</span><br>	<!-- deactivated -->
+    <span id="pickaxes" style="display: none;">0</span><br>		<!-- moved to soul terminal -->
+    <span id="health" style="display: none;">24</span><br>		<!-- deactivated -->
+    <span id="diamonds" style="display: none;">0</span><br>		<!-- moved to soul terminal -->
     <span id="perfectlyCutDiamonds" style="display: none;">0</span><br> <!-- moved to soul terminal -->
-    <span id="runes" style="display: none;">None</span><br> <!-- moved to soul terminal -->
-    <span id="resonance" style="display: none;">0%</span><br>
+    <span id="runes" style="display: none;">None</span><br>		<!-- moved to soul terminal -->
+    <span id="resonance" style="display: none;">0%</span><br>		<!-- moved to soul terminal -->
 </div>
         </div>
 <div id="battle-log">
@@ -2162,6 +2166,18 @@ assets.cat = new Image();
 assets.cat.src = 'black_cat.png';
 assets.cat.onerror = () => console.error('Failed to load black_cat.png');
 
+// New top-right UI assets (16x16)
+assets.inv_cloth = new Image();
+assets.inv_leather = new Image();
+assets.inv_diamond_armor = new Image();
+assets.inv_cursed_aura = new Image();
+assets.inv_maze_aura = new Image();
+assets.inv_cloth.src = 'inv_cloth.png';
+assets.inv_leather.src = 'inv_leather.png';
+assets.inv_diamond_armor.src = 'inv_diamond_armor.png';
+assets.inv_cursed_aura.src = 'inv_cursed_aura.png';
+assets.inv_maze_aura.src = 'inv_maze_aura.png';
+
 assets.shrimp_huge_1 = new Image();
 assets.shrimp_huge_2 = new Image();
 assets.shrimp_huge_3 = new Image();
@@ -3235,51 +3251,70 @@ function logWhaleHashId(txid) {
 function logBattleEvent(event) {
     if (gameOver) return;
     const battleEvents = document.getElementById('battle-events');
-    if (event.startsWith('Kills:') || event.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/) || event === '') {
+
+    // Only handle the "Kills:" summary — ignore everything else
+    if (event.startsWith('Kills:') || event.match(/^(Shrimp|Crab|Squid|Dolphin|Shark|Whale):/)) {
         if (event === 'Kills:') {
-            killsLog = [event];
+            // Start fresh kills summary
+            killsLog = ['Kills:'];
         } else {
+            // Add individual kill line
             killsLog.push(event);
-            if (killsLog.length > 10) {
-                killsLog = killsLog.slice(-10); // Cap at 10 entries
-            }
         }
+
+        // When floor is cleared (stairs exist + no enemies), show full summary
         if (exit && enemies.length === 0) {
-            // Show exactly 8 kills lines
+            // Always show all enemy types (even if 0 kills)
+            killsLog = [
+                'Kills:',
+                `Shrimp: ${kills.Shrimp}`,
+                `Crab: ${kills.Crab}`,
+                `Squid: ${kills.Squid}`,
+                `Dolphin: ${kills.Dolphin}`,
+                `Shark: ${kills.Shark}`,
+                `Whale: ${kills.Whale}`,
+                '' // extra line to fill 8 lines
+            ];
+
             battleEvents.value = killsLog.join('\n');
             battleEvents.scrollTop = battleEvents.scrollHeight;
-            // Keep visible without fade-out
             battleEvents.style.transform = 'translateX(0)';
             battleEvents.style.opacity = '1';
+
+            // Cancel any fade-out
             if (battleLogTimeout) {
                 clearTimeout(battleLogTimeout);
                 battleLogTimeout = null;
             }
-                        return;
         }
+        return; // don't fall through to normal log
     }
-    // Keep last 3 messages for regular events (reverse waterfall)
+
+    // === Normal battle events (everything else) ===
     battleLog.push(event);
-    battleLog = battleLog.slice(-3); // Keep last 3 events
+    battleLog = battleLog.slice(-3); // keep last 3
+
     battleEvents.value = battleLog.join('\n');
     battleEvents.scrollTop = battleEvents.scrollHeight;
-    // Clear any existing timeout
-    if (battleLogTimeout) {
-        clearTimeout(battleLogTimeout);
-    }
-    // Slide in and fade in
+
+    // Cancel existing fade
+    if (battleLogTimeout) clearTimeout(battleLogTimeout);
+
+    // Show
     battleEvents.style.transform = 'translateX(0)';
     battleEvents.style.opacity = '1';
-    // Schedule slide out after 3 seconds for non-kills events
+
+    // Fade out after 3 seconds
     battleLogTimeout = setTimeout(() => {
         battleEvents.style.transform = 'translateX(-100%)';
         battleEvents.style.opacity = '0';
+
         setTimeout(() => {
-            const computedStyle = window.getComputedStyle(battleEvents);
-            if (computedStyle.opacity === '0') {
+            if (window.getComputedStyle(battleEvents).opacity === '0') {
                 battleLog = [];
                 battleEvents.value = '';
-                                // Restore kills display if still valid
+
+                // Restore kills summary if floor still cleared
                 if (exit && enemies.length === 0) {
                     killsLog = [
                         'Kills:',
@@ -3289,16 +3324,15 @@ function logBattleEvent(event) {
                         `Dolphin: ${kills.Dolphin}`,
                         `Shark: ${kills.Shark}`,
                         `Whale: ${kills.Whale}`,
-                        '' // Empty line for 8 lines total
+                        ''
                     ];
                     battleEvents.value = killsLog.join('\n');
                     battleEvents.style.transform = 'translateX(0)';
                     battleEvents.style.opacity = '1';
                     battleEvents.scrollTop = battleEvents.scrollHeight;
-                                    }
+                }
             }
-        }, 300); // Wait for transition (0.3s)
-        battleLogTimeout = null;
+        }, 300);
     }, 3000);
 }
 
@@ -3313,7 +3347,7 @@ function updateSatsDisplay() {
 
     // The calculation – shown on its own line
     const calcElem = document.getElementById('sats-calc');
-    calcElem.textContent = `${floor / 100}: ${mult < 1e8 ? `${mult} sats` : `${(mult / 1e8).toFixed(1)} BTC`}`;
+    calcElem.textContent = `${mult < 1e8 ? `${mult} sats` : `${(mult / 1e8).toFixed(1)} BTC`}`;
 
     // Trigger kills display only when exit exists and no enemies remain
     if (exit && enemies.length === 0) {
@@ -3576,15 +3610,14 @@ updateFogMap(p.x, p.y);
 
 // ——— THEME BLOCK CONSISTENCY ———
 if (floor % 3 === 0 && floor > 1) {
-
 const newTheme = selectNewTheme(currentTheme);
 
 // DEBUG THEME
 //let newTheme;
-//if (floor === 3) {
-//    newTheme = 'ruins';  // DEBUG: Force ruins on floor 3
+//if (floor === 6) {
+//    newTheme = 'dungeon'; // DEBUG: Force ruins on floor 3
 //} else {
-//    newTheme = selectNewTheme(currentTheme);
+//    newTheme = selectNewTheme(currentTheme);
 //}
 
     if (newTheme === 'hell') {
@@ -4318,21 +4351,6 @@ if (p.hp <= 48 && p.hasDiamondArmor) {  // Tie to <= 48 HP
         document.getElementById('armorStatus').textContent = 'Cloth'; // Essential line
 }
 
-// ——— UI DISPLAY: ARMOR ———
-if (p.hasDiamondArmor) {
-    document.getElementById('armorStatus').textContent = 'Diamond';
-}
-else if (p.hasCursedRing) {
-    document.getElementById('armorStatus').textContent = redMazeAuraGiven ? 'Maze Aura' : 'Cursed Aura';
-}
-
-else if (p.hasArmor) {
-    document.getElementById('armorStatus').textContent = 'Leather';
-}
-else {
-    document.getElementById('armorStatus').textContent = 'Cloth';
-}
-
     // HODL immortality protection
     if (p.immortal && p.hp <= 0) {
         p.hp = 1;
@@ -4416,7 +4434,7 @@ else {
         p.auraShield = Math.min(p.auraMax, p.auraShield + 1);
         p.lastAuraRefillMove = p.auraMoveCounter; // Track last refill move to prevent spam
         p.auraMoveCounter = 0;  // Reset aura counter after refill
-        logBattleEvent(`Floor ${floor} - Cursed Aura regenerates +1 (now ${p.auraShield}/${p.auraMax})`);
+        logBattleEvent(`Floor ${floor} - Aura regenerates +1 (now ${p.auraShield}/${p.auraMax})`);
     }
 
     // Break ring if aura depleted
@@ -4424,12 +4442,17 @@ else {
         p.hasCursedRing = false;
         p.auraMax = 0;
         p.auraShield = 0;
-        redMazeAuraGiven = false; // Reset so next Red Maze boss can grant aura again
         // Keep curseActive true until pond dispel
         // Restore a random immunity
         const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
         p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
-        logBattleEvent(`Floor ${floor} - Cursed Ring shattered! HP unchanged at ${p.hp}/${p.maxHP}. Gained ${p.elementImmunity} immunity.`);
+      
+    if (redMazeAuraGiven) {
+        logBattleEvent(`Floor ${floor} - Red Maze Aura depleted!`);
+    } else {
+        logBattleEvent(`Floor ${floor} - Cursed Ring shattered!`);
+    }
+    redMazeAuraGiven = false; // Reset so next Red Maze boss can grant aura again
     }
 
 // Centralized death check (immortal + resonance + normal)
@@ -5212,7 +5235,7 @@ function move(dir) {
 // In the move function, after updating position:
 p.moveCounter++;
 if (playerClass === 'degen' && playerLevel >= 50 && p.moveCounter >= 2) {
-    p.soulStormCharges = Math.min(256, p.soulStormCharges + 1);
+    p.soulStormCharges = Math.min(256, p.soulStormCharges + 2);
 }
 p.auraMoveCounter++;
 if (p.moveCounter >= 2) {
@@ -5436,19 +5459,20 @@ if (map[ny][nx] === 6 && !inHideout) {
         p.auraShield = 0;
         redMazeAuraGiven = false; // Reset for next Red Maze boss
         p.armorImmunity = null;
-        logBattleEvent(`Floor ${floor} - Pond dispels Cursed Aura! Resistances restored.`);
+        logBattleEvent(`Floor ${floor} - Pond dispels Aura!`);
         playWebAudioSound(sounds.pond);
         // Restore a random immunity
         const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
         p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
     }
-    // Only restore HP if we're below the threshold
-        if (p.hp < 48) {
-            const oldHP = p.hp;
-            p.hp = 36 + (p.hasArmor ? 12 : 0); // Full health (36 or 48 with armor)
-            logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
-            playWebAudioSound(sounds.pond);
-        }
+    // Restore HP only if below max (36 base, 48 with armor) — do nothing if already full
+    const maxHP = 36 + (p.hasArmor ? 12 : 0);
+    if (p.hp < maxHP) {
+        const oldHP = p.hp;
+        p.hp = maxHP;
+        logBattleEvent(`Floor ${floor} - Pond: HP restored to ${p.hp}`);
+        playWebAudioSound(sounds.pond);
+    }
     }            
             // If p.hp > 36, do nothing and continue
             
@@ -5549,10 +5573,10 @@ if (map[ny][nx] === 7) {
     }
     const coinToss = Math.random() < 0.5; // 50/50 chance
     if (coinToss) {
-        if (p.hasCursedRing) {
-            logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! But Cursed Aura blocks extra life!`);
-            playWebAudioSound(sounds.heads); // Play heads.wav
-        } else {
+    if (p.hasCursedRing && !redMazeAuraGiven) {
+        logBattleEvent(`Floor ${floor} - Gnome flips a coin... Heads! But Cursed Aura blocks extra life!`);
+        playWebAudioSound(sounds.heads); // Play heads.wav
+    } else {
             // Grant max health (original behavior)
             const healthGain = p.potions * 12;
             p.maxHP += healthGain;
@@ -5995,38 +6019,38 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     floor++;
 
 // ——— RED MAZE BOSS CHECK (corrected logic) ———
-// Activate on dungeon floors once ≥50 floors have passed since last Red Maze (or run start)
-if (currentTheme === 'dungeon' && floor >= 50) {
+// First encounter: floor >= 50
+if (currentTheme === 'dungeon' && !redMazeActive) {
     const floorsSinceLast = floor - (redMazeLastFloor || 0);
-    if (floorsSinceLast >= 50) {
-        logBattleEvent('RED MAZE HAS ARRIVED!');
 
-// UNIQUE MONSTER SOUND START        
-    if (isIOSorSafari()) {
-        // iOS/Safari version - use existing audio handling
-        const audio = sounds.unique_monster;
-        if (audio && audio.src) {
-            audio.currentTime = 0;
-            audio.play().catch(e => console.error('Unique monster sound error:', e));
+    // Subsequent: exactly every 50 floors after last
+    if (redMazeLastFloor === 0 ? floor >= 50 : floorsSinceLast >= 50) {
+        logBattleEvent('RED MAZE HAS ARRIVED!');
+        // UNIQUE MONSTER SOUND START
+        if (isIOSorSafari()) {
+            const audio = sounds.unique_monster;
+            if (audio && audio.src) {
+                audio.currentTime = 0;
+                audio.play().catch(e => console.error('Unique monster sound error:', e));
+            }
+        } else {
+            playWebAudioSound(sounds.unique_monster);
         }
-    } else {
-        // Non-iOS version - use Web Audio
-        playWebAudioSound(sounds.unique_monster);
-    }
-// UNIQUE MONSTER SOUND END
-               
+        // UNIQUE MONSTER SOUND END
+        
         playWebAudioSound(sounds.secret);
-// Kill ALL enemies instantly (including invisible Cursed Trader)
-enemies.forEach(e => e.hp = 0);
-enemies = [];
+        // Kill ALL enemies instantly
+        enemies.forEach(e => e.hp = 0);
+        enemies = [];
         redMazeActive = true;
-        redMazeLastFloor = floor;           // lock out for next 50 floors
-// Save current mute state before forcing mute for boss
-redMazeSavedMuteState = {
-    muted: musicMuted,
-    buttonText: document.getElementById('mute').textContent
-};
-musicManager.mute(true); // force mute during boss
+        redMazeLastFloor = floor; // update last appearance
+        
+        // Save mute state
+        redMazeSavedMuteState = {
+            muted: musicMuted,
+            buttonText: document.getElementById('mute').textContent
+        };
+        musicManager.mute(true);
     }
 }
     
@@ -6920,7 +6944,7 @@ if (numTileSteps > 0) {
     e.currentY = startY * S;
     
     // Rage scream every ~2 moves for huge shrimp
-    if (e.isHuge && numTileSteps > 0 && performance.now() - e.lastRageScream > 1800) {
+    if (e.isHuge && numTileSteps > 0 && performance.now() - e.lastRageScream > 400) {
         playShrimpRageGrowl();
         e.lastRageScream = performance.now();
     }
@@ -6996,9 +7020,6 @@ if (e.isHuge && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1) {
                         // Normal HP damage
                         p.hp -= damage;
                     }
-
-                    // Standard attack log
-                    logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG`);
 
 // Thorns only if damage was actually taken (not blocked by shield) AND enemy is adjacent (1 tile away)
 if (playerClass === 'druid' && playerLevel >= 10) {
@@ -7108,9 +7129,6 @@ if (playerClass === 'druid' && playerLevel >= 10) {
 }
 
                 playWebAudioSound(sounds.hit);
-
-const auraMsg = p.hasCursedRing ? ' (Aura depleted; ' : ' ';
-logBattleEvent(`Floor ${floor} - ${e.type.name} Attacks! ${damage} DMG${auraMsg}HP now ${p.hp}${p.hasCursedRing ? ')' : ''}`);
 
 // Wisp vulnerability: Attack wisp if close (like player)
 if (wisps.length > 0) {
@@ -7317,7 +7335,7 @@ updatePlayerState(); // Check HP and armor state after damage
                             frameDuration: 400 // slightly slower for big boi
                         },
                         ragePulseStart: performance.now(),
-                        lastRageScream: performance.now() - 2000, // so it can scream on first move
+                        lastRageScream: performance.now(),
                         bits: 0, bitAmmo: 0
                     };
                     enemies.push(huge);
@@ -11083,6 +11101,7 @@ function restart() {
     p.currentWeapon = 'sword';
     p.hasCursedRing = false;
     redMazeLastFloor = 0;
+    redMazeActive = false; // explicitly reset boss state on new run
     redMazeAuraGiven = false;
     p.echoWardenBlessingGiven = false;
 p.curseActive = false;  // Lift lingering curse
@@ -12046,23 +12065,27 @@ const frame = safeFrames[safeFrameIndex];
         }
         c.restore();
 
-// New: Draw bluish aura hit flash circle
-if (p.hasCursedRing && auraHitStartTime > 0) {
+// Aura hit flash: Red eerie for Maze Aura, Indigo-purple for regular Cursed Aura
+if ((p.hasCursedRing || redMazeAuraGiven) && auraHitStartTime > 0) {
     const elapsed = Date.now() - auraHitStartTime;
     if (elapsed < auraFlashDuration) {
-        const flashAlpha = 0.6 * (1 - (elapsed / auraFlashDuration)); // Fade out
-        // Clear reusable aura canvas
+        const flashAlpha = 0.6 * (1 - (elapsed / auraFlashDuration));
         auraTempCtx.clearRect(0, 0, W * S, H * S);
-        auraTempCtx.fillStyle = `rgba(75, 0, 130, ${flashAlpha})`; // Indigo-purple curse flash
+        
+        // Red eerie flash for Maze Aura, regular purple for Cursed Aura
+        auraTempCtx.fillStyle = redMazeAuraGiven 
+            ? `rgba(200, 0, 0, ${flashAlpha})`     // Deep red
+            : `rgba(75, 0, 130, ${flashAlpha})`;  // Indigo-purple
+        
         auraTempCtx.beginPath();
         const centerX = p.currentX + S / 2;
         const centerY = p.currentY + S / 2;
-        const radius = S * 1 * (elapsed / auraFlashDuration) + (S / 2); // Expand from S/2 to 1.5S
+        const radius = S * (elapsed / auraFlashDuration) + S / 2;
         auraTempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         auraTempCtx.fill();
         c.drawImage(auraTempCanvas, 0, 0);
     } else {
-        auraHitStartTime = 0; // End flash
+        auraHitStartTime = 0;
     }
 }
     }
@@ -12832,6 +12855,26 @@ if (exit) {
     c.restore();
 }
 
+    // Top-right armor icon
+    const armorIcon = document.getElementById('armor-icon-container');
+    let currentArmorImg = null;
+    if (p.hasDiamondArmor) currentArmorImg = assets.inv_diamond_armor;
+    else if (p.hasCursedRing) currentArmorImg = redMazeAuraGiven ? assets.inv_maze_aura : assets.inv_cursed_aura;
+    else if (p.hasArmor) currentArmorImg = assets.inv_leather;
+    else currentArmorImg = assets.inv_cloth;
+
+    if (currentArmorImg && currentArmorImg.complete) {
+        armorIcon.innerHTML = '';
+        const img = currentArmorImg.cloneNode();
+        img.style.width = '48px';
+        img.style.height = '48px';
+        img.style.imageRendering = 'pixelated'; // Crisp pixels, no smoothing
+        // Center if asset has transparency around a central design
+        img.style.display = 'block';
+        img.style.margin = 'auto';
+        armorIcon.appendChild(img);
+    }
+
     // GUI for health and soul charges – crisp & screen-space ready (2x on zoom)
     if (assets.guiHP?.complete && assets.guiHPglobe?.complete &&
         assets.guiSC?.complete && assets.guiSCglobe?.complete) {
@@ -12872,6 +12915,15 @@ if (exit) {
         c.clip();
         c.drawImage(assets.guiHPglobe, hpGlobeX, globeY, globeW, globeH);
         c.restore();
+        
+        // Overlay current HP as text centered on HP globe
+        c.imageSmoothingEnabled = false; // Ensure no blur on text
+        c.font = (11 * scale) + 'px VT323'; // Scale font with zoom
+        c.fillStyle = '#000000';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(p.hp.toString(), hpGlobeX + globeW / 2, globeY + globeH / 2 + 1 * scale); // Slight Y nudge for better centering
+
 
         // Soul Charges globe fill
         const scPercent = Math.max(0, Math.min(1, p.soulStormCharges / 256));
