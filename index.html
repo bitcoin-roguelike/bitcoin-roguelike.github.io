@@ -2619,6 +2619,7 @@ function wispSpeak(type) {
     };
 }
 
+// this is important for Android users --> master.gain.value = 0.9 * soundVolume;
 function playPigSnort() {
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
@@ -2646,7 +2647,7 @@ function playPigSnort() {
     source.buffer = buffer;
     // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 0.9); // uses the global soundVolume set by terminal
+    master.gain.value = 0.9 * soundVolume;
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -2663,7 +2664,7 @@ const now = audioContext.currentTime;
 
     // Master gain – louder epic
     const master = audioContext.createGain();
-    master.gain.value = 0.9 * (typeof soundVolume !== 'undefined' ? soundVolume : 0.9);
+    master.gain.value = 0.9 * soundVolume;
     master.connect(audioContext.destination);
 
     // 1. Angelic WHOOSH sweep
@@ -2989,6 +2990,7 @@ function startRainAmbience() {
     rainAmbienceTimer = true;
 }
 
+// this is important for Android users --> master.gain.value = 0.9 * soundVolume;
 function playShrimpRageGrowl() {
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error('Failed to resume AudioContext for rage growl:', e));
@@ -3012,7 +3014,7 @@ function playShrimpRageGrowl() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 0.9);
+    master.gain.value = 0.9 * soundVolume;
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
