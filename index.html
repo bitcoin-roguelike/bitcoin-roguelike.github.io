@@ -2620,19 +2620,28 @@ function wispSpeak(type) {
 }
 
 function playPigSnort() {
-    // Use global audioContext (created on start button — iOS-safe)
-    if (!audioContext) return; // safety
-    if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(() => {}); // silent fail okay
+    // Use global audioContext if available and running (iOS-safe)
+    let ctx = audioContext;
+    let needClose = false;
+
+    // Android fallback: create new context if global is missing/silent
+    if (!ctx || ctx.state === 'closed' || ctx.state === 'suspended') {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        needClose = true;
     }
 
-    const now = audioContext.currentTime;
+    // Resume if needed (iOS)
+    if (ctx.state === 'suspended') {
+        ctx.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
+    }
+
     const duration = 0.45;
-    const buffer = audioContext.createBuffer(1, duration * audioContext.sampleRate, audioContext.sampleRate);
+    const sampleRate = ctx.sampleRate;
+    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate);
     const data = buffer.getChannelData(0);
 
     for (let i = 0; i < data.length; i++) {
-        const t = i / audioContext.sampleRate;
+        const t = i / sampleRate;
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
@@ -2642,15 +2651,20 @@ function playPigSnort() {
         data[i] = wave * envelope;
     }
 
-    const source = audioContext.createBufferSource();
+    const source = ctx.createBufferSource();
     source.buffer = buffer;
-
-    const gainNode = audioContext.createGain();
-    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1.0) * 0.9;
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1.0);
     source.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(ctx.destination);
+    source.start(0);
 
-    source.start(now);
+    // Auto-close temporary Android context after sound ends
+    if (needClose) {
+        source.onended = () => {
+            ctx.close().catch(() => {});
+        };
+    }
 }
 
 /* ---------- AUDIO ---------- */
