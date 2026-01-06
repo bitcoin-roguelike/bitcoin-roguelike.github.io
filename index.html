@@ -2620,41 +2620,35 @@ function wispSpeak(type) {
 }
 
 function playPigSnort() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
+    }
+
     const duration = 0.45;
-    const sampleRate = ctx.sampleRate;
-
-    const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate);
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < data.length; i++) {
         const t = i / sampleRate;
-
         // Base low growl with wobble
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
-
         // Higher piggy harmonic
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
-
         // Add some roughness/noise
         wave += 0.2 * (Math.random() - 0.5);
-
         // Punchy envelope: fast attack, long decay
         const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
         data[i] = wave * envelope;
     }
-
-    const source = ctx.createBufferSource();
+    const source = audioContext.createBufferSource();
     source.buffer = buffer;
-
     // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = soundVolume;  // uses the global soundVolume set by terminal
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = soundVolume; // uses the global soundVolume set by terminal
     source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
+    gainNode.connect(audioContext.destination);
     source.start(0);
 }
 
