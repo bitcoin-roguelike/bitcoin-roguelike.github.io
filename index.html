@@ -2620,51 +2620,42 @@ function wispSpeak(type) {
 }
 
 function playPigSnort() {
-    // Use global audioContext if available and running (iOS-safe)
-    let ctx = audioContext;
-    let needClose = false;
-
-    // Android fallback: create new context if global is missing/silent
-    if (!ctx || ctx.state === 'closed' || ctx.state === 'suspended') {
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        needClose = true;
-    }
-
-    // Resume if needed (iOS)
-    if (ctx.state === 'suspended') {
-        ctx.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
-    }
-
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const duration = 0.45;
     const sampleRate = ctx.sampleRate;
+
     const buffer = ctx.createBuffer(1, duration * sampleRate, sampleRate);
     const data = buffer.getChannelData(0);
 
     for (let i = 0; i < data.length; i++) {
         const t = i / sampleRate;
+
+        // Base low growl with wobble
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
+
+        // Higher piggy harmonic
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
+
+        // Add some roughness/noise
         wave += 0.2 * (Math.random() - 0.5);
+
+        // Punchy envelope: fast attack, long decay
         const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
         data[i] = wave * envelope;
     }
 
     const source = ctx.createBufferSource();
     source.buffer = buffer;
+
+    // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
     const gainNode = ctx.createGain();
-    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1.0);
+    gainNode.gain.value = soundVolume;  // uses the global soundVolume set by terminal
     source.connect(gainNode);
     gainNode.connect(ctx.destination);
-    source.start(0);
 
-    // Auto-close temporary Android context after sound ends
-    if (needClose) {
-        source.onended = () => {
-            ctx.close().catch(() => {});
-        };
-    }
+    source.start(0);
 }
 
 /* ---------- AUDIO ---------- */
