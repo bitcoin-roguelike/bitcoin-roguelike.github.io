@@ -2654,7 +2654,7 @@ function playThrowSpear() {
 
     const gainNode = audioContext.createGain();
     // boost a bit for Android
-    gainNode.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
+    gainNode.gain.setTargetAtTime(soundVolume * 0.9, audioContext.currentTime, 0.01);
 
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
@@ -3029,7 +3029,7 @@ function playShrimpRageGrowl() {
     source.buffer = buffer;
 
     const gainNode = audioContext.createGain();
-    gainNode.gain.setTargetAtTime(soundVolume * 2, audioContext.currentTime, 0.01);
+    gainNode.gain.setTargetAtTime(soundVolume * 0.9, audioContext.currentTime, 0.01);
 
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
