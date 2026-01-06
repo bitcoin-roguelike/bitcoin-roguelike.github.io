@@ -2536,7 +2536,7 @@ function playWebAudioSound(soundObj) {
     const source = audioContext.createBufferSource();
     source.buffer = soundObj.buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1.0); // Use global sound volume setting
+    gainNode.gain.value = soundVolume; // Use global sound volume setting
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -2619,38 +2619,38 @@ function wispSpeak(type) {
     };
 }
 
-// without this there will only be close to silence for Android users: 0.9 * soundVolume
 function playPigSnort() {
+    // Use global audioContext (created on start button — iOS-safe)
+    if (!audioContext) return; // safety
     if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
+        audioContext.resume().catch(() => {}); // silent fail okay
     }
 
+    const now = audioContext.currentTime;
     const duration = 0.45;
-    const sampleRate = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+    const buffer = audioContext.createBuffer(1, duration * audioContext.sampleRate, audioContext.sampleRate);
     const data = buffer.getChannelData(0);
+
     for (let i = 0; i < data.length; i++) {
-        const t = i / sampleRate;
-        // Base low growl with wobble
+        const t = i / audioContext.sampleRate;
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
-        // Higher piggy harmonic
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
-        // Add some roughness/noise
         wave += 0.2 * (Math.random() - 0.5);
-        // Punchy envelope: fast attack, long decay
         const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
         data[i] = wave * envelope;
     }
+
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
+
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.9 * soundVolume; // uses the global soundVolume set by terminal
+    gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1.0) * 0.9;
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    source.start(0);
+
+    source.start(now);
 }
 
 /* ---------- AUDIO ---------- */
@@ -2990,7 +2990,6 @@ function startRainAmbience() {
     rainAmbienceTimer = true;
 }
 
-// without this there will only be close to silence for Android users: 0.9 * soundVolume
 function playShrimpRageGrowl() {
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error('Failed to resume AudioContext for rage growl:', e));
@@ -3014,7 +3013,7 @@ function playShrimpRageGrowl() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.9 * soundVolume;
+    gainNode.gain.value = soundVolume;
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
