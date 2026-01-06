@@ -2536,9 +2536,7 @@ function playWebAudioSound(soundObj) {
     const source = audioContext.createBufferSource();
     source.buffer = soundObj.buffer;
     const gainNode = audioContext.createGain();
-    // Android safety: boost volume if global soundVolume is undefined or near-zero
-    const effectiveVolume = (typeof soundVolume !== 'undefined' && soundVolume > 0.05) ? soundVolume : 1.0;
-    gainNode.gain.value = effectiveVolume;
+    gainNode.gain.value = soundVolume; // Use global sound volume setting
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -2623,39 +2621,32 @@ function wispSpeak(type) {
 
 function playPigSnort() {
     if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(e => console.error('Failed to resume AudioContext:', e));
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for pig snort:', e));
     }
 
     const duration = 0.45;
-    const sr = audioContext.sampleRate;
-    const buffer = audioContext.createBuffer(1, Math.round(duration * sr), sr);
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
     const data = buffer.getChannelData(0);
-
     for (let i = 0; i < data.length; i++) {
-        const t = i / sr;
-
+        const t = i / sampleRate;
         // Base low growl with wobble
         const freq1 = 110 + 20 * Math.sin(2 * Math.PI * 1.5 * t);
         let wave = Math.sin(2 * Math.PI * freq1 * t);
-
         // Higher piggy harmonic
         const freq2 = 320 + 50 * Math.sin(2 * Math.PI * 2 * t);
         wave += 0.4 * Math.sin(2 * Math.PI * freq2 * t);
-
-        // Reduced roughness
-        wave += 0.05 * (Math.random() - 0.5);
-
-        // Envelope scaled for any sample‑rate
-        const envelope = Math.exp(-4 * t * (44100 / sr)) *
-                         (1 - Math.exp(-15 * t * (44100 / sr)));
-        data[i] = Math.max(-1, Math.min(1, wave * envelope));
+        // Add some roughness/noise
+        wave += 0.2 * (Math.random() - 0.5);
+        // Punchy envelope: fast attack, long decay
+        const envelope = Math.exp(-4 * t) * (1 - Math.exp(-15 * t));
+        data[i] = wave * envelope;
     }
-
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-
+    // ---- RESPECT SOUL TERMINAL SOUND VOLUME ----
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume;
+    gainNode.gain.value = soundVolume; // uses the global soundVolume set by terminal
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -3000,50 +2991,28 @@ function startRainAmbience() {
 
 function playShrimpRageGrowl() {
     if (audioContext.state === 'suspended') {
-        audioContext.resume().catch(e =>
-            console.error('Failed to resume AudioContext for rage growl:', e)
-        );
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for rage growl:', e));
     }
-
     const duration = 0.6;
-    const sr = audioContext.sampleRate;                     // actual sample rate
-    const buffer = audioContext.createBuffer(1,
-        Math.round(duration * sr), sr);
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
     const data = buffer.getChannelData(0);
-
-    // Ratio to map the original 44.1 kHz‑based envelope to the current rate
-    const rateRatio = 44100 / sr;
-
     for (let i = 0; i < data.length; i++) {
-        const t = i / sr;
-
+        const t = i / sampleRate;
         // Deep angry growl with vibration
         const freq = 80 + 30 * Math.sin(2 * Math.PI * 3 * t);
         let wave = Math.sin(2 * Math.PI * freq * t);
-
-        // Add a second harmonic
+        // Add harmonics and grit
         wave += 0.5 * Math.sin(2 * Math.PI * freq * 2 * t);
-
-        // Reduced grit (random component)
-        wave += 0.08 * (Math.random() - 0.5);   // down from 0.3
-
-        // Sharp attack, slow decay – scaled for any sample‑rate
-        const attack = Math.min(1, t * 8 * rateRatio);
-        const decay  = Math.exp(-3 * t * rateRatio);
-        const envelope = attack * decay;
-
-        // Apply envelope and a modest overall gain
-        let sample = wave * envelope * 0.6;
-
-        // Prevent clipping
-        data[i] = Math.max(-1, Math.min(1, sample));
+        wave += 0.3 * (Math.random() - 0.5);
+        // Sharp attack, slow decay
+        const envelope = Math.min(1, t * 8) * Math.exp(-3 * t);
+        data[i] = wave * envelope * 0.6;
     }
-
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume;   // global volume set elsewhere
+    gainNode.gain.value = soundVolume;
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -3075,7 +3044,7 @@ function playShrimpTrollDeathScream() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume * 0.7; // calmer volume
+    gainNode.gain.value = soundVolume * 0.9; // calmer volume
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
