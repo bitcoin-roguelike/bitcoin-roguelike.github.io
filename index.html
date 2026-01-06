@@ -2653,7 +2653,7 @@ function playPigSnort() {
     source.buffer = buffer;
 
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.9 * soundVolume;
+    gainNode.gain.value = Math.min(1, soundVolume * 2);
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -3041,7 +3041,7 @@ function playShrimpRageGrowl() {
     source.buffer = buffer;
 
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.9 * soundVolume;   // global volume
+    gainNode.gain.value = Math.min(1, soundVolume * 2);
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
