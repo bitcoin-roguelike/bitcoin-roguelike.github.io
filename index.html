@@ -2653,7 +2653,7 @@ function playPigSnort() {
     source.buffer = buffer;
 
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume;
+    gainNode.gain.value = 0.9 * soundVolume;
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -3041,7 +3041,7 @@ function playShrimpRageGrowl() {
     source.buffer = buffer;
 
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume;   // global volume set elsewhere
+    gainNode.gain.value = 0.9 * soundVolume;   // global volume
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
@@ -3073,7 +3073,7 @@ function playShrimpTrollDeathScream() {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume * 0.9; // calmer volume
+    gainNode.gain.value = soundVolume * 0.8; // calmer volume
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start(0);
