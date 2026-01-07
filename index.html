@@ -1504,6 +1504,8 @@ let frameCount = 0;  // Add this line
 let borderLastUpdate = null;
 let activeUniqueMonsterName = null;
 
+let lastMessageTime = 0;
+
 let redMazeActive = false;          // Is the boss currently on the floor?
 let redMazeSavedMuteState = null; // null = no boss active, object = saved state
 let redMaze = null;                 // Boss object {x, y, hp, teleportTime}
@@ -1588,7 +1590,7 @@ anim: {
         diamond_armor_front: [new Image(), new Image()],
         diamond_armor_back: [new Image(), new Image()],
         diamond_armor_right: [new Image(), new Image()],
-        fall: [new Image(), new Image(), new Image()],
+        fall: [new Image(), new Image(), new Image(), new Image(), new Image(), new Image()],
     },
     direction: 'front',
     frameIndex: 0,
@@ -1653,6 +1655,9 @@ p.anim.frames.armor_right[1].src = 'player_armor-right2.png';
 p.anim.frames.fall[0].src = 'player_fall1.png';
 p.anim.frames.fall[1].src = 'player_fall2.png';
 p.anim.frames.fall[2].src = 'player_fall3.png';
+p.anim.frames.fall[0].src = 'player_fall4.png';
+p.anim.frames.fall[1].src = 'player_fall5.png';
+p.anim.frames.fall[2].src = 'player_fall6.png';
 p.anim.frames.fall.forEach((frame, i) => {
     frame.onerror = () => console.error(`Failed to load fall frame ${i}: ${frame.src}`);
 });
@@ -1669,8 +1674,8 @@ let cachedLeaderboard = null; // Store fetched leaderboard
 let whaleHashIds = ['Whale Transactions:'], battleLog = [], killsLog = [];
 let satsEarned = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
 let kills = {Shrimp: 0, Crab: 0, Squid: 0, Dolphin: 0, Shark: 0, Whale: 0};
-let soulResonance = 0; // 0-100%, +1 per floor, maxed triggers resurrection
-let resonanceTriggeredThisRun = false; // One-time per run
+let soulResonance = 0; // 0-100%
+let resonanceTriggeredThisRun = false; 
 let wardenUses = 0;  // tracks echo warden revives (reset on restart)
 let wardenRollPending = false;  // true when we need to roll for revive
 let wardenFlashStart = 0; // Timestamp for 500ms invert flash
@@ -1696,6 +1701,7 @@ let gameOverSoundPlayed = false;
 let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
+let frostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
 let snowflakes = [];
 let ruinsRainActive = false;
 let rainAmbienceTimer = null; // restart loop timer
@@ -2111,6 +2117,21 @@ Object.values(assets.wispFrames).forEach((frames, typeIndex) => {
     });
 });
 
+// Frost Nova animation frames (3-frame)
+assets.frostNova = [new Image(), new Image(), new Image()];
+assets.frostNova[0].src = 'wisp_nova1.png';
+assets.frostNova[1].src = 'wisp_nova2.png';
+assets.frostNova[2].src = 'wisp_nova3.png';
+
+// Frozen enemy overlays (3 frames each)
+const frozenTypes = ['shrimp', 'crab', 'squid', 'dolphin', 'shark', 'whale'];
+frozenTypes.forEach(type => {
+    assets[`frozen_${type}`] = [new Image(), new Image(), new Image()];
+    assets[`frozen_${type}`][0].src = `frozen_${type}_1.png`;
+    assets[`frozen_${type}`][1].src = `frozen_${type}_2.png`;
+    assets[`frozen_${type}`][2].src = `frozen_${type}_3.png`;
+});
+
 // Enemy background circles (16x16px animated)
 assets.enemyBg = [new Image(), new Image(), new Image()];
 assets.enemyBg[0].src = 'red-bg1.png';
@@ -2176,13 +2197,6 @@ assets.inv_leather.src = 'inv_leather.png';
 assets.inv_diamond_armor.src = 'inv_diamond_armor.png';
 assets.inv_cursed_aura.src = 'inv_cursed_aura.png';
 assets.inv_maze_aura.src = 'inv_maze_aura.png';
-
-assets.shrimp_huge_1 = new Image();
-assets.shrimp_huge_2 = new Image();
-assets.shrimp_huge_3 = new Image();
-assets.shrimp_huge_1.src = 'shrimp_1_HUGE.png';
-assets.shrimp_huge_2.src = 'shrimp_2_HUGE.png';
-assets.shrimp_huge_3.src = 'shrimp_3_HUGE.png';
 
 assets.red_maze = new Image();
 assets.red_maze.src = 'red_maze.png';
@@ -3116,6 +3130,33 @@ function playShrimpTrollDeathScream() {
     source.start(0);
 }
 
+function playFrostNovaSound() {
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext:', e));
+    }
+    const duration = 0.8;
+    const sampleRate = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+        const t = i / sampleRate;
+        // Chilly whoosh + crystalline sparkle
+        let freq = 600 + 400 * Math.sin(2 * Math.PI * 5 * t);
+        let wave = Math.sin(2 * Math.PI * freq * t);
+        wave += 0.3 * Math.sin(2 * Math.PI * freq * 4 * t);
+        wave += 0.2 * (Math.random() - 0.5);
+        const envelope = Math.min(1, t * 12) * Math.exp(-5 * t);
+        data[i] = wave * envelope * 0.6;
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = soundVolume * 0.8;
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    source.start(0);
+}
+
 const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
 let currentSplashImage = 'splash.png';
 const splashImg = new Image();
@@ -3681,7 +3722,7 @@ const newTheme = selectNewTheme(currentTheme);
 // DEBUG THEME
 //let newTheme;
 //if (floor === 3) {
-//    newTheme = 'hell'; // DEBUG: Force ruins on floor 3
+//    newTheme = 'ruins'; // DEBUG: Force ruins on floor 3
 //} else {
 //    newTheme = selectNewTheme(currentTheme);
 //}
@@ -4176,6 +4217,38 @@ exit = null;
 
 if (!musicMuted && !inPuzzleRoom) {
     musicManager.play(currentTheme);
+}
+
+// Red Maze boss: spawn immediately on qualifying dungeon floor
+if (currentTheme === 'dungeon' && !redMazeActive) {
+    const floorsSinceLast = floor - (redMazeLastFloor || 0);
+    if ((redMazeLastFloor === 0 && floor >= 50) || floorsSinceLast >= 50) {
+        logBattleEvent('RED MAZE HAS ARRIVED!');
+        // UNIQUE MONSTER SOUND
+        if (isIOSorSafari()) {
+            const audio = sounds.unique_monster;
+            if (audio && audio.src) {
+                audio.currentTime = 0;
+                audio.play().catch(e => console.error('Unique monster sound error:', e));
+            }
+        } else {
+            playWebAudioSound(sounds.unique_monster);
+        }
+        
+        playWebAudioSound(sounds.secret);
+        // Kill ALL enemies instantly
+        enemies.forEach(e => e.hp = 0);
+        enemies = [];
+        redMazeActive = true;
+        redMazeLastFloor = floor;
+        
+        // Save mute state
+        redMazeSavedMuteState = {
+            muted: musicMuted,
+            buttonText: document.getElementById('mute').textContent
+        };
+        musicManager.mute(true);
+    }
 }
 
 if (redMazeActive) {
@@ -5822,6 +5895,7 @@ if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
             }
         }
 
+
         // Check for falling animation (only on Ruins theme)
         if (
             currentTheme === 'ruins' &&
@@ -5836,8 +5910,8 @@ if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
 
             // Start fall animation - ensure it starts from frame 0
             let frameIndex = 0;
-            const fallDuration = 200; // ms per frame
-            const totalFrames = 3; // Exactly 3 frames
+            const fallDuration = 100; // ms per frame
+            const totalFrames = 6;
             const startTime = Date.now();
 
             function animateFall() {
@@ -6014,8 +6088,6 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
-camera.x = 0;
-camera.y = 0;
 needsRedraw = true;
                     } else {
                         // Fallback: keep player at original position if no valid move
@@ -6027,8 +6099,7 @@ p.deltaX = 0;
 p.deltaY = 0;
 p.targetTileX = p.x;
 p.targetTileY = p.y;
-camera.x = 0;
-camera.y = 0;
+
 needsRedraw = true;
 return;
                     }
@@ -6049,6 +6120,7 @@ return;
             animateFall();
             return; // Exit move early to prevent further movement
         }
+
 
 // Add this after the stairs logic in move function:
 if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !inPuzzleRoom check (puzzle room now uses same stairs)
@@ -6083,42 +6155,6 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     }
    
     floor++;
-
-// ——— RED MAZE BOSS CHECK (corrected logic) ———
-// First encounter: floor >= 50
-if (currentTheme === 'dungeon' && !redMazeActive) {
-    const floorsSinceLast = floor - (redMazeLastFloor || 0);
-
-    // Subsequent: exactly every 50 floors after last
-    if (redMazeLastFloor === 0 ? floor >= 50 : floorsSinceLast >= 50) {
-        logBattleEvent('RED MAZE HAS ARRIVED!');
-        // UNIQUE MONSTER SOUND START
-        if (isIOSorSafari()) {
-            const audio = sounds.unique_monster;
-            if (audio && audio.src) {
-                audio.currentTime = 0;
-                audio.play().catch(e => console.error('Unique monster sound error:', e));
-            }
-        } else {
-            playWebAudioSound(sounds.unique_monster);
-        }
-        // UNIQUE MONSTER SOUND END
-        
-        playWebAudioSound(sounds.secret);
-        // Kill ALL enemies instantly
-        enemies.forEach(e => e.hp = 0);
-        enemies = [];
-        redMazeActive = true;
-        redMazeLastFloor = floor; // update last appearance
-        
-        // Save mute state
-        redMazeSavedMuteState = {
-            muted: musicMuted,
-            buttonText: document.getElementById('mute').textContent
-        };
-        musicManager.mute(true);
-    }
-}
     
     // CRITICAL: FULL WAVE & ENEMY RESET — this fixes dead Floor 2 after puzzle
     wave = 1;
@@ -6142,7 +6178,7 @@ if (currentTheme === 'dungeon' && !redMazeActive) {
     if (floor === 3 && wisps.length === 0) {
     
         // DEBUG
-        //const wispType = WISP_TYPES[1]; // FIRE wisp (index 1)
+        //const wispType = WISP_TYPES[0]; // COLD wisp (index 0), FIRE wisp (index 1) etc ..
         const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
         wisps.push({
             x: p.x, y: p.y,
@@ -6861,6 +6897,7 @@ echoWardenPos.deltaY = 0;
     
     moveEnemies();
 updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
+applyEnsnare();    // Druid Ensnare (lvl 20+)
     updatePlayerState();
     
     // Check if player is standing on a rune tile (specifically placed rune)
@@ -7395,10 +7432,10 @@ updatePlayerState(); // Check HP and armor state after damage
                         move: 2,
                         isHuge: true,
                         anim: {
-                            frames: [assets.shrimp_huge_1, assets.shrimp_huge_2, assets.shrimp_huge_1], // cycle 1-2-1 as requested
                             frameIndex: 0,
-                            lastFrameTime: performance.now(),
-                            frameDuration: 400 // slightly slower for big boi
+                            lastFrameTime: performance.now()
+                            // No frames array needed — uses themed frames from type.anim
+                            // frameDuration handled in draw loop (same as others)
                         },
                         ragePulseStart: performance.now(),
                         lastRageScream: performance.now(),
@@ -7436,7 +7473,7 @@ updatePlayerState(); // Check HP and armor state after damage
                                 // Visual crack flash
                                 highlightTiles.push({
                                     x: wallX, y: wallY,
-                                    highlightStart: performance.now(),
+                                    highlightStart: Date.now(),
                                     color: 'rgba(255,100,0,0.8)'
                                 });
                             }
@@ -7543,14 +7580,18 @@ dirs.forEach(dir => {
         redMazeActive = false;
         redMaze = null;
 
-        // Reward: permanent red aura (once per run)
+        // Reward: red maze aura
         if (!redMazeAuraGiven) {
-            const baseHP = p.hp;
-            p.auraMax = baseHP * 2;
-            p.auraShield = p.auraMax;
-            p.hasCursedRing = true; // reuse flag for red aura visuals
-            redMazeAuraGiven = true;
-            logBattleEvent(`Red Aura gained! Shield: ${p.auraShield}/${p.auraMax}`);
+            if (p.elementImmunity !== null) {
+                const baseHP = p.hp;
+                p.auraMax = baseHP * 2;
+                p.auraShield = p.auraMax;
+                p.hasCursedRing = true; // reuse flag for red aura visuals
+                redMazeAuraGiven = true;
+                logBattleEvent(`Red Aura gained! Shield: ${p.auraShield}/${p.auraMax}`);
+              } else {              
+                logBattleEvent(`Cursed Aura blocks Red Maze Aura grant!`);
+            }
         }
 
 // Restore exact mute state user had before boss fight
@@ -7735,15 +7776,6 @@ function updateWisps() {
         return edist <= wisp.type.range && e.hp > 0; // allow 1-HP for Ensnare
     });
 
-    // Ensnare (Druid lvl 20) - freeze nearest enemy in range
-    if (ensnareActive && playerClass === 'druid' && inRangeEnemies.length > 0) {
-        const target = inRangeEnemies[0];
-        target.frozen = true;
-        target.frozenTurns = 2;
-        logBattleEvent(`Ensnare entangles ${target.type.name}!`);
-        playWebAudioSound(sounds.attack);
-    }
-
     // Move close to player (realtime, random bob within 1-2 tiles)
     let dx = p.x - wisp.x, dy = p.y - wisp.y;
     let dist = Math.abs(dx) + Math.abs(dy);
@@ -7789,6 +7821,51 @@ function updateWisps() {
     needsRedraw = true;
 }
 
+function applyEnsnare() {
+    if (!(playerClass === 'druid' && playerLevel >= 20)) return;
+
+    // Find enemies in range (max 3 tiles, same as wisp)
+    const inRangeEnemies = enemies.filter(e => {
+        const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
+        return dist <= 3 && e.hp > 0;
+    });
+
+    if (inRangeEnemies.length === 0) return;
+
+    // Entangle only the nearest single enemy
+    let nearest = null;
+    let minDist = Infinity;
+    inRangeEnemies.forEach(e => {
+        const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
+        if (dist < minDist) {
+            minDist = dist;
+            nearest = e;
+        }
+    });
+
+    if (nearest) {
+        nearest.frozen = true;
+        nearest.frozenTurns = 2;
+        // Throttled message — once every 1 seconds
+        const now = performance.now();
+        if (now - lastMessageTime >= 1000) {
+            logBattleEvent(`Ensnare entangles ${nearest.type.name}!`);
+            lastMessageTime = now;
+        }
+        playWebAudioSound(sounds.attack);
+
+        // Green square flash on entangled enemy
+        highlightTiles.push({
+            x: nearest.x,
+            y: nearest.y,
+            highlightStart: Date.now(),
+            color: 'rgba(81, 191, 73, 0.7)' // bright green
+        });
+
+        needsRedraw = true;
+    }
+}
+
 function applyWispAttack(wisp, primaryTarget) {
     const now = Date.now();
     let hitEnemies = new Set(); // Track all affected enemies for flash
@@ -7823,7 +7900,13 @@ function applyWispAttack(wisp, primaryTarget) {
         // Cold = freeze (ignores shield, no damage, no mercy needed)
         primaryTarget.frozen = true;
         primaryTarget.frozenTurns = 2;
-        logBattleEvent(`Wisp freezes ${primaryTarget.type.name}! [FROST LOCK]`);
+        
+        // Throttled message — once every 1 second
+        const now = performance.now();
+        if (now - lastMessageTime >= 1000) {
+            logBattleEvent(`Wisp freezes ${primaryTarget.type.name}! [FROST LOCK]`);
+            lastMessageTime = now;
+        }        
         playWebAudioSound(sounds.attack);
         hitEnemies.add(primaryTarget);
     }
@@ -7845,8 +7928,26 @@ function applyWispAttack(wisp, primaryTarget) {
             if (dx <= 1 && dy <= 1) {
                 enemy.frozen = true;
                 enemy.frozenTurns = 2;
-                logBattleEvent(`Wisp freezes ${enemy.type.name} in cold nova!`);
                 affected = true;
+
+                // Spawn drifting Frost Nova projectile toward this enemy
+                frostNovaProjectiles.push({
+                
+                    x: wisp.x,
+                    y: wisp.y,
+                    currentX: wisp.x * S,
+                    currentY: wisp.y * S,
+                    targetX: enemy.x * S,
+                    targetY: enemy.y * S,
+                    frameIndex: 0,
+                    startTime: performance.now()
+                });
+                
+                // Play Frost Nova sound (once per nova burst)
+                if (frostNovaProjectiles.length === 1) { // first nova this turn
+                    playFrostNovaSound();
+                }
+                
             }
         }
         else if (wisp.type.name === 'chain' && wisp.type.aoe === 'large') {
@@ -8341,18 +8442,6 @@ function updateAndDrawMatrix() {
             c.fillStyle = 'rgba(255, 255, 255, 0.1)';
             c.fill();
         }
-
-        // 5. Aery and offset effect
-        const offsetX = Math.sin(now * 0.01 + phaseOffset) * 2; // Slight horizontal offset
-        const offsetY = Math.cos(now * 0.01 + phaseOffset) * 2; // Slight vertical offset
-        const offsetAlpha = 0.3; // More transparent offset
-
-        c.globalAlpha = offsetAlpha;
-        c.beginPath();
-        c.arc(e.currentX + S / 2 + offsetX, e.currentY + S / 2 + offsetY, S / 2, 0, Math.PI * 2);
-        c.fillStyle = isUnique ? 'rgba(255, 51, 102, 0.5)' : 'rgba(247, 147, 26, 0.5)';
-        c.fill();
-        c.globalAlpha = 1;
 
         c.restore();
     });
@@ -9288,12 +9377,13 @@ if (p.currentWeapon === 'satoshi_scourge' && !usePickaxeSword) {
     if (p.soulStormCharges >= 8) {
         p.soulStormCharges -= 8;
         p.scourgeSpin = { start: Date.now() };
-        p.scourgeCooldown = Date.now() + 600; // 600ms cooldown
+        p.scourgeCooldown = Date.now() + 400; // 400ms cooldown
         doScourgeSpinAttack();
         playScourgeSpin();
        
         moveEnemies();
         updateWisps();
+        applyEnsnare();    // Druid Ensnare (lvl 20+)
         needsRedraw = true;
         return; // Exit early — no other attack
     }
@@ -9391,6 +9481,7 @@ if (redMazeActive && redMaze) {
     
     moveEnemies();
 updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
+applyEnsnare();    // Druid Ensnare (lvl 20+)
     needsRedraw = true;
     setTimeout(() => {
         swordActive = false;
@@ -9419,6 +9510,7 @@ if (p.curseActive) {
     sounds.potion.play().catch(e => console.error('Potion sound error:', e));
     moveEnemies();
 updateWisps(); // Update wisp pos/attacks synced to player/enemy turns
+applyEnsnare();    // Druid Ensnare (lvl 20+)
     updatePlayerState();
     needsRedraw = true;
 }
@@ -11230,7 +11322,10 @@ updateXPBar();
 playerClass = null;
 pendingSkillTreeLevel = null;
 skillTreeActive = false;
-  
+
+rostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
+
+    lastMessageTime = 0;  
     redMazeSavedMuteState = null; 
     // Reset shrine tracking
     p.shrineCharges = 0;
@@ -12088,6 +12183,7 @@ if (currentTheme === 'ruins') {
             c.restore();
         }
     });
+        
 // Draw player
 // Add this to the existing draw function for player rendering
     if (p.x >= 0 && p.x < W && p.y >= 0 && p.y < H && map[p.y][p.x] !== 1) {
@@ -12491,7 +12587,17 @@ enemies.forEach(e => {
             }
             enemyTempCtx.putImageData(imageData, 0, 0);
         }
-        
+
+        // Frozen overlay — hides regular animation while frozen
+        if (currentEnemy.frozen && isVisible) {
+            const typeName = currentEnemy.type.name.toLowerCase();
+            const frozenFrames = assets[`frozen_${typeName}`];
+            if (frozenFrames && frozenFrames[0].complete) {
+                const frameIndex = Math.floor(performance.now() / 300) % 3;
+                enemyTempCtx.clearRect(0, 0, S, S); // hide underlying enemy sprite
+                enemyTempCtx.drawImage(frozenFrames[frameIndex], 0, 0, S, S);
+            }
+        }        
 
         // Pulsating red soulstorm circle under enraged huge shrimp
         if (e.isHuge && e.ragePulseStart) {
@@ -12643,6 +12749,14 @@ c.restore();
             if (Date.now() - e.wispHitFlash.time > 200) delete e.wispHitFlash;
         }
     }
+    
+    // Draw drifting Frost Nova
+    frostNovaProjectiles.forEach(nova => {
+        if (assets.frostNova[nova.frameIndex].complete) {
+            c.drawImage(assets.frostNova[nova.frameIndex], nova.currentX, nova.currentY, S, S);
+        }
+    });
+    
 });
 
 // Draw fading dangerous spell areas after enemies
@@ -12829,8 +12943,9 @@ if (exit) {
     // Top-right armor icon
     const armorIcon = document.getElementById('armor-icon-container');
     let currentArmorImg = null;
-    if (p.hasDiamondArmor) currentArmorImg = assets.inv_diamond_armor;
-    else if (p.hasCursedRing) currentArmorImg = redMazeAuraGiven ? assets.inv_maze_aura : assets.inv_cursed_aura;
+    if (redMazeAuraGiven) currentArmorImg = assets.inv_maze_aura;
+    else if (p.hasCursedRing) currentArmorImg = assets.inv_cursed_aura;
+    else if (p.hasDiamondArmor) currentArmorImg = assets.inv_diamond_armor;
     else if (p.hasArmor) currentArmorImg = assets.inv_leather;
     else currentArmorImg = assets.inv_cloth;
 
@@ -13035,6 +13150,20 @@ if (gameOver) {
 }
     
 updateProjectiles();
+
+// Update frost nova projectiles
+frostNovaProjectiles = frostNovaProjectiles.filter(nova => {
+    const elapsed = performance.now() - nova.startTime;
+    const duration = 800; // 800ms drift
+    if (elapsed >= duration) return false; // remove when done
+
+    const progress = elapsed / duration;
+    nova.currentX = nova.x * S + progress * (nova.targetX - nova.x * S);
+    nova.currentY = nova.y * S + progress * (nova.targetY - nova.y * S);
+    nova.frameIndex = Math.floor(elapsed / 200) % 3; // 200ms per frame
+    return true;
+});
+
 updateRedMaze();
 
     // Unique monster harasses player who stands still inside its spell
