@@ -1702,6 +1702,7 @@ let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
 let frostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
+let entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 let snowflakes = [];
 let ruinsRainActive = false;
 let rainAmbienceTimer = null; // restart loop timer
@@ -1724,12 +1725,13 @@ let catAnimStart = 0; // Timestamp for fade cycle
 let playerXP = 0;
 let playerLevel = 1;
 let playerClass = null; // null | 'druid' | 'degen'
-let pendingSkillTreeLevel = null; // level to show tree at (null = none)
+
+let pendingSkillTreeLevel = null; // show tree at (null = none)
 let skillTreeActive = false;
 let skillTreeSelectedOption = 0; // 0 = Druid, 1 = Degen (only at lvl 3)
 
 const LEVEL_XP = [
-    0,     // lvl 1
+    0,  // lvl 1
     10, // 2
     25, // 3 → tree
     45,
@@ -2131,6 +2133,12 @@ frozenTypes.forEach(type => {
     assets[`frozen_${type}`][1].src = `frozen_${type}_2.png`;
     assets[`frozen_${type}`][2].src = `frozen_${type}_3.png`;
 });
+
+// Entangle animation overlay (3 frames)
+assets.entangleFrames = [new Image(), new Image(), new Image()];
+assets.entangleFrames[0].src = 'entangle_1.png';
+assets.entangleFrames[1].src = 'entangle_2.png';
+assets.entangleFrames[2].src = 'entangle_3.png';
 
 // Enemy background circles (16x16px animated)
 assets.enemyBg = [new Image(), new Image(), new Image()];
@@ -7836,6 +7844,9 @@ function applyEnsnare() {
     let nearest = null;
     let minDist = Infinity;
     inRangeEnemies.forEach(e => {
+        // Skip already frozen enemies — wisp freeze has priority
+        if (e.frozen) return;
+
         const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
         if (dist < minDist) {
             minDist = dist;
@@ -7844,8 +7855,18 @@ function applyEnsnare() {
     });
 
     if (nearest) {
-        nearest.frozen = true;
+	nearest.frozen = true;
         nearest.frozenTurns = 2;
+        nearest.frozenByEnsnare = true; // mark as frozen by Ensnare
+        
+        // Spawn 3-frame entangle animation overlay
+        entangleAnimations.push({
+            x: nearest.x,
+            y: nearest.y,
+            frameIndex: 0,
+            startTime: performance.now(),
+            enemyRef: nearest
+        });
         // Throttled message — once every 1 seconds
         const now = performance.now();
         if (now - lastMessageTime >= 1000) {
@@ -7853,14 +7874,6 @@ function applyEnsnare() {
             lastMessageTime = now;
         }
         playWebAudioSound(sounds.attack);
-
-        // Green square flash on entangled enemy
-        highlightTiles.push({
-            x: nearest.x,
-            y: nearest.y,
-            highlightStart: Date.now(),
-            color: 'rgba(81, 191, 73, 0.7)' // bright green
-        });
 
         needsRedraw = true;
     }
@@ -7900,6 +7913,7 @@ function applyWispAttack(wisp, primaryTarget) {
         // Cold = freeze (ignores shield, no damage, no mercy needed)
         primaryTarget.frozen = true;
         primaryTarget.frozenTurns = 2;
+        delete primaryTarget.frozenByEnsnare; // ensure wisp freeze shows frozen overlay
         
         // Throttled message — once every 1 second
         const now = performance.now();
@@ -7926,9 +7940,15 @@ function applyWispAttack(wisp, primaryTarget) {
             const dx = Math.abs(enemy.x - primaryTarget.x);
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if (dx <= 1 && dy <= 1) {
+                // Skip if already ensnared — Ensnare has lower priority
+                if (enemy.frozenByEnsnare) {
+                    affected = true; // still counts as affected for visuals/sound
+                } else {
                 enemy.frozen = true;
                 enemy.frozenTurns = 2;
-                affected = true;
+                delete enemy.frozenByEnsnare; // wisp freeze priority — show frozen overlay
+                    affected = true;
+                }
 
                 // Spawn drifting Frost Nova projectile toward this enemy
                 frostNovaProjectiles.push({
@@ -11324,6 +11344,7 @@ pendingSkillTreeLevel = null;
 skillTreeActive = false;
 
 rostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
+entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 
     lastMessageTime = 0;  
     redMazeSavedMuteState = null; 
@@ -11694,6 +11715,7 @@ if (wardenFlashStart > 0) {
         wardenFlashStart = 0;    
     }    
 }
+
     if (gameOver) {
         const gameOverCanvas = document.getElementById('game-over-canvas').getContext('2d');
         gameOverCanvas.clearRect(0, 0, 320, 320);
@@ -12588,16 +12610,16 @@ enemies.forEach(e => {
             enemyTempCtx.putImageData(imageData, 0, 0);
         }
 
-        // Frozen overlay — hides regular animation while frozen
-        if (currentEnemy.frozen && isVisible) {
+        // Frozen overlay — ONLY for wisp freeze (not Ensnare)
+        if (currentEnemy.frozen && !currentEnemy.frozenByEnsnare && isVisible) {
             const typeName = currentEnemy.type.name.toLowerCase();
             const frozenFrames = assets[`frozen_${typeName}`];
             if (frozenFrames && frozenFrames[0].complete) {
                 const frameIndex = Math.floor(performance.now() / 300) % 3;
-                enemyTempCtx.clearRect(0, 0, S, S); // hide underlying enemy sprite
+                enemyTempCtx.clearRect(0, 0, S, S);
                 enemyTempCtx.drawImage(frozenFrames[frameIndex], 0, 0, S, S);
             }
-        }        
+        }   
 
         // Pulsating red soulstorm circle under enraged huge shrimp
         if (e.isHuge && e.ragePulseStart) {
@@ -12756,8 +12778,18 @@ c.restore();
             c.drawImage(assets.frostNova[nova.frameIndex], nova.currentX, nova.currentY, S, S);
         }
     });
-    
+   
+// Draw entangle overlay ON TOP of enemies
+entangleAnimations.forEach(ent => {
+    if (assets.entangleFrames[ent.frameIndex].complete) {
+        c.save();
+        c.globalAlpha = 0.9;
+        c.drawImage(assets.entangleFrames[ent.frameIndex], ent.x * S, ent.y * S, S, S);
+        c.restore();
+    }
 });
+        
+}); // END OF DRAWING OF ENEMIES ETC ..
 
 // Draw fading dangerous spell areas after enemies
 drawFadingDangerousAreas();
@@ -13162,6 +13194,14 @@ frostNovaProjectiles = frostNovaProjectiles.filter(nova => {
     nova.currentY = nova.y * S + progress * (nova.targetY - nova.y * S);
     nova.frameIndex = Math.floor(elapsed / 200) % 3; // 200ms per frame
     return true;
+});
+
+// Update entangle animations
+entangleAnimations = entangleAnimations.filter(ent => {
+    const elapsed = performance.now() - ent.startTime;
+    const frameTime = 200; // 200ms per frame
+    ent.frameIndex = Math.min(2, Math.floor(elapsed / frameTime)); // 0→1→2, stop at 3rd frame
+    return elapsed < 600; // keep for 600ms total
 });
 
 updateRedMaze();
