@@ -2125,13 +2125,11 @@ assets.frostNova[0].src = 'wisp_nova1.png';
 assets.frostNova[1].src = 'wisp_nova2.png';
 assets.frostNova[2].src = 'wisp_nova3.png';
 
-// Frozen enemy overlays (3 frames each)
+// Frozen enemy overlays (1 frame)
 const frozenTypes = ['shrimp', 'crab', 'squid', 'dolphin', 'shark', 'whale'];
 frozenTypes.forEach(type => {
-    assets[`frozen_${type}`] = [new Image(), new Image(), new Image()];
+    assets[`frozen_${type}`] = [new Image()];
     assets[`frozen_${type}`][0].src = `frozen_${type}_1.png`;
-    assets[`frozen_${type}`][1].src = `frozen_${type}_2.png`;
-    assets[`frozen_${type}`][2].src = `frozen_${type}_3.png`;
 });
 
 // Entangle animation overlay (3 frames)
@@ -12610,16 +12608,17 @@ enemies.forEach(e => {
             enemyTempCtx.putImageData(imageData, 0, 0);
         }
 
-        // Frozen overlay — ONLY for wisp freeze (not Ensnare)
-        if (currentEnemy.frozen && !currentEnemy.frozenByEnsnare && isVisible) {
-            const typeName = currentEnemy.type.name.toLowerCase();
-            const frozenFrames = assets[`frozen_${typeName}`];
-            if (frozenFrames && frozenFrames[0].complete) {
-                const frameIndex = Math.floor(performance.now() / 300) % 3;
-                enemyTempCtx.clearRect(0, 0, S, S);
-                enemyTempCtx.drawImage(frozenFrames[frameIndex], 0, 0, S, S);
-            }
-        }   
+// Frozen overlay — ONLY for wisp freeze (not Ensnare)
+if (currentEnemy.frozen && !currentEnemy.frozenByEnsnare && isVisible) {
+    const typeName = currentEnemy.type.name.toLowerCase();
+    const frozenFrames = assets[`frozen_${typeName}`];
+
+    // Use only the first frame if it exists and is loaded
+    if (frozenFrames && frozenFrames[0].complete) {
+        enemyTempCtx.clearRect(0, 0, S, S);
+        enemyTempCtx.drawImage(frozenFrames[0], 0, 0, S, S);
+    }
+}
 
         // Pulsating red soulstorm circle under enraged huge shrimp
         if (e.isHuge && e.ragePulseStart) {
@@ -12660,10 +12659,9 @@ enemies.forEach(e => {
                                 
                                 // Wall impact flash
                                 if (crushTime > 300) {
-                                    const flashAlpha = (400 - crushTime) / 100;
-                                    c.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
+                                    c.fillStyle = `rgba(255, 0, 0, 0.5)`;
                                     // Bigger centered flash on wall tile
-                                    c.fillStyle = `rgba(255, 100, 0, ${flashAlpha})`;
+                                    c.fillStyle = `rgba(255, 0, 0, 0.5)`;
                                     c.fillRect(e.crushedToWall.targetX * S - S/2, e.crushedToWall.targetY * S - S/2, S*2, S*2);
                                 }
                             } else {
@@ -12673,58 +12671,7 @@ enemies.forEach(e => {
                                 if (e.hp <= 0) {
                                     enemies = enemies.filter(en => en !== e);
                                 }
-                            }
-                            
-                        // VAPORIZE DEATH for small shrimps on huge spawn
-                        if (e.vaporizeDeath && e.hp <= 0) {
-                            const deathTime = performance.now() - e.vaporizeDeath.startTime;
-                            if (deathTime < 600) {
-                                const progress = deathTime / 600;
-                                c.save();
-                                c.globalAlpha = 1 - progress;
-                                c.translate(e.currentX + S/2, e.currentY + S/2);
-                                c.scale(1 + progress * 3, 1 + progress * 3);
-                                c.globalAlpha = 0.8 * (1 - progress);
-                                c.drawImage(enemyTempCanvas, -S/2, -S/2, S, S);
-                                c.restore();
-                                
-                                // Green/purple glitch flash
-                                c.fillStyle = `rgba(${progress < 0.5 ? 0 : 255}, 255, ${progress < 0.5 ? 255 : 0}, ${0.7 * (1 - progress)})`;
-                                c.fillRect(e.currentX - S, e.currentY - S, S*3, S*3);
-                            } else {
-                                delete e.vaporizeDeath;
-                            }
-                        }
-                            
-                        }
-
-                        // Huge shrimp death explosion
-                        if (e.isHuge && e.hp <= 0 && e.deathTime) {
-                            const deathTime = performance.now() - e.deathTime;
-                            if (deathTime < 600) { // 600ms explosion
-                                const progress = deathTime / 600;
-                                c.save();
-                                c.globalAlpha = 1 - progress;
-                                // Expanding fade
-                                c.translate(e.currentX + S, e.currentY + S);
-                                c.scale(1 + progress * 2, 1 + progress * 2);
-                                c.drawImage(enemyTempCanvas, -S, -S, S*2, S*2);
-                                c.restore();
-                                
-                                // Massive orange shockwave flash
-                                const flashRadius = S * 2 * progress;
-                                c.save();
-                                c.globalAlpha = 0.7 * (1 - progress);
-                                c.fillStyle = 'rgba(255, 80, 0, 0.8)';
-                                c.beginPath();
-                                c.arc(e.currentX + S, e.currentY + S, flashRadius, 0, Math.PI * 2);
-                                c.fill();
-                                c.restore();
-                                
-                                needsRedraw = true;
-                            } else {
-                                delete e.deathTime; // cleanup
-                            }
+                            }                                                     
                         }
 
                         // SCOURGE HIT FLASH (bright orange-red)
@@ -12755,7 +12702,7 @@ c.restore();
 // Wisp hit flash on enemies (inside loop)
         if (e.wispHitFlash && Date.now() - e.wispHitFlash.time < 200) {
             c.save();
-            let flashColor = 'rgba(0, 232, 216, 0.5)'; // Default cyan (freeze)
+            let flashColor = 'rgba(0, 0, 0, 0)'; // Default no color (freeze)
             switch (e.wispHitFlash.type) {
                 case 'earth': flashColor = 'rgba(139, 69, 19, 0.6)'; // Brown quake
                     break;
@@ -12763,7 +12710,7 @@ c.restore();
                     break;
                 case 'fire': flashColor = 'rgba(103, 0, 0, 0.55)'; // Red fire bolt
                     break;
-                // cold/freeze stays cyan
+                // cold/freeze stays colorless
             }
             c.fillStyle = flashColor;
             c.fillRect(e.currentX, e.currentY, S, S);
