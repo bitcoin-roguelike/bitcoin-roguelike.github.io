@@ -1498,6 +1498,7 @@ let isFetchingTxs = false; // Track if fetchTxs is currently running
 let savedPauseState = null; // remembers pause button state before screensaver
 let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
+let shrimpBloodDrips = []; // {x, y, startTime}
 let activatedRunewords = [];
 let lastDrawTime = null;
 let frameCount = 0;  // Add this line
@@ -6183,7 +6184,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     // Spawn wisp on floor 3
     if (floor === 3 && wisps.length === 0) {
     
-        // DEBUG
+        // DEBUG wisp
         //const wispType = WISP_TYPES[0]; // COLD wisp (index 0), FIRE wisp (index 1) etc ..
         const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
         wisps.push({
@@ -7366,73 +7367,59 @@ updatePlayerState(); // Check HP and armor state after damage
             
     });
 
-    // DEBUG: Enraged Huge Shrimp summon - once per floor when 3+ shrimps exist
     if (!window.hugeShrimpSpawnedThisFloor && enemies.filter(e => e.type.name === 'Shrimp' && !e.isHuge).length >= 3 && currentTheme !== 'hell') {
-        // Find shrimp cluster center
+        // Find visible shrimp cluster center
         let clusterX = 0, clusterY = 0, shrimpCount = 0;
         enemies.forEach(e => {
-            if (e.type.name === 'Shrimp' && !e.isHuge && fogMap[e.y][e.x] === 1) { // visible only
-                clusterX += e.x; clusterY += e.y; shrimpCount++;
+            if (e.type.name === 'Shrimp' && !e.isHuge && fogMap[e.y][e.x] === 1) {
+                clusterX += e.x;
+                clusterY += e.y;
+                shrimpCount++;
             }
         });
+
         if (shrimpCount >= 3) {
             const hx = Math.floor(clusterX / shrimpCount);
             const hy = Math.floor(clusterY / shrimpCount);
-            
-            // Try 8 adjacent tiles for spawn
+
+            // Try 8 adjacent tiles for huge shrimp spawn
             const dirs = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]];
             for (let d of dirs) {
                 const tx = hx + d[0], ty = hy + d[1];
-                if (tx >= 0 && tx < W && ty >= 0 && ty < H && map[ty][tx] === 0 && 
+                if (tx >= 0 && tx < W && ty >= 0 && ty < H && map[ty][tx] === 0 &&
                     !enemies.some(e => e.x === tx && e.y === ty)) {
-                    
-                    // DRAMATIC CRUSH: Push 2 nearby shrimps into walls → explode
-                    const nearbyShrimps = enemies.filter(e => 
-                        e.type.name === 'Shrimp' && !e.isHuge && 
+
+                    // === WALL SLAM: Push up to 3 nearby shrimps into nearest wall ===
+                    const slamCandidates = enemies.filter(e =>
+                        e.type.name === 'Shrimp' && !e.isHuge &&
                         Math.abs(e.x - tx) <= 2 && Math.abs(e.y - ty) <= 2
-                    ).slice(0, 2);
-                    
-                    nearbyShrimps.forEach(shrimp => {
-                        // Find nearest wall to push into
-                        const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+                    ).slice(0, 3);
+
+                    slamCandidates.forEach(shrimp => {
+                        const wallDirs = [[0,-1],[0,1],[-1,0],[1,0]];
                         let pushX = shrimp.x, pushY = shrimp.y;
-                        for (let d of dirs) {
-                            const wallX = shrimp.x + d[0];
-                            const wallY = shrimp.y + d[1];
-                            if (wallX >= 0 && wallX < W && wallY >= 0 && wallY < H && map[wallY][wallX] === 1) {
-                                pushX = wallX; pushY = wallY;
+                        for (let wd of wallDirs) {
+                            const wx = shrimp.x + wd[0];
+                            const wy = shrimp.y + wd[1];
+                            if (wx >= 0 && wx < W && wy >= 0 && wy < H && map[wy][wx] === 1) {
+                                pushX = wx;
+                                pushY = wy;
                                 break;
                             }
                         }
-                        
-                        // Drop sats at original position
-                        // Safe drop: use real sats if available, else 1 sat
-                        // Safe drop: blockchain sats → real value, else use EnemyType reward (fallback 1 sat)
-                        const dropSats = (shrimp.sats !== undefined && Number.isFinite(shrimp.sats) && shrimp.sats > 0)
-                            ? shrimp.sats
-                            : (shrimp.type.reward > 0 ? shrimp.type.reward : 1);
-
-                        if (map[shrimp.y][shrimp.x] === 0) {
-                            map[shrimp.y][shrimp.x] = 3;
-                            satoshiDrops.push({x: shrimp.x, y: shrimp.y, sats: dropSats, type: shrimp.type.name});
-                        }
-
-                        // Also add to global run tracker (for game-over stats)
-                        satsEarned.Shrimp = (satsEarned.Shrimp || 0) + dropSats;
-                        
-                        // VISUAL: Mark shrimp for wall-crush death flash
+                        // Mark for dramatic wall-crush death
                         shrimp.crushedToWall = { targetX: pushX, targetY: pushY, startTime: performance.now() };
-                        shrimp.hp = 0; // Kill it
+                        shrimp.hp = 0;
                     });
-                    
-                    // SPAWN HUGE SHRIMP
+
+                    // === SPAWN HUGE SHRIMP ===
                     const huge = {
                         x: tx, y: ty,
                         currentX: tx * S, currentY: ty * S,
                         moving: false, stepsLeft: 0, deltaX: 0, deltaY: 0,
                         targetTileX: tx, targetTileY: ty,
-                            type: types[0],
-                            sats: 0, // Explicitly no blockchain value
+                        type: types[0],
+                        sats: 0, // No blockchain value
                         hp: cursedTraderType.hp,
                         atk: 2,
                         move: 2,
@@ -7440,8 +7427,6 @@ updatePlayerState(); // Check HP and armor state after damage
                         anim: {
                             frameIndex: 0,
                             lastFrameTime: performance.now()
-                            // No frames array needed — uses themed frames from type.anim
-                            // frameDuration handled in draw loop (same as others)
                         },
                         ragePulseStart: performance.now(),
                         lastRageScream: performance.now(),
@@ -7449,51 +7434,47 @@ updatePlayerState(); // Check HP and armor state after damage
                     };
                     enemies.push(huge);
 
-                    // VAPORIZE ALL nearby normal shrimps (not just 2) with obscene troll scream
-                    const vaporizeRange = 3; // tiles
-                    const vaporized = enemies.filter(en => 
+                    // === VAPORIZE ALL nearby normal shrimps (range 3) ===
+                    const vaporizeRange = 3;
+                    const vaporized = enemies.filter(en =>
                         en.type.name === 'Shrimp' && !en.isHuge &&
                         Math.abs(en.x - tx) <= vaporizeRange && Math.abs(en.y - ty) <= vaporizeRange
                     );
 
                     vaporized.forEach(shrimp => {
-                        // Drop sats
-                        if (map[shrimp.y][shrimp.x] === 0) {
-                            map[shrimp.y][shrimp.x] = 3;
-                            satoshiDrops.push({x: shrimp.x, y: shrimp.y, sats: shrimp.sats, type: shrimp.type.name});
-                        }
-                        // Mark for vaporize death animation
+                        // NO SATS DROP EVER
+                        // Just mark for vaporize death animation
                         shrimp.vaporizeDeath = { startTime: performance.now() };
                         shrimp.hp = 0;
                     });
 
-                    // Dramatic wall break: exploding shrimps crack nearby walls (not outer limits)
+                    // Blood drip effect on vaporized shrimp floor tiles
                     vaporized.forEach(shrimp => {
-                        const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
-                        dirs.forEach(dir => {
-                            const wallX = shrimp.x + dir[0];
-                            const wallY = shrimp.y + dir[1];
-                            // Only break inner walls (not map edges)
-                            if (wallX > 0 && wallX < W-1 && wallY > 0 && wallY < H-1 && map[wallY][wallX] === 1) {
-                                map[wallY][wallX] = 0; // Crack wall → floor
-                                // Visual crack flash
-                                highlightTiles.push({
-                                    x: wallX, y: wallY,
-                                    highlightStart: Date.now(),
-                                    color: 'rgba(255,100,0,0.8)'
-                                });
+                        shrimpBloodDrips.push({
+                            x: shrimp.x,
+                            y: shrimp.y,
+                            startTime: performance.now()
+                        });
+                    });
+
+                    // === WALL BREAK: Vaporized shrimps crack nearby inner walls ===
+                    vaporized.forEach(shrimp => {
+                        const wallDirs = [[0,-1],[0,1],[-1,0],[1,0]];
+                        wallDirs.forEach(dir => {
+                            const wx = shrimp.x + dir[0];
+                            const wy = shrimp.y + dir[1];
+                            if (wx > 0 && wx < W-1 && wy > 0 && wy < H-1 && map[wy][wx] === 1) {
+                                map[wy][wx] = 0; // Crack → floor
                             }
                         });
                     });
 
-                    // Play the most obscene, rage-infused troll scream possible
+                    // Epic scream + log
                     playShrimpTrollDeathScream();
-
                     window.hugeShrimpSpawnedThisFloor = true;
                     logBattleEvent(`MASS SHRIMP FUSION! ALL NEARBY SHRIMPS VAPORIZED IN RAGE!`);
                     needsRedraw = true;
-                    needsRedraw = true;
-                    break;
+                    break; // Only spawn one huge shrimp per trigger
                 }
             }
         }
@@ -12165,6 +12146,46 @@ if (currentTheme === 'ruins') {
     floorSplashes = floorSplashes.filter(s => Date.now() - s.start < 450);
 }
 
+
+// Bitcoin orange-ish splat from a vaporised shrimp – bright 16×16 px square
+// Duration: 4 s (unchanged)
+const splatDuration = 4000;
+
+shrimpBloodDrips = shrimpBloodDrips.filter(drip => {
+    const age = performance.now() - drip.startTime;
+    if (age > splatDuration) return false;
+
+    const progress = age / splatDuration;          // 0 → 1
+    const maxSize = 16;                            // final side length
+    const curSize = maxSize * progress;            // grow from 0 to 16 px
+
+    // Tile centre (pixel coordinates)
+    const tileX = drip.x * S;
+    const tileY = drip.y * S;
+    const cx    = tileX + S / 2;
+    const cy    = tileY + S / 2;
+
+    const half = curSize / 2;
+    const left = cx - half;
+    const top  = cy - half;
+
+    // ---- Opacity (half the previous transparency) ----
+    // Centre now almost fully opaque (≈0.95) and the whole splat fades more slowly.
+    const grad = c.createRadialGradient(cx, cy, 0, cx, cy, half);
+    grad.addColorStop(0, 'rgba(255,150,0,0.95)');   // bitcoin orange
+    grad.addColorStop(1, 'rgba(255,140,0,0.1)');      // almost fully transparent at edge
+
+    c.save();
+    // Global fade reduced to half of the previous value
+    c.globalAlpha = 0.95 * (1 - progress);
+    c.fillStyle = grad;
+    c.fillRect(left, top, curSize, curSize);
+    c.restore();
+
+    return true;
+});
+
+
     // Draw projectiles – enemy bits use bit_spear.png, player sword uses shoot_sword.png
     projectiles.forEach(proj => {
         if (proj.x >= 0 && proj.x < W && proj.y >= 0 && proj.y < H &&
@@ -12641,14 +12662,14 @@ if (currentEnemy.frozen && !currentEnemy.frozenByEnsnare && isVisible) {
                             c.drawImage(enemyTempCanvas, e.currentX, e.currentY, S, S);                            
                         }
 
-                        // DRAMATIC WALL-CRUSH DEATH — show even if already dead
+                        // DRAMATIC WALL‑CRUSH DEATH — show even if already dead
                         if (!e.isHuge && e.crushedToWall) {
                             const crushTime = performance.now() - e.crushedToWall.startTime;
-                            if (crushTime < 400) { // 400ms death animation
-                                const progress = crushTime / 400;
+                            if (crushTime < 600) { // 600 ms death animation
+                                const progress = crushTime / 600;
                                 const crushX = e.x * S + (e.crushedToWall.targetX - e.x) * S * progress;
                                 const crushY = e.y * S + (e.crushedToWall.targetY - e.y) * S * progress;
-                                
+
                                 // Slide to wall
                                 c.save();
                                 c.translate(crushX, crushY);
@@ -12656,23 +12677,47 @@ if (currentEnemy.frozen && !currentEnemy.frozenByEnsnare && isVisible) {
                                 c.scale(1 + progress * 0.5, 1 + progress * 0.5); // explode scale
                                 c.drawImage(enemyTempCanvas, -S/2, -S/2, S, S);
                                 c.restore();
-                                
-                                // Wall impact flash
-                                if (crushTime > 300) {
-                                    c.fillStyle = `rgba(255, 0, 0, 0.5)`;
-                                    // Bigger centered flash on wall tile
-                                    c.fillStyle = `rgba(255, 0, 0, 0.5)`;
-                                    c.fillRect(e.crushedToWall.targetX * S - S/2, e.crushedToWall.targetY * S - S/2, S*2, S*2);
-                                }
+
                             } else {
                                 // Animation done → clean up and let normal death removal handle it
                                 delete e.crushedToWall;
-                                // Optional: force removal if somehow still alive (safety)
                                 if (e.hp <= 0) {
                                     enemies = enemies.filter(en => en !== e);
                                 }
-                            }                                                     
+                            }
                         }
+
+// Huge shrimp death explosion – Bitcoin orange-ish splash
+if (e.isHuge && e.hp <= 0 && e.deathTime) {
+    const deathTime = performance.now() - e.deathTime;
+    if (deathTime < 400) {                     // 400 ms total
+        const progress = deathTime / 400;
+
+        // Shrimp sprite fades and expands
+        c.save();
+        c.globalAlpha = 1 - progress;
+        c.translate(e.currentX + S, e.currentY + S);
+        c.scale(1 + progress * 2, 1 + progress * 2);
+        c.drawImage(enemyTempCanvas, -S, -S, S * 2, S * 2);
+        c.restore();
+
+        // ----- Blood splash -----
+        const splashRadius = S * 2 * progress;          // grows with progress
+        c.save();
+        // Fade out as it expands
+        c.globalAlpha = 0.8 * (1 - progress);
+
+        c.fillStyle = 'rgba(255, 140, 0, 0.9)';            // Bitcoin orange-ish
+        c.beginPath();
+        c.arc(e.currentX + S, e.currentY + S, splashRadius, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+
+        needsRedraw = true;
+    } else {
+        delete e.deathTime; // cleanup after animation finishes
+    }
+}
 
                         // SCOURGE HIT FLASH (bright orange-red)
                         if (e.scourgeHit && Date.now() - e.scourgeHit < 200) {
