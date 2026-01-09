@@ -1499,6 +1499,7 @@ let savedPauseState = null; // remembers pause button state before screensaver
 let currentRuneTile = null; // Track current rune tile position
 let highlightTiles = [];
 let shrimpBloodDrips = []; // {x, y, startTime}
+
 let activatedRunewords = [];
 let lastDrawTime = null;
 let frameCount = 0;  // Add this line
@@ -2044,6 +2045,8 @@ Object.values(assets).forEach(asset => {
 	assets.themes.hideout.floor.src = 'town_floor.png';
 	assets.themes.hideout.wall.src = 'town_wall.png';
 	assets.themes.hideout.diamond_wall.src = 'diamond_wall.png';
+	assets.smelter = new Image();
+        assets.smelter.src = 'smelter.png';
 	assets.soul_orb_statue.src = 'soul_orb_statue.png';
 	assets.shrine.src = 'shrine.png';
 
@@ -2218,6 +2221,15 @@ assets.coolROI.src = 'Cool_ROI.png';
 assets.coolROI.onerror = () => console.error('Failed to load Cool_ROI.png');
 
 assets.coolROI.src = 'Cool_ROI.png';
+
+assets.um_poisonCloud = new Image();
+assets.um_poisonCloud.src = 'um_p-cloud.png';
+assets.um_frostNova = new Image();
+assets.um_frostNova.src = 'um_f-nova.png';
+assets.um_lightningStorm = new Image();
+assets.um_lightningStorm.src = 'um_l-storm.png';
+assets.um_fireWall = new Image();
+assets.um_fireWall.src = 'um_f-wall.png';
 	
 assets.guiHP = new Image();
 assets.guiHP.src = 'GUI-HP.png';
@@ -2714,12 +2726,14 @@ function playThrowSpear() {
 
 /* ---------- AUDIO ---------- */
 function playScourgeSpin() {
-    if (musicMuted || soundVolume === 0) return;
+    if (soundVolume === 0) return; // Respect sound volume setting (no music check)
 
-if (audioContext.state === 'suspended') {
-    audioContext.resume().catch(e => console.error('Failed to resume AudioContext for scourge spin:', e));
-}
-const now = audioContext.currentTime;
+    // Resume AudioContext if needed
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error('Failed to resume AudioContext for scourge spin:', e));
+    }
+
+    const now = audioContext.currentTime;
 
     // Master gain – louder epic
     const master = audioContext.createGain();
@@ -2731,17 +2745,14 @@ const now = audioContext.currentTime;
     whoosh.type = 'triangle';
     whoosh.frequency.setValueAtTime(300, now);
     whoosh.frequency.exponentialRampToValueAtTime(30, now + 0.5);
-
     const whooshFilter = audioContext.createBiquadFilter();
     whooshFilter.type = 'highpass';
     whooshFilter.frequency.setValueAtTime(200, now);
     whooshFilter.frequency.exponentialRampToValueAtTime(800, now + 0.5);
-
     const whooshGain = audioContext.createGain();
     whooshGain.gain.setValueAtTime(0, now);
     whooshGain.gain.linearRampToValueAtTime(1.2, now + 0.03);
     whooshGain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
-
     whoosh.connect(whooshFilter).connect(whooshGain).connect(master);
     whoosh.start(now);
     whoosh.stop(now + 0.55);
@@ -2749,17 +2760,14 @@ const now = audioContext.currentTime;
     // 2. Four heavy THUNK impacts (cleaner)
     for (let i = 0; i < 4; i++) {
         const t = now + i * 0.09;
-
         // Deep punch – sine
         const thud = audioContext.createOscillator();
         thud.type = 'sine';
         thud.frequency.setValueAtTime(120, t);
         thud.frequency.exponentialRampToValueAtTime(40, t + 0.15);
-
         const thudGain = audioContext.createGain();
         thudGain.gain.setValueAtTime(1.0, t);
         thudGain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
-
         thud.connect(thudGain).connect(master);
         thud.start(t);
         thud.stop(t + 0.18);
@@ -2769,25 +2777,20 @@ const now = audioContext.currentTime;
         clang.type = 'square';
         clang.frequency.setValueAtTime(380 + i * 90, t);
         clang.frequency.exponentialRampToValueAtTime(120, t + 0.08);
-
         const clang2 = audioContext.createOscillator();
         clang2.type = 'square';
         clang2.frequency.setValueAtTime((380 + i * 90) * 1.5 + 5, t);
         clang2.frequency.exponentialRampToValueAtTime(180, t + 0.08);
-
         const clangGain = audioContext.createGain();
         clangGain.gain.setValueAtTime(0.45, t);
         clangGain.gain.exponentialRampToValueAtTime(0.02, t + 0.12);
-
         const clangFilter = audioContext.createBiquadFilter();
         clangFilter.type = 'bandpass';
         clangFilter.frequency.value = 900;
         clangFilter.Q.value = 10;
-
         clang.connect(clangFilter);
         clang2.connect(clangFilter);
         clangFilter.connect(clangGain).connect(master);
-
         clang.start(t);
         clang2.start(t);
         clang.stop(t + 0.12);
@@ -3580,7 +3583,7 @@ function initMap() {
             initialSpawnDoneThisFloor = false;
             initialWaveSpawned = false;
             map = Array(H).fill().map(() => Array(W).fill(1));
-            fogMap = Array(H).fill().map(() => Array(W).fill(0));
+            fogMap = Array(H).fill().map(() => Array(W).fill(1));  // Full visibility in hideout – no fog
             rooms = [];
             satoshiDrops = [];
             runeDrops = runeDrops.filter(r => !r.specific);
@@ -3642,6 +3645,7 @@ function initMap() {
             }
 
             jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+
             const diamondWallTiles = [
                 {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
                 {x: mainRoomX + 2, y: mainRoomY + 3}, {x: mainRoomX + 4, y: mainRoomY + 3},
@@ -3654,24 +3658,37 @@ function initMap() {
             });
             map[jewellerPos.y][jewellerPos.x] = 14;
 
-            // Place blacksmith at a fixed position in the left room
+            // Place blacksmith
             const blacksmithX = leftRoomX + 4;
-            const blacksmithY = leftRoomY + 2;
+            const blacksmithY = leftRoomY + 1;
             if (map[blacksmithY][blacksmithX] === 0) {
                 map[blacksmithY][blacksmithX] = 15; // Blacksmith
                 blacksmithPos = { x: blacksmithX, y: blacksmithY };
 
-                // Place swap.png just two tiles below the blacksmith
-                const swapX = blacksmithX;
-                const swapY = blacksmithY + 2; // Two tiles below
-                if (map[swapY][swapX] === 0) {
-                    map[swapY][swapX] = 29; // Swap tile
+                // Place smelter 2 tiles below blacksmith
+                const smelterX = blacksmithX;
+                const smelterY = blacksmithY + 2;
+                if (smelterY < H && map[smelterY][smelterX] === 0) {
+                    map[smelterY][smelterX] = 31; // Smelter tile ID
                 } else {
-                    console.warn('Failed to place swap.png: tile occupied at', swapX, swapY);
+                    console.warn('Failed to place smelter: occupied or out of bounds at', smelterX, smelterY);
                 }
             } else {
                 console.warn('Failed to place blacksmith: tile occupied at', blacksmithX, blacksmithY);
             }
+
+            // Place swap 4 tiles below blacksmith
+            const swapX = blacksmithX;
+            const swapY = blacksmithY + 4;
+            if (swapY >= 0 && map[swapY][swapX] === 0) {
+                map[swapY][swapX] = 29; // Swap tile
+            } else {
+                console.warn('Failed to place swap tile: occupied or out of bounds at', swapX, swapY);
+            }
+
+            // Place jeweller (unchanged)
+            jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+            map[jewellerPos.y][jewellerPos.x] = 14;
 
             // Place waypoint at a fixed position in the right room
             const waypointX = rightRoomX + 3;
@@ -4155,11 +4172,7 @@ catVisible = false;
 catAnimStart = 0;
 
 // 5% chance black cat spawn (once per floor) — NEVER in hideout, puzzle rooms, or Glitch Zone
-if (!inHideout && 
-    !inPuzzleRoom && 
-    currentTheme !== 'hideout' && 
-    puzzleStaticCanvas === null && 
-    Math.random() < 0.05) {
+if (!inHideout && !inPuzzleRoom && puzzleStaticCanvas === null && Math.random() < 0.05) {
     let attempts = 50;
     do {
         const x = Math.floor(Math.random() * W);
@@ -5400,6 +5413,18 @@ if (p.shrineCharges > 0) {
     updatePlayerState();  // Call every 2 moves (shrine tick) to check aura too
 }
 
+if (map[ny][nx] === 31 && inHideout) { // Smelter tile
+    if (p.hasDiamondHand) {
+        p.hasDiamondHand = false;
+        p.perfectlyCutDiamonds++;
+        logBattleEvent(`Floor ${floor} - Diamond Hand smelted into a Perfectly Cut Diamond!`);
+        playWebAudioSound(sounds.secret); // or a custom smelter sound
+        updatePlayerState();
+    } else {
+        logBattleEvent(`Smelter: Bring a Diamond Hand to smelt!`);
+    }
+}
+
     // === VALIDATE MOVE + BOULDER PUSHING (L2 style) ===
     if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
         p.anim.direction = newDirection;
@@ -5582,11 +5607,8 @@ p.anim.direction = newDirection;
 
 
 
-        // Apply spell damage when moving onto dangerous areas
-        applySpellDamage(p.x, p.y);
-
-        // Standing still on a dangerous tile still hurts!
-        if (dangerousAreas.some(area => area.x === p.x && area.y === p.y)) {
+        // Apply spell damage when standing or moving onto a spell effect tile
+        if (dangerousAreas.some(effect => effect.x === p.x && effect.y === p.y)) {
             applySpellDamage(p.x, p.y);
         }
         
@@ -7391,7 +7413,7 @@ updatePlayerState(); // Check HP and armor state after damage
 
                     // === WALL SLAM: Push up to 3 nearby shrimps into nearest wall ===
                     const slamCandidates = enemies.filter(e =>
-                        e.type.name === 'Shrimp' && !e.isHuge &&
+                        e.type.name === 'Shrimp' && !e.isHuge && !e.uniqueName &&  // exclude uniques
                         Math.abs(e.x - tx) <= 2 && Math.abs(e.y - ty) <= 2
                     ).slice(0, 3);
 
@@ -7437,7 +7459,7 @@ updatePlayerState(); // Check HP and armor state after damage
                     // === VAPORIZE ALL nearby normal shrimps (range 3) ===
                     const vaporizeRange = 3;
                     const vaporized = enemies.filter(en =>
-                        en.type.name === 'Shrimp' && !en.isHuge &&
+                        en.type.name === 'Shrimp' && !en.isHuge && !en.uniqueName &&
                         Math.abs(en.x - tx) <= vaporizeRange && Math.abs(en.y - ty) <= vaporizeRange
                     );
 
@@ -7491,6 +7513,10 @@ if (!inPuzzleRoom && enemies.length === 0 && !exit && waveActive && !p.ripBlast 
         waveActive = false;
         document.getElementById('wave').textContent = wave;
         logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
+
+        // Reveal entire floor when wave cleared (player sees stairs + map)
+        fogMap = Array(H).fill().map(() => Array(W).fill(1));
+        needsRedraw = true;
     } else {
         logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
     }
@@ -8011,34 +8037,36 @@ function applyWispAttack(wisp, primaryTarget) {
     needsRedraw = true;
 }
 
-// Function to apply spell damage to player
 function applySpellDamage(x, y) {
-    const dangerousArea = dangerousAreas.find(area => area.x === x && area.y === y);
-    if (dangerousArea) {
-        let damage = 0;
-        let damageType = "";
-        switch (dangerousArea.spellType) {
-            case SPELL_TYPES.FIRE_WALL:
-                damage = 2;
-                damageType = "Fire";
-                break;
-            case SPELL_TYPES.LIGHTNING_STORM:
-                damage = 1;
-                damageType = "Lightning";
-                break;
-            case SPELL_TYPES.FROST_NOVA:
-                damage = 2;
-                damageType = "Frost";
-                break;
-            case SPELL_TYPES.POISON_CLOUD:
-                damage = 1;
-                damageType = "Poison";
-                break;
-        }
-        if (p.elementImmunity === damageType || p.armorImmunity === damageType) {
-            logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
-        } else {
-            p.hp -= damage;
+    const effect = dangerousAreas.find(e => e.x === x && e.y === y);
+    if (!effect) return;
+
+    let damage = 0;
+    let damageType = "";
+
+    switch (effect.spellType) {
+        case SPELL_TYPES.FIRE_WALL:
+            damage = 2;
+            damageType = "Fire";
+            break;
+        case SPELL_TYPES.LIGHTNING_STORM:
+            damage = 1;
+            damageType = "Lightning";
+            break;
+        case SPELL_TYPES.FROST_NOVA:
+            damage = 2;
+            damageType = "Frost";
+            break;
+        case SPELL_TYPES.POISON_CLOUD:
+            damage = 1;
+            damageType = "Poison";
+            break;
+    }
+
+    if (p.elementImmunity === damageType || p.armorImmunity === damageType) {
+        logBattleEvent(`Floor ${floor} - Immune to ${damageType} spell! No damage taken.`);
+    } else {
+        p.hp -= damage;
         // 20% chance to paralyze wisp on spell damage
         if (wisps.length > 0 && Math.random() < 0.20) {
             const wisp = wisps[0];
@@ -8046,19 +8074,19 @@ function applySpellDamage(x, y) {
             wisp.paralyzedTurns = 2;
             logBattleEvent(`Floor ${floor} - Spell paralyzes your wisp!`);
         }
-            // Throttled spell log (every 1 second max)
-            if (Date.now() - (window.lastSpellLogTime || 0) > 1000) {
-                logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
-                window.lastSpellLogTime = Date.now();
-            }
-            // Throttled sound (every 1 second max)
-            if (Date.now() - (window.lastSpellSoundTime || 0) > 1000) {
-                playWebAudioSound(sounds.hit);
-                window.lastSpellSoundTime = Date.now();
-            }
+        // Throttled spell log (every 1 second max)
+        if (Date.now() - (window.lastSpellLogTime || 0) > 1000) {
+            logBattleEvent(`Floor ${floor} - ${damageType} spell damage! ${damage} DMG`);
+            window.lastSpellLogTime = Date.now();
         }
-        updatePlayerState(); // Centralized: surge if eligible, no early gameOver
+        // Throttled sound (every 1 second max)
+        if (Date.now() - (window.lastSpellSoundTime || 0) > 1000) {
+            playWebAudioSound(sounds.hit);
+            window.lastSpellSoundTime = Date.now();
+        }
     }
+
+    updatePlayerState(); // Centralized: surge if eligible, no early gameOver
 }
 
 // Fixed updateProjectiles – pure cardinal movement, spears always destroy on player hit, no laying on ground
@@ -8662,12 +8690,12 @@ function handleUniqueMonsterReward(hit) {
         }
     }
     
-    // Tag all areas with this monster's death timestamp for global fadeout/removal
+    // Tag spell areas for fade-out when unique monster dies (no conflict with breathing/fade-in)
     if (hit.uniqueName && hit.spell) {
         const deathTime = Date.now();
         dangerousAreas.forEach(area => {
-            if (area.spellType === hit.spell) {
-                area.deathTime = deathTime; // Tag for fadeout
+            if (area.spellType === hit.spell && !area.deathTime) {
+                area.deathTime = deathTime; // start smooth fade-out
             }
         });
     }
@@ -8730,59 +8758,6 @@ function assignUniqueMonsterSpell(enemy) {
     return spell;
 }
 
-// Enhanced draw for fading dangerous areas based on deathTime
-function drawFadingDangerousAreas() {
-    dangerousAreas.forEach(area => {
-        const dist = Math.sqrt((area.x - p.x) ** 2 + (area.y - p.y) ** 2);
-        const isVisible = fogMap[area.y][area.x] === 1 || dist <= 4;
-        if (!isVisible) return; // Skip fog-hidden areas
-        
-        let spellAlpha = 0.5;
-        let spellColor = 'rgba(255, 255, 255, 0.5)';
-        
-        // Fade if tagged with deathTime
-        if (area.deathTime) {
-            const elapsed = Date.now() - area.deathTime;
-            const fadeDuration = 5000;
-            const progress = Math.min(elapsed / fadeDuration, 1);
-            spellAlpha *= (1 - progress);
-            
-            // Set color based on spell
-            switch (area.spellType) {
-                case SPELL_TYPES.FIRE_WALL: spellColor = `rgba(255, 0, 0, ${spellAlpha})`; break;
-                case SPELL_TYPES.LIGHTNING_STORM: spellColor = `rgba(255, 255, 0, ${spellAlpha})`; break;
-                case SPELL_TYPES.FROST_NOVA: spellColor = `rgba(0, 255, 255, ${spellAlpha})`; break;
-                case SPELL_TYPES.POISON_CLOUD: spellColor = `rgba(0, 255, 0, ${spellAlpha})`; break;
-            }
-        } else {
-            // Non-fading areas
-            switch (area.spellType) {
-                case SPELL_TYPES.FIRE_WALL: spellColor = 'rgba(255, 0, 0, 0.5)'; break;
-                case SPELL_TYPES.LIGHTNING_STORM: spellColor = 'rgba(255, 255, 0, 0.5)'; break;
-                case SPELL_TYPES.FROST_NOVA: spellColor = 'rgba(0, 255, 255, 0.5)'; break;
-                case SPELL_TYPES.POISON_CLOUD: spellColor = 'rgba(0, 255, 0, 0.5)'; break;
-            }
-        }
-        
-        c.save();
-        c.fillStyle = spellColor;
-        c.fillRect(area.x * S, area.y * S, S, S);
-        c.restore();
-    });
-
-    // Continuous cleanup: remove fully faded areas
-    const now = Date.now();
-    dangerousAreas = dangerousAreas.filter(area => {
-        if (area.deathTime) {
-            const elapsed = now - area.deathTime;
-            return elapsed < 2000;  // Remove after 2s
-        }
-        return true;
-    });
-
-    if (needsRedraw) needsRedraw = true;  // Ensure redraw if cleaned
-}
-
 // Modified attack function with Hell Shrimp rune drop rate changed to 20%
 function attack() {
     if (gameOver || splashActive) return;
@@ -8822,63 +8797,56 @@ if (hit) {
         //logBattleEvent(`Floor ${floor} - ${hit.uniqueName} casts ${spellEffect}!`);
         
         // Create the spell effect area around the enemy position
+        // Create spell effect areas (now handled by animated assets)
         switch (spellEffect) {
             case SPELL_TYPES.FIRE_WALL:
-                // Create fire wall in a 3x3 area centered on the enemy
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         const x = hit.x + dx;
                         const y = hit.y + dy;
-                        if (x >= 0 && x < W && y >= 0 && y < H) {
-                            // Only create the spell area if it's not already a wall or another spell area
-                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
-                                createDangerousArea(x, y, spellEffect);
-                            }
+                        if (x >= 0 && x < W && y >= 0 && y < H &&
+                            map[y][x] !== 1 &&
+                            !dangerousAreas.some(e => e.x === x && e.y === y)) {
+                            createDangerousArea(x, y, spellEffect);
                         }
                     }
                 }
                 break;
             case SPELL_TYPES.LIGHTNING_STORM:
-                // Create lightning storm in a 5x5 area centered on the enemy
                 for (let dx = -2; dx <= 2; dx++) {
                     for (let dy = -2; dy <= 2; dy++) {
                         const x = hit.x + dx;
                         const y = hit.y + dy;
-                        if (x >= 0 && x < W && y >= 0 && y < H) {
-                            // Only create the spell area if it's not already a wall or another spell area
-                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
-                                createDangerousArea(x, y, spellEffect);
-                            }
+                        if (x >= 0 && x < W && y >= 0 && y < H &&
+                            map[y][x] !== 1 &&
+                            !dangerousAreas.some(e => e.x === x && e.y === y)) {
+                            createDangerousArea(x, y, spellEffect);
                         }
                     }
                 }
                 break;
             case SPELL_TYPES.FROST_NOVA:
-                // Create frost nova in a 3x3 area centered on the enemy
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         const x = hit.x + dx;
                         const y = hit.y + dy;
-                        if (x >= 0 && x < W && y >= 0 && y < H) {
-                            // Only create the spell area if it's not already a wall or another spell area
-                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
-                                createDangerousArea(x, y, spellEffect);
-                            }
+                        if (x >= 0 && x < W && y >= 0 && y < H &&
+                            map[y][x] !== 1 &&
+                            !dangerousAreas.some(e => e.x === x && e.y === y)) {
+                            createDangerousArea(x, y, spellEffect);
                         }
                     }
                 }
                 break;
             case SPELL_TYPES.POISON_CLOUD:
-                // Create poison cloud in a 5x5 area centered on the enemy
                 for (let dx = -2; dx <= 2; dx++) {
                     for (let dy = -2; dy <= 2; dy++) {
                         const x = hit.x + dx;
                         const y = hit.y + dy;
-                        if (x >= 0 && x < W && y >= 0 && y < H) {
-                            // Only create the spell area if it's not already a wall or another spell area
-                            if (map[y][x] !== 1 && !dangerousAreas.some(area => area.x === x && area.y === y)) {
-                                createDangerousArea(x, y, spellEffect);
-                            }
+                        if (x >= 0 && x < W && y >= 0 && y < H &&
+                            map[y][x] !== 1 &&
+                            !dangerousAreas.some(e => e.x === x && e.y === y)) {
+                            createDangerousArea(x, y, spellEffect);
                         }
                     }
                 }
@@ -10373,25 +10341,12 @@ function handleBlurredTerminalInput(key) {
 
 // Function to create dangerous spell area (called when unique monster uses a spell)
 function createDangerousArea(x, y, spellType) {
-    // Add the dangerous area to the array
     dangerousAreas.push({
         x: x,
         y: y,
-        spellType: spellType
+        spellType: spellType,
+        startTime: Date.now()  // For pulse animation
     });
-    
-    // Draw immediate visual feedback
-    needsRedraw = true;
-}
-
-// Function to remove dangerous areas when a unique monster dies
-function removeDangerousAreas(monster) {
-    if (!monster.uniqueName || !monster.spell) return;
-    
-    // Remove all dangerous areas that match this spell type
-    dangerousAreas = dangerousAreas.filter(area => area.spellType !== monster.spell);
-    
-    // Redraw to reflect changes
     needsRedraw = true;
 }
 
@@ -11262,6 +11217,25 @@ function restart() {
 
     // Reset fetch flag
     isFetchingTxs = false;
+
+    // Reset skill tree system
+    playerXP = 0;
+    playerLevel = 1;
+    playerClass = null;
+    pendingSkillTreeLevel = null;
+    skillTreeActive = false;
+    skillTreeSelectedOption = 0;
+
+    // Hide and clear skill tree overlay
+    const overlay = document.getElementById('skill-tree-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.classList.remove('visible');
+    }
+    const content = document.getElementById('skill-tree-content');
+    if (content) content.innerHTML = '';
+
+    updateXPBar();
     
     /* ------------------------------------------------------------------
        2. Reset all game state variables
@@ -11313,16 +11287,6 @@ farmSpot = null;
 p.farmLocked = false;
 p.farmLockedFloor = 0;
 p.farmLockedSats = 0;
-
-
-// Skill tree system
-let playerXP = 0;
-let playerLevel = 1;
-updateXPBar();
-let playerClass = null; // null | 'druid' | 'degen'
-let pendingSkillTreeLevel = null; // show tree at (null = none)
-let skillTreeActive = false;
-let skillTreeSelectedOption = 0; // 0 = Druid, 1 = Degen (only at lvl 3)
 
 rostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
 entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
@@ -11789,49 +11753,79 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
     if (isVisible && map[y][x] !== 1) {
 
-// Draw floor — snowy hell only when BOTH in hell theme AND snowy block is active
-if (currentTheme === 'hell' && snowyHellActive) {
-    c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
-} else {
-    c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
-    
-if (redMazeActive) {
-    // Red walls
-c.fillStyle = 'rgba(255,0,0,0.18)'; // much more transparent
+        // Draw floor — snowy hell only when BOTH in hell theme AND snowy block is active
+        if (currentTheme === 'hell' && snowyHellActive) {
+            c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
+        } else {
+            c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+        }
 
-    // Draw the eye
-    if (redMaze) {
-        c.drawImage(assets.red_maze, redMaze.x * S, redMaze.y * S, S, S);
+        if (redMazeActive && redMaze && redMaze.x === x && redMaze.y === y) {
+            c.drawImage(assets.red_maze, x * S, y * S, S, S);
+        }
+
+
+// ── Draw unique monster spell effects – breathing only, floor stays static ──
+const now = Date.now();
+const FADE_DURATION = 1000;   // ms – length of the fade‑out
+const BREATH_PERIOD = 3000;   // ms – breathing loop length
+
+dangerousAreas.forEach(area => {
+    // only draw the tile we are currently processing
+    if (area.x !== x || area.y !== y) return;
+
+    // ---------- pick the correct spell image ----------
+    let img;
+    switch (area.spellType) {
+        case SPELL_TYPES.POISON_CLOUD:    img = assets.um_poisonCloud;    break;
+        case SPELL_TYPES.FROST_NOVA:      img = assets.um_frostNova;      break;
+        case SPELL_TYPES.LIGHTNING_STORM: img = assets.um_lightningStorm; break;
+        case SPELL_TYPES.FIRE_WALL:       img = assets.um_fireWall;       break;
+        default: return;
     }
-}
-    
-}
-        
-        // Draw dangerous areas (spells) before other items
-        dangerousAreas.forEach(area => {
-            if (area.x === x && area.y === y) {
-                let spellColor = 'rgba(255, 255, 255, 0.5)';
-                switch (area.spellType) {
-                    case SPELL_TYPES.FIRE_WALL:
-                        spellColor = 'rgba(255, 0, 0, 0.5)'; // Red for fire
-                        break;
-                    case SPELL_TYPES.LIGHTNING_STORM:
-                        spellColor = 'rgba(255, 255, 0, 0.5)'; // Yellow for lightning
-                        break;
-                    case SPELL_TYPES.FROST_NOVA:
-                        spellColor = 'rgba(0, 255, 255, 0.5)'; // Cyan for frost
-                        break;
-                    case SPELL_TYPES.POISON_CLOUD:
-                        spellColor = 'rgba(0, 255, 0, 0.5)'; // Green for poison
-                        break;
-                }
-                c.fillStyle = spellColor;
-                c.globalAlpha = 0.5;
-                c.fillRect(x * S, y * S, S, S);
-                c.globalAlpha = 1;
-            }
-        });
-        
+    if (!img?.complete) return;
+
+    // ---------- draw the static floor ----------
+    const floorImg = (currentTheme === 'hell' && snowyHellActive)
+        ? assets.themes.hell.snowy_floor
+        : assets.themes[currentTheme].floor;
+    c.drawImage(floorImg, x * S, y * S, S, S);
+
+    // ---------- breathing opacity ----------
+    const phase   = ((now - area.startTime) % BREATH_PERIOD) / BREATH_PERIOD;
+    const sinVal  = Math.sin(phase * Math.PI * 2);
+    const minAlpha = 0.25;
+    const maxAlpha = 0.90;
+    const breathAlpha = minAlpha + (maxAlpha - minAlpha) * (sinVal * 0.5 + 0.5);
+
+    // ---------- fade‑out after monster death ----------
+    let fadeAlpha = 1;
+    if (area.deathTime) {
+        const elapsed = now - area.deathTime;
+        if (elapsed >= FADE_DURATION) return;               // fully faded → skip drawing
+        fadeAlpha = 1 - elapsed / FADE_DURATION;            // linear fade
+    }
+
+    const finalAlpha = Math.min(breathAlpha, fadeAlpha);
+
+    // ---------- draw the spell overlay (no rotation) ----------
+    c.save();
+    c.translate(x * S, y * S);          // static position, no rotation or scaling
+    c.globalAlpha = finalAlpha;
+    c.drawImage(img, 0, 0, S, S);
+    c.restore();
+});
+
+
+    // Cleanup fully faded spell areas (prevents lingering damage)
+    dangerousAreas = dangerousAreas.filter(area => {
+        if (area.deathTime) {
+            const elapsed = now - area.deathTime;
+            return elapsed < 2000; // keep during fade-out only
+        }
+        return true; // active spells stay until deathTime set
+    });
+       
         if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
         if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
         if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
@@ -11916,6 +11910,10 @@ if (map[y][x] === 25) { // Puzzle portal tile
         if (map[y][x] === 30) {
             c.drawImage(assets.coolROI, x * S, y * S, S, S);
         }
+        if (map[y][x] === 31) {
+            c.drawImage(assets.smelter, x * S, y * S, S, S);
+        }        
+        
 
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
 if (inPuzzleRoom && puzzleStaticCanvas) {
@@ -12174,12 +12172,12 @@ shrimpBloodDrips = shrimpBloodDrips.filter(drip => {
     // ---- Opacity (half the previous transparency) ----
     // Centre now almost fully opaque (≈0.95) and the whole splat fades more slowly.
     const grad = c.createRadialGradient(cx, cy, 0, cx, cy, half);
-    grad.addColorStop(0, 'rgba(255,150,0,0.95)');   // bitcoin orange
+    grad.addColorStop(0, 'rgba(255,150,0,1)');   // bitcoin orange
     grad.addColorStop(1, 'rgba(255,140,0,0.1)');      // almost fully transparent at edge
 
     c.save();
     // Global fade reduced to half of the previous value
-    c.globalAlpha = 0.95 * (1 - progress);
+    c.globalAlpha = 1 * (1 - progress);
     c.fillStyle = grad;
     c.fillRect(left, top, curSize, curSize);
     c.restore();
@@ -12427,6 +12425,10 @@ if (ripBlastActive && Date.now() - ripBlastStartTime < 3000) {
             waveActive = false;
             document.getElementById('wave').textContent = wave;
             logBattleEvent(`Floor ${floor} - Wave ${wave - 1} cleared! Stairs appeared!`);
+
+            // Reveal entire floor when wave cleared (player sees stairs + map)
+            fogMap = Array(H).fill().map(() => Array(W).fill(1));
+            needsRedraw = true;
         } else {
             logBattleEvent(`Floor ${floor} - Wave ${wave} cleared, but stairs placement failed!`);
         }
@@ -12784,9 +12786,6 @@ entangleAnimations.forEach(ent => {
 });
         
 }); // END OF DRAWING OF ENEMIES ETC ..
-
-// Draw fading dangerous spell areas after enemies
-drawFadingDangerousAreas();
 
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
