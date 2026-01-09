@@ -2585,68 +2585,68 @@ function playWebAudioSound(soundObj) {
 
 // Ultra low-fi 8-bit / C64 style wisp voice + music ducking
 function wispSpeak(type) {
-    if (musicMuted || !audioContext || wispIsSpeaking) return;
+    // Abort only if the audio system isn’t ready or a wisp line is already playing
+    if (!audioContext || wispIsSpeaking) return;
 
     wispIsSpeaking = true;
     const originalVolume = musicManager.volume;
 
-    // Gently duck the music (feels like Navi!)
-    if (musicManager.current) {
+    // ----- Duck the music **only if it isn’t muted** -----
+    if (!musicMuted && musicManager.current) {
         musicManager.audios[musicManager.current].volume = originalVolume * 0.25;
     }
 
-    const osc = audioContext.createOscillator();
+    const osc  = audioContext.createOscillator();
     const gain = audioContext.createGain();
     osc.type = 'square';
     osc.connect(gain);
     gain.connect(audioContext.destination);
-    gain.gain.setValueAtTime(0.180, audioContext.currentTime); // 50% louder (0.09 × 2)
+    gain.gain.setValueAtTime(0.180, audioContext.currentTime); // 0.18 ≈ 50 % louder than 0.09
 
     let duration = 0.38;
+
     if (type === 'danger') {
         const notes = [220, 277.18, 329.63, 440];
         let t = audioContext.currentTime;
         notes.forEach((f, i) => {
-            osc.frequency.setValueAtTime(f * (1 + i*0.05), t);
+            osc.frequency.setValueAtTime(f * (1 + i * 0.05), t);
             t += 0.09;
         });
     } else if (type === 'victory') {
-        duration = 0.85; // longer to fit the laugh
+        duration = 0.85;               // longer for the laugh
         osc.type = 'sine';
         gain.gain.setValueAtTime(0.18, audioContext.currentTime);
 
-        // Laughing pattern: "plooiiihhhiihiihhiung" in pure 8-bit fairy voice
+        // ---- “plooiiihhhiihiihhiung” ----
         let t = audioContext.currentTime;
 
         // ploooooiii (long rising glide)
-        osc.frequency.setValueAtTime(880, t);           // A5 start
-        osc.frequency.exponentialRampToValueAtTime(1760, t + 0.28); // fast rise to A6
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.exponentialRampToValueAtTime(1760, t + 0.28);
 
-        // hhhiihiihhi (quick giggling ups and downs)
+        // hhhiihiihhi (quick giggle)
         t += 0.30;
         const giggle = [1760, 1396.96, 1760, 1396.96, 1760, 1567.98];
         giggle.forEach((f, i) => {
-            osc.frequency.setValueAtTime(f, t + i*0.07);
+            osc.frequency.setValueAtTime(f, t + i * 0.07);
         });
 
-        // final "ung" (soft drop)
+        // final “ung” (soft drop)
         osc.frequency.exponentialRampToValueAtTime(880, t + 0.50);
     }
 
-    // start/stop once – works for both danger and victory
+    // ---- start / stop ----
     osc.start();
     osc.stop(audioContext.currentTime + duration);
     gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
 
-    // Restore music after the voice finishes
+    // ---- restore music after the sound finishes ----
     osc.onended = () => {
-        // Only restore music immediately for victory jingle
-        if (type === 'victory') {
-            if (musicManager.current && !musicMuted) {
-                musicManager.audios[musicManager.current].volume = originalVolume;
-            }
+        // Victory jingle: restore volume immediately (only if music isn’t muted)
+        if (type === 'victory' && !musicMuted && musicManager.current) {
+            musicManager.audios[musicManager.current].volume = originalVolume;
         }
-        // For danger: music stays ducked until player heals above 8 HP
+        // Danger warning: music stays ducked until some other game logic restores it
         wispIsSpeaking = false;
     };
 }
@@ -7916,16 +7916,21 @@ function applyWispAttack(wisp, primaryTarget) {
     }
     else if (wisp.type.effect === 'freeze') {
         // Cold = freeze (ignores shield, no damage, no mercy needed)
-        primaryTarget.frozen = true;
-        primaryTarget.frozenTurns = 2;
-        delete primaryTarget.frozenByEnsnare; // ensure wisp freeze shows frozen overlay
-        
-        // Throttled message — once every 1 second
-        const now = performance.now();
-        if (now - lastMessageTime >= 1000) {
-            logBattleEvent(`Wisp freezes ${primaryTarget.type.name}! [FROST LOCK]`);
-            lastMessageTime = now;
-        }        
+        // Cursed Trader immune to wisp freeze
+        if (primaryTarget.type.name !== 'Cursed Trader') {
+            primaryTarget.frozen = true;
+            primaryTarget.frozenTurns = 2;
+            delete primaryTarget.frozenByEnsnare; // ensure wisp freeze shows frozen overlay
+            
+            // Throttled message — once every 1 second
+            const now = performance.now();
+            if (now - lastMessageTime >= 1000) {
+                logBattleEvent(`Wisp freezes ${primaryTarget.type.name}! [FROST LOCK]`);
+                lastMessageTime = now;
+            }
+        } else {
+            logBattleEvent(`Wisp ${wisp.type.name.toUpperCase()} fails against Cursed Trader!`);
+        }
         playWebAudioSound(sounds.attack);
         hitEnemies.add(primaryTarget);
     }
@@ -7945,14 +7950,19 @@ function applyWispAttack(wisp, primaryTarget) {
             const dx = Math.abs(enemy.x - primaryTarget.x);
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if (dx <= 1 && dy <= 1) {
-                // Skip if already ensnared — Ensnare has lower priority
-                if (enemy.frozenByEnsnare) {
-                    affected = true; // still counts as affected for visuals/sound
+                // Skip Cursed Trader (immune to wisp freeze)
+                if (enemy.type.name === 'Cursed Trader') {
+                    affected = true; // still counts for visuals/sound
                 } else {
-                enemy.frozen = true;
-                enemy.frozenTurns = 2;
-                delete enemy.frozenByEnsnare; // wisp freeze priority — show frozen overlay
-                    affected = true;
+                    // Skip if already ensnared — Ensnare has lower priority
+                    if (enemy.frozenByEnsnare) {
+                        affected = true; // still counts as affected for visuals/sound
+                    } else {
+                        enemy.frozen = true;
+                        enemy.frozenTurns = 2;
+                        delete enemy.frozenByEnsnare; // wisp freeze priority — show frozen overlay
+                        affected = true;
+                    }
                 }
 
                 // Spawn drifting Frost Nova projectile toward this enemy
