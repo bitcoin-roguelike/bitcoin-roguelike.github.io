@@ -11314,13 +11314,15 @@ p.farmLocked = false;
 p.farmLockedFloor = 0;
 p.farmLockedSats = 0;
 
-playerXP = 0;
-playerLevel = 1;
-updateXPBar();
 
-playerClass = null;
-pendingSkillTreeLevel = null;
-skillTreeActive = false;
+// Skill tree system
+let playerXP = 0;
+let playerLevel = 1;
+updateXPBar();
+let playerClass = null; // null | 'druid' | 'degen'
+let pendingSkillTreeLevel = null; // show tree at (null = none)
+let skillTreeActive = false;
+let skillTreeSelectedOption = 0; // 0 = Druid, 1 = Degen (only at lvl 3)
 
 rostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
 entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
