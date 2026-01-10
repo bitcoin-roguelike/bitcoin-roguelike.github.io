@@ -2598,22 +2598,23 @@ const talkOpts = {speed: 72, pitch: 28, throat: 128, mouth: 128};
 
 // wisp voice lines
 const talkLines = [
-  "BITCoOIN,",					// 0
-  "Nooo. -Shark",				// 1
-  "BOSS-TIME! - GO GO GO",			// 2
-  "Watch out",					// 3
-  "winning",					// 4
-  "HA HA. Shwrimp!",				// 5
-  "take your time, no rush",			// 6
-  "take, a breac!",				// 7
-  "Oh no."					// 8
+  "DUMMY LINE, DO NOT USE",			// 0
+  "BITCoOIN,",					// 1
+  "Nooo. -Shark",				// 2
+  "BOSS-TIME! - GO GO GO",			// 3
+  "Watch out",					// 4
+  "winning",					// 5
+  "HA HA. Shwrimp!",				// 6
+  "take your time, no rush",			// 7
+  "take, a breac!",				// 8
+  "Oh no."					// 9
 ];
 
 // Current speech (for stopping if needed)
 let currentTalkSpeech = null;
 
-// Speak a wisp line by index (0-7)
-// Call this from your game events, e.g. wispSpeak(2) when treasure found
+// Speak a wisp line by index (0-Infinity)
+// Call this from your game events
 function talkSpeak(lineIndex) {
   if (lineIndex < 0 || lineIndex >= talkLines.length) {
     console.warn("Invalid wisp line index:", lineIndex);
@@ -2628,7 +2629,7 @@ function talkSpeak(lineIndex) {
   }
 
   try {
-    // Ensure AudioContext is resumed (your game already handles this on click, but safe)
+    // Ensure AudioContext is resumed
     if (audioContext && audioContext.state === "suspended") {
       audioContext.resume().catch(e => console.error("Failed to resume AudioContext for talk:", e));
     }
@@ -2637,18 +2638,16 @@ function talkSpeak(lineIndex) {
 
     currentTalkSpeech = talk.speak(text);
 
-    // Respect the player's current sound volume from terminal (0–1 scale)
-    // Assumes you have a global soundVolume set by setSoundVolume(volume / 100)
+    // Force wisp speech to use 70% of current soundVolume (like your purr)
     if (typeof soundVolume === 'undefined') soundVolume = 1;
     if (soundVolume === 0) {
-      console.log("Talk speech muted (soundVolume = 0)");
+      console.log("Wisp speech muted (soundVolume = 0)");
       return;
     }
 
-    // Apply volume scaling to the speech output
-    // TalkJs exposes .gainNode on the returned promise (from library source)
+    // Apply volume scaling (TalkJs exposes .gainNode on the returned promise)
     if (currentTalkSpeech && currentTalkSpeech.gainNode) {
-      currentTalkSpeech.gainNode.gain.value = soundVolume;
+      currentTalkSpeech.gainNode.gain.value = soundVolume * 0.7;
     }
 
     currentTalkSpeech.catch(err => {
@@ -4341,7 +4340,7 @@ exit = null;
     // Global wisp "take a break" reminder every 25 floors
     if (floor % 25 === 0 && floor > 0 && !window.breakReminderSpoken) {
         if (wisps.length > 0) {
-            talkSpeak(7); // "take a break" or your chosen index
+            talkSpeak(8); // "take a break" or your chosen index
             window.breakReminderSpoken = true;
         }
     }
@@ -10006,7 +10005,7 @@ case 'reset':
     addTerminalLineToContent('Type "help" for help.');
 
         if (wisps.length > 0) {
-            talkSpeak(6); // "take a break" or your chosen index
+            talkSpeak(7); // "take your time, no rush"
         }
 
     // Save current player position (so we don't teleport to @)
@@ -13045,12 +13044,12 @@ if (visibleUniques.length > 0) {
            
             // Map unique type to talk line index, starting from 0
             const typeMap = {
-                'Shrimp': 5, // "HA HA. Shwrimp!"
-                'Crab': 3, // "Watch out"
-                'Squid': 3, // "Watch out"
-                'Dolphin': 3, // "Watch out"
-                'Shark': 1, // "Nooo. -Shark"
-                'Whale': 0 // "BITCoOIN,"
+                'Shrimp': 6, // "HA HA. Shwrimp!"
+                'Crab': 4, // "Watch out"
+                'Squid': 4, // "Watch out"
+                'Dolphin': 4, // "Watch out"
+                'Shark': 2, // "Nooo. -Shark"
+                'Whale': 1 // "BITCoOIN,"
             };
             const lineIndex = typeMap[visibleUniques[0].type.name] || Math.floor(Math.random() * talkLines.length);
             
@@ -13061,8 +13060,6 @@ if (visibleUniques.length > 0) {
         }
     }
 }
-
-Where to put it
 
 // Visible Cursed Trader
 const visibleTrader = enemies.find(e => e.type.name === 'Cursed Trader' && fogMap[e.y][e.x] === 1);
