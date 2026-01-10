@@ -893,6 +893,7 @@ button:hover {
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/axios@1.10.0/dist/axios.min.js"></script>
+    <script src="talk.js"></script>
     <script>
 
 // Auto-scroll whale log to bottom when new transaction added
@@ -1555,6 +1556,11 @@ let puzzleStaticCanvas = null;
 let puzzleStaticCtx = null;
 
 let ensnareActive = false;
+window.spokenUniques = new Set(); // Track spoken unique names this run
+window.breakReminderSpoken = false; // Track if reminder fired this 25-floor block
+
+window.currentBounty = null;
+window.seenBountyTypes = []; // optional – for "cousin" tracking
 
 let map = [],
 p = {
@@ -2049,6 +2055,9 @@ Object.values(assets).forEach(asset => {
         assets.smelter.src = 'smelter.png';
 	assets.soul_orb_statue.src = 'soul_orb_statue.png';
 	assets.shrine.src = 'shrine.png';
+
+assets.billboard = new Image();
+assets.billboard.src = 'billboard.png';
 
 // Puzzle room assets
 assets.puzzlePortal = [new Image(), new Image(), new Image()];
@@ -2583,6 +2592,87 @@ function playWebAudioSound(soundObj) {
     }, soundObj.duration);
 }
 
+
+// TTS Wisps voice
+const talkOpts = {speed: 72, pitch: 28, throat: 128, mouth: 128};
+
+// wisp voice lines
+const talkLines = [
+  "BITCoOIN,",					// 0
+  "Nooo. -Shark",				// 1
+  "BOSS-TIME! - GO GO GO",			// 2
+  "Watch out",					// 3
+  "winning",					// 4
+  "HA HA. Shwrimp!",				// 5
+  "take your time, no rush",			// 6
+  "take, a breac!",				// 7
+  "Oh no."					// 8
+];
+
+// Current speech (for stopping if needed)
+let currentTalkSpeech = null;
+
+// Speak a wisp line by index (0-7)
+// Call this from your game events, e.g. wispSpeak(2) when treasure found
+function talkSpeak(lineIndex) {
+  if (lineIndex < 0 || lineIndex >= talkLines.length) {
+    console.warn("Invalid wisp line index:", lineIndex);
+    return;
+  }
+
+  const text = talkLines[lineIndex];
+
+  // Stop any ongoing speech
+  if (currentTalkSpeech && currentTalkSpeech.abort) {
+    currentTalkSpeech.abort();
+  }
+
+  try {
+    // Ensure AudioContext is resumed (your game already handles this on click, but safe)
+    if (audioContext && audioContext.state === "suspended") {
+      audioContext.resume().catch(e => console.error("Failed to resume AudioContext for talk:", e));
+    }
+
+    const talk = new TalkJs(talkOpts);
+
+    currentTalkSpeech = talk.speak(text);
+
+    // Respect the player's current sound volume from terminal (0–1 scale)
+    // Assumes you have a global soundVolume set by setSoundVolume(volume / 100)
+    if (typeof soundVolume === 'undefined') soundVolume = 1;
+    if (soundVolume === 0) {
+      console.log("Talk speech muted (soundVolume = 0)");
+      return;
+    }
+
+    // Apply volume scaling to the speech output
+    // TalkJs exposes .gainNode on the returned promise (from library source)
+    if (currentTalkSpeech && currentTalkSpeech.gainNode) {
+      currentTalkSpeech.gainNode.gain.value = soundVolume;
+    }
+
+    currentTalkSpeech.catch(err => {
+      console.error("Talk speech error:", err);
+    });
+  } catch (err) {
+    console.error("Talk speak failed:", err);
+  }
+}
+
+// Stop current wisp speech
+function talkStop() {
+  if (currentTalkSpeech && currentTalkSpeech.abort) {
+    currentTalkSpeech.abort();
+  }
+  currentTalkSpeech = null;
+}
+
+// Example calls:
+// talkSpeak(0); // greeting
+// talkSpeak(3); // danger warning
+// talkStop();   // silence the wisp
+
+
 // Ultra low-fi 8-bit / C64 style wisp voice + music ducking
 function wispSpeak(type) {
     // Abort only if the audio system isn’t ready or a wisp line is already playing
@@ -2592,6 +2682,7 @@ function wispSpeak(type) {
     const originalVolume = musicManager.volume;
 
     // ----- Duck the music **only if it isn’t muted** -----
+    // Duck music only if not muted
     if (!musicMuted && musicManager.current) {
         musicManager.audios[musicManager.current].volume = originalVolume * 0.25;
     }
@@ -2601,7 +2692,7 @@ function wispSpeak(type) {
     osc.type = 'square';
     osc.connect(gain);
     gain.connect(audioContext.destination);
-    gain.gain.setValueAtTime(0.180, audioContext.currentTime); // 0.18 ≈ 50 % louder than 0.09
+    gain.gain.setValueAtTime(0.18 * soundVolume, audioContext.currentTime); // respect user sound volume
 
     let duration = 0.38;
 
@@ -2615,7 +2706,7 @@ function wispSpeak(type) {
     } else if (type === 'victory') {
         duration = 0.85;               // longer for the laugh
         osc.type = 'sine';
-        gain.gain.setValueAtTime(0.18, audioContext.currentTime);
+        gain.gain.setValueAtTime(0.18 * soundVolume, audioContext.currentTime);
 
         // ---- “plooiiihhhiihiihhiung” ----
         let t = audioContext.currentTime;
@@ -3644,7 +3735,9 @@ function initMap() {
                 map[mainRoomY + 3][x] = 0;
             }
 
-            jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+            // Place jeweller (unchanged)
+            jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+            map[jewellerPos.y][jewellerPos.x] = 14;
 
             const diamondWallTiles = [
                 {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
@@ -3656,15 +3749,22 @@ function initMap() {
                     map[pos.y][pos.x] = 13;
                 }
             });
-            map[jewellerPos.y][jewellerPos.x] = 14;
 
-            // Place blacksmith
+            // Place billboard 2 tiles ABOVE jeweller (main room, north side)
+            const billboardX = jewellerPos.x;
+            const billboardY = jewellerPos.y - 2;
+            if (billboardY >= 0 && map[billboardY][billboardX] === 0) {
+                map[billboardY][billboardX] = 32; // Billboard tile ID (pick any unused, e.g. 32)
+            } else {
+                console.warn('Failed to place billboard: occupied or out of bounds at', billboardX, billboardY);
+            }
+
+            // Place blacksmith (unchanged)
             const blacksmithX = leftRoomX + 4;
             const blacksmithY = leftRoomY + 1;
             if (map[blacksmithY][blacksmithX] === 0) {
                 map[blacksmithY][blacksmithX] = 15; // Blacksmith
                 blacksmithPos = { x: blacksmithX, y: blacksmithY };
-
                 // Place smelter 2 tiles below blacksmith
                 const smelterX = blacksmithX;
                 const smelterY = blacksmithY + 2;
@@ -3676,19 +3776,14 @@ function initMap() {
             } else {
                 console.warn('Failed to place blacksmith: tile occupied at', blacksmithX, blacksmithY);
             }
-
-            // Place swap 4 tiles below blacksmith
-            const swapX = blacksmithX;
-            const swapY = blacksmithY + 4;
-            if (swapY >= 0 && map[swapY][swapX] === 0) {
-                map[swapY][swapX] = 29; // Swap tile
-            } else {
-                console.warn('Failed to place swap tile: occupied or out of bounds at', swapX, swapY);
-            }
-
-            // Place jeweller (unchanged)
-            jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
-            map[jewellerPos.y][jewellerPos.x] = 14;
+            // Place swap 4 tiles below blacksmith
+            const swapX = blacksmithX;
+            const swapY = blacksmithY + 4;
+            if (swapY >= 0 && map[swapY][swapX] === 0) {
+                map[swapY][swapX] = 29; // Swap tile
+            } else {
+                console.warn('Failed to place swap tile: occupied or out of bounds at', swapX, swapY);
+            }
 
             // Place waypoint at a fixed position in the right room
             const waypointX = rightRoomX + 3;
@@ -3717,6 +3812,15 @@ function initMap() {
                 map[heirloomY][heirloomX] = 18; // Hooded Heirloom
             } else {
                 console.warn('Failed to place hooded heirloom: tile occupied at', heirloomX, heirloomY);
+            }
+
+            // Set bounty if none exists (random unique from any type)
+            if (!window.currentBounty) {
+                const allTypes = Object.keys(uniqueMonsterNames);
+                const randomType = allTypes[Math.floor(Math.random() * allTypes.length)];
+                const names = uniqueMonsterNames[randomType];
+                const randomName = names[Math.floor(Math.random() * names.length)];
+                window.currentBounty = { type: randomType, name: randomName };
             }
 
 p.x = mainRoomX + 3;
@@ -4228,9 +4332,23 @@ exit = null;
                 };
                 enemies.push(newTrader);
                 logBattleEvent(`Floor ${floor} - Cursed Trader appears!`);
+              
                 needsRedraw = true;
             }
         }
+
+
+    // Global wisp "take a break" reminder every 25 floors
+    if (floor % 25 === 0 && floor > 0 && !window.breakReminderSpoken) {
+        if (wisps.length > 0) {
+            talkSpeak(7); // "take a break" or your chosen index
+            window.breakReminderSpoken = true;
+        }
+    }
+    // Reset spoken flag on new floor if needed (optional)
+    if (floor % 25 !== 0) {
+        window.breakReminderSpoken = false;
+    }
 
         // Check runewords at floor start
         checkRunewordsAtFloorStart();
@@ -4973,7 +5091,12 @@ if (floor > 1 && Math.random() < 0.10) {
         newEnemy.uniqueName = randomUniqueName;
         // Make unique monster stronger
         newEnemy.atk = type.atk * 2;
-        newEnemy.hp = type.hp * 2;
+            newEnemy.hp = type.hp * 2;
+            // Bounty target gets 10× HP (beefed up)
+            if (window.currentBounty && randomUniqueName === window.currentBounty.name) {
+                newEnemy.hp *= 10; // 10× instead of 2×
+                logBattleEvent(`Bounty Target Detected! ${randomUniqueName}`);
+            }
         
         // Assign a spell to this unique monster
         const spell = assignUniqueMonsterSpell(newEnemy);
@@ -6446,6 +6569,74 @@ logBattleEvent(`Floor ${floor} - Returned from hideout via waypoint!`);
 
 if (!musicMuted && !inPuzzleRoom) {
     musicManager.play(currentTheme);
+}
+
+if (map[ny][nx] === 32 && inHideout && window.currentBounty) {
+    // Create/reuse overlay (like skill tree)
+    let overlay = document.getElementById('bounty-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'bounty-overlay';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"VT323",monospace;color:#ff8c00;pointer-events:none;';
+        document.body.appendChild(overlay);
+    }
+
+    let content = document.getElementById('bounty-content');
+    if (!content) {
+        content = document.createElement('div');
+        content.id = 'bounty-content';
+        content.style.cssText = 'width:90%;max-width:800px;height:80%;background:rgba(17,17,17,0.95);border:4px solid #ff8c00;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
+        overlay.appendChild(content);
+    }
+
+    // Build popup HTML
+    let html = `<h2 style="font-size:clamp(32px, 8vw, 48px);margin:0;">Bounty Hunter!</h2>`;
+    html += `<p style="font-size:clamp(24px, 6vw, 36px);margin:20px 0;"></p>`;
+    
+    let bountyText = window.currentBounty.name;
+    // Optional: "cousin" if same type seen before (needs seenBountyTypes tracking)
+    if (window.seenBountyTypes?.includes(window.currentBounty.type)) {
+        bountyText += ' (cousin)';
+    }
+    html += `<p style="font-size:clamp(28px, 7vw, 42px);color:#ff4444;margin:10px 0;">Most Wanted: ${bountyText}</p>`;
+    html += `<p style="font-size:clamp(20px, 5vw, 28px);">Reward: 1% of your current BTC on kill!</p>`;
+    html += `<p style="font-size:clamp(16px, 4vw, 22px);margin-top:20px;">Tap/Click/Enter to close</p>`;
+
+    content.innerHTML = html;
+
+    // Show with fade-in
+    overlay.style.display = 'flex';
+    overlay.offsetHeight; // reflow
+    overlay.classList.add('visible');
+
+    // Enable interaction after brief delay (prevents accidental close)
+    overlay.style.pointerEvents = 'none';
+    setTimeout(() => {
+        overlay.style.pointerEvents = 'auto';
+    }, 500);
+
+    inputBlocked = false; // we keep input allowed for navigation
+
+    // Close on tap/click/Enter/Space
+    const closeBounty = () => {
+        overlay.style.display = 'none';
+        overlay.classList.remove('visible');
+        overlay.onclick = null;
+        overlay.ontouchend = null;
+        document.removeEventListener('keydown', keyClose);
+    };
+
+    overlay.onclick = closeBounty;
+    overlay.ontouchend = closeBounty;
+
+    const keyClose = e => {
+        if ([' ', 'Enter'].includes(e.key)) {
+            e.preventDefault();
+            closeBounty();
+        }
+    };
+    document.addEventListener('keydown', keyClose, { once: true });    
+    logBattleEvent(`Bounty Board: Most Wanted - ${window.currentBounty.name} (${window.currentBounty.type})`);
 }
 
 // Handle soul stash interaction
@@ -8700,7 +8891,7 @@ function handleUniqueMonsterReward(hit) {
         }
     }
     
-    // Tag spell areas for fade-out when unique monster dies (no conflict with breathing/fade-in)
+    // Tag spell areas for fade-out when unique monster dies
     if (hit.uniqueName && hit.spell) {
         const deathTime = Date.now();
         dangerousAreas.forEach(area => {
@@ -8708,7 +8899,28 @@ function handleUniqueMonsterReward(hit) {
                 area.deathTime = deathTime; // start smooth fade-out
             }
         });
-    }
+        
+    // Bounty reward: 1% current sats if matching current bounty
+    if (window.currentBounty && hit.uniqueName === window.currentBounty.name) {
+        const totalSats = Object.values(satsEarned).reduce((a, b) => a + b, 0);
+        const bountyReward = Math.floor(totalSats * 0.01);
+        
+        // Distribute 1% proportionally across types
+        Object.keys(satsEarned).forEach(key => {
+            satsEarned[key] += Math.floor(satsEarned[key] * 0.01);
+        });
+        
+        logBattleEvent(`Bounty Claimed! +${bountyReward} sats for killing ${hit.uniqueName}!`);
+        
+        // Track seen type for "cousin" NEXT time (before reset)
+        if (!window.seenBountyTypes.includes(window.currentBounty.type)) {
+            window.seenBountyTypes.push(window.currentBounty.type);
+        }
+        
+        window.currentBounty = null; // Reset bounty
+        updateSatsDisplay();
+    }     
+}
 
     // === UNIQUE REWARD MESSAGE ===
     const multiplier = Math.round(randomMultiplier * 10) / 10; // e.g., 2.7x
@@ -9793,6 +10005,10 @@ case 'reset':
     addTerminalLineToContent('_____________________');
     addTerminalLineToContent('Type "help" for help.');
 
+        if (wisps.length > 0) {
+            talkSpeak(6); // "take a break" or your chosen index
+        }
+
     // Save current player position (so we don't teleport to @)
     const savedPlayerX = p.x;
     const savedPlayerY = p.y;
@@ -9907,9 +10123,9 @@ if (map[y][x] === 27) {
 case 'set':
     if (args.length === 0) {
         addTerminalLineToContent('Settings:');
-        addTerminalLineToContent('  set sound [0-100]  – Control sound volume');
-        addTerminalLineToContent('  set music [0-100]  – Control music volume');
-        addTerminalLineToContent('  set zoom [on/off]  – 2× zoom on playfield');
+        addTerminalLineToContent(' set sound [0-100] – Control sound volume');
+        addTerminalLineToContent(' set music [0-100] – Control music volume');
+        addTerminalLineToContent(' set zoom [on/off] – 2× zoom on playfield');
         addTerminalLineToContent('_____________________');
         addTerminalLineToContent('Type "help" for help.');
     } else {
@@ -9943,35 +10159,37 @@ case 'set':
                 }
             }
         }
-else if (subCmd === 'zoom') {
-    if (args.length < 2) {
-        addTerminalLineToContent('Usage: set zoom [on/off]');
-        addTerminalLineToContent('Current: ' + (zoomEnabled ? 'ON' : 'OFF'));
-    } else {
-        const state = args[1].toLowerCase();
-        if (state === 'on' || state === 'true' || state === '1') {
-            zoomEnabled = true;
-            localStorage.setItem('zoomEnabled', 'true');
-            minimapVisible = zoomEnabled;
-            needsRedraw = true;
-            addTerminalLineToContent('2× ZOOM ACTIVATED – PLAYFIELD ONLY');
-        } 
-        else if (state === 'off' || state === 'false' || state === '0') {
-            zoomEnabled = false;
-            localStorage.setItem('zoomEnabled', 'false');
-            // instantly center camera again so you don’t see empty space
-            camera.x = p.x * S + S/2 - 160;
-            camera.y = p.y * S + S/2 - 160;
-            addTerminalLineToContent('2× zoom deactivated');
-            addTerminalLineToContent('Back to classic 1:1 view');
-        } 
-        else {
-            addTerminalLineToContent('Invalid argument – use "on" or "off"');
+        else if (subCmd === 'zoom') {
+            if (args.length < 2) {
+                addTerminalLineToContent('Usage: set zoom [on/off]');
+                addTerminalLineToContent('Current: ' + (zoomEnabled ? 'ON' : 'OFF'));
+            } else {
+                const state = args[1].toLowerCase();
+                if (state === 'on' || state === 'true' || state === '1') {
+                    zoomEnabled = true;
+                    localStorage.setItem('zoomEnabled', 'true');
+                    minimapVisible = zoomEnabled;
+                    needsRedraw = true;
+                    addTerminalLineToContent('2× ZOOM ACTIVATED – PLAYFIELD ONLY');
+                }
+                else if (state === 'off' || state === 'false' || state === '0') {
+                    zoomEnabled = false;
+                    localStorage.setItem('zoomEnabled', 'false');
+                    camera.x = p.x * S + S/2 - 160;
+                    camera.y = p.y * S + S/2 - 160;
+                    addTerminalLineToContent('2× zoom deactivated');
+                    addTerminalLineToContent('Back to classic 1:1 view');
+                }
+                else {
+                    addTerminalLineToContent('Invalid argument – use "on" or "off"');
+                }
+                needsRedraw = true;
+            }
         }
-        needsRedraw = true; // force immediate redraw
+        else {
+            addTerminalLineToContent('Unknown setting – use sound, music, voice, or zoom');
         }
     }
-}
     break;
 case 'leaderboard':
     if (!cachedLeaderboard || cachedLeaderboard.length === 0) {
@@ -11301,6 +11519,9 @@ p.farmLockedSats = 0;
 rostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
 entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 
+window.spokenUniques = new Set();
+window.breakReminderSpoken = false;
+
     lastMessageTime = 0;  
     redMazeSavedMuteState = null; 
     // Reset shrine tracking
@@ -11421,6 +11642,8 @@ localStorage.setItem('musicMuted', 'true');
     document.getElementById('submit-score').disabled = false;
     document.getElementById('submit-score').style.background = '#ff8c00';
     document.getElementById('splash-screen').style.display = 'block';
+    window.currentBounty = null; // Reset bounty on restart
+    window.seenBountyTypes = []; // optional – for "cousin" tracking
     //window.location.reload(); // Nuke: Full page reload to clear all events/sprites/memory (nah ..)
 
     /* ------------------------------------------------------------------
@@ -11923,7 +12146,9 @@ if (map[y][x] === 25) { // Puzzle portal tile
         if (map[y][x] === 31) {
             c.drawImage(assets.smelter, x * S, y * S, S, S);
         }        
-        
+	if (map[y][x] === 32) {
+            c.drawImage(assets.billboard, x * S, y * S, S, S);
+	}        
 
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
 if (inPuzzleRoom && puzzleStaticCanvas) {
@@ -12808,15 +13033,41 @@ let nameToShow = null;
 let isHarbinger = false;
 
 // Visible unique blockchain monsters (exclude Cursed Trader)
-const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader'  && !e.isHuge && fogMap[e.y][e.x] === 1);
+const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && !e.isHuge && fogMap[e.y][e.x] === 1);
 if (visibleUniques.length > 0) {
     nameToShow = visibleUniques[0].uniqueName;
+    // Trigger wisp TTS when first seeing a unique monster (only if wisp is alive)
+    if (wisps.length > 0) {
+        const uniqueKey = visibleUniques[0].uniqueName;
+        if (!window.spokenUniques) window.spokenUniques = new Set();
+        if (!window.spokenUniques.has(uniqueKey)) {
+            window.spokenUniques.add(uniqueKey);
+           
+            // Map unique type to talk line index, starting from 0
+            const typeMap = {
+                'Shrimp': 5, // "HA HA. Shwrimp!"
+                'Crab': 3, // "Watch out"
+                'Squid': 3, // "Watch out"
+                'Dolphin': 3, // "Watch out"
+                'Shark': 1, // "Nooo. -Shark"
+                'Whale': 0 // "BITCoOIN,"
+            };
+            const lineIndex = typeMap[visibleUniques[0].type.name] || Math.floor(Math.random() * talkLines.length);
+            
+            // Delay the speak call slightly to ensure AudioContext is ready
+            setTimeout(() => {
+                talkSpeak(lineIndex);
+            }, 200); // 200ms delay - adjust if needed
+        }
+    }
 }
+
+Where to put it
 
 // Visible Cursed Trader
 const visibleTrader = enemies.find(e => e.type.name === 'Cursed Trader' && fogMap[e.y][e.x] === 1);
 if (visibleTrader) {
-    nameToShow = 'Cursed Trader';
+    nameToShow = 'Cursed Trader';   
 }
 
 // Harbinger message for uniques in fog
@@ -13865,15 +14116,29 @@ if (!splashActive && !gameOver && inputBlocked) {
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // B Button (1) - attack, skill tree confirm, or game over actions
+    // B Button (1) - attack, skill tree confirm, bounty close, or game over actions
     if (buttons[1].pressed && !lastButtonsState[1]) {
+        // Bounty overlay close (first priority)
+        const bountyOverlay = document.getElementById('bounty-overlay');
+        if (bountyOverlay && bountyOverlay.style.display === 'flex') {
+            const closeBounty = bountyOverlay.onclick || bountyOverlay.ontouchend;
+            if (closeBounty) closeBounty();
+            // No return - let gamepad continue polling
+        }
+
+        // Skill tree confirm
         if (skillTreeActive && !window.skillTreeInputBlocked) {
-            selectSkillTreeOption();  // Confirm class choice (ONLY after 1 second)
-        } else if (!splashActive && !gameOver) {
-            // Normal gameplay B button action
+            selectSkillTreeOption();
+        }
+
+        // Normal gameplay attack
+        else if (!splashActive && !gameOver) {
             attack();
             lastMoveTime = nowTime;
-        } else if (gameOver && gamepadIndex !== null && !inputBlocked) {
+        }
+
+        // Game over actions
+        else if (gameOver && gamepadIndex !== null && !inputBlocked) {
             if (!gameOverBPressed) {
                 if (!scoreSubmitted && floor >= 3) {
                     submitScoreWithRandomName();
@@ -13883,7 +14148,6 @@ if (!splashActive && !gameOver && inputBlocked) {
                 }
                 gameOverBPressed = true;
             } else {
-                // Second press restarts
                 restart();
             }
         }
