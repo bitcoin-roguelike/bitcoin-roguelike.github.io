@@ -13455,6 +13455,7 @@ if (redMazeActive && redMaze) {
 }
 
 function gameLoop(timestamp) {
+    if (document.hidden) return; // double-safety: skip processing if tab hidden
     if (!map?.[0] || !p || !enemies || !rooms?.length) {
         console.error('Invalid state');
         initMap();
@@ -14605,31 +14606,31 @@ document.getElementById('battle-events').addEventListener('focus', function() {
     this.blur();
 });
 
-// Pause RAF + force redraw on visibility change (fixes Firefox Android black canvas after sleep/app switch)
+// Pause/resume animation loop on visibility change (smooth, no stale enemies)
 let rafId = null;
-const startGameLoop = () => {
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(gameLoop);
+const resumeLoop = () => {
+    if (!rafId) {
+        rafId = requestAnimationFrame(gameLoop);
+    }
 };
-
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        // Pause loop when tab hidden/sleep
+        // Pause animation (stop requesting new frames)
         if (rafId) {
             cancelAnimationFrame(rafId);
             rafId = null;
-            console.log('Game paused (tab hidden)');
+            console.log('Game animation paused (tab hidden)');
         }
     } else {
-        // Resume + force redraw when back
-        startGameLoop();
-        // Firefox Android canvas redraw hack
+        // Resume smoothly
+        resumeLoop();
+        // Force redraw + tiny nudge to fix stale canvas on Firefox/Android
+        needsRedraw = true;
         canvas.style.transform = 'translateZ(0)';
         setTimeout(() => {
             canvas.style.transform = 'none';
-            needsRedraw = true;
-            console.log('Game resumed + canvas forced redraw');
-        }, 100);
+        }, 50);
+        console.log('Game animation resumed');
     }
 });
 
