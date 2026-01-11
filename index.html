@@ -2382,7 +2382,8 @@ sound.volume = soundVolume;
 }
 });
 if (currentTalkSpeech && currentTalkSpeech.gainNode) {
-currentTalkSpeech.gainNode.gain.value = soundVolume * 0.10;
+// this does not work, will have to check back on this
+currentTalkSpeech.gainNode.gain.value = soundVolume * 0.5;
 }
 }
 
@@ -11821,11 +11822,7 @@ function closeSkillTree() {
 function draw() {
     // Add frame rate limiting - cap to maximum 50ms updates (20 FPS)
     const now = performance.now();
-    if (now - lastDrawTime < 50) {
-        needsRedraw = true;
-        return;
-    }
-    lastDrawTime = now;
+
     
 
     
@@ -14605,38 +14602,36 @@ document.getElementById('battle-events').addEventListener('focus', function() {
     this.blur();
 });
 
-// Pause/resume animation loop on visibility change (no janky resume)
+// Pause RAF + force redraw on visibility change (fixes Firefox Android black canvas after sleep/app switch)
 let rafId = null;
-const resumeLoop = () => {
-    if (!rafId) {
-        rafId = requestAnimationFrame(gameLoop);
-    }
+const startGameLoop = () => {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(gameLoop);
 };
 
-// Visibility change: just pause/resume RAF, no heavy reset
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
+        // Pause loop when tab hidden/sleep
         if (rafId) {
             cancelAnimationFrame(rafId);
             rafId = null;
-            console.log('Game animation paused (tab hidden)');
+            console.log('Game paused (tab hidden)');
         }
     } else {
-        resumeLoop();
-        // Light nudge for Firefox/Android stale canvas (no full redraw needed)
-        needsRedraw = true;
-        canvas.style.opacity = '0.99';
+        // Resume + force redraw when back
+        startGameLoop();
+        // Firefox Android canvas redraw hack
+        canvas.style.transform = 'translateZ(0)';
         setTimeout(() => {
-            canvas.style.opacity = '1';
-        }, 50);
-        console.log('Game animation resumed smoothly');
+            canvas.style.transform = 'none';
+            needsRedraw = true;
+            console.log('Game resumed + canvas forced redraw');
+        }, 100);
     }
 });
 
-// Start initial loop (only once)
-if (!rafId) {
-    rafId = requestAnimationFrame(gameLoop);
-}
+// Start initial loop
+startGameLoop();
 
     </script>
 </body>
