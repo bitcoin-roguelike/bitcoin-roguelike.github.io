@@ -13473,10 +13473,12 @@ if (redMazeActive && redMaze) {
     frameCount++;
 }
 
+// GOLDEN : 2 PART 1
 let rafId = null;
 let lastTimestamp = 0;          // ← keep the previous RAF time
 
 const startGameLoop = () => {
+    // GOLDEN : 2 PART 2
     // Reset the timing source so the first delta after resume is tiny
     lastTimestamp = performance.now();
     if (rafId) cancelAnimationFrame(rafId);
@@ -13484,10 +13486,12 @@ const startGameLoop = () => {
 };
 
 function gameLoop(timestamp) {
+    // GOLDEN : 3
     // If this is the very first frame after a resume, ignore the huge delta
     if (lastTimestamp === 0) lastTimestamp = timestamp;
     const delta = timestamp - lastTimestamp;
     lastTimestamp = timestamp;
+    
     if (!map?.[0] || !p || !enemies || !rooms?.length) {
         console.error('Invalid state');
         initMap();
@@ -13654,7 +13658,7 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
     }
     
 
-    
+    // GOLDEN : 4
     rafId = requestAnimationFrame(gameLoop);
 }
 
@@ -14639,8 +14643,9 @@ document.getElementById('battle-events').addEventListener('focus', function() {
     this.blur();
 });
 
-/* ------------------------------------------------- */
-/* Visibility handling – unchanged except for timer   */
+// GOLDEN : 1
+/* ----------------------- */
+/* Visibility handling –  */
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         // Pause loop when tab hidden/sleep
