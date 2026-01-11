@@ -539,17 +539,23 @@ function TALK() {
             if (e = this.buf32(e, H), I = null === I ? new AudioContext : I) {
                 var O = I,
                     R = e;
-                let t, H = new Promise((H, e) => {
-                    let A = O.createBufferSource(),
-                        E = O.createBuffer(1, R.length, 22050),
-                        r = E.getChannelData(0);
-                    for (let H = 0; H < R.length; H++) r[H] = R[H];
-                    A.buffer = E, A.connect(O.destination), A.onended = () => {
-                        H(!0)
-                    }, t = H => {
-                        A.disconnect(), e(H)
-                    }, A.start(0)
-                });
+let t, H = new Promise((H, e) => {
+let A = O.createBufferSource(),
+E = O.createBuffer(1, R.length, 22050),
+r = E.getChannelData(0);
+for (let H = 0; H < R.length; H++) r[H] = R[H];
+A.buffer = E;
+let gainNode = O.createGain();
+gainNode.gain.value = 1.0;
+A.connect(gainNode);
+gainNode.connect(O.destination);
+H.gainNode = gainNode;
+A.onended = () => {
+H(!0)
+}, t = H => {
+A.disconnect(), e(H)
+}, A.start(0)
+});
                 return H.abort = t, H
             }
             throw new Error

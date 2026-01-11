@@ -2326,6 +2326,7 @@ function placeStairs() {
     }
 }
 
+// AudioContext setup – early init for iOS compatibility
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 let audioContext = null;
 function getAudioContext() {
@@ -2334,19 +2335,20 @@ function getAudioContext() {
     }
     return audioContext;
 }
-audioContext = getAudioContext();
+audioContext = getAudioContext(); // Early creation (before sounds)
 
+// Sounds object – create Audio instances early
 const sounds = {
     attack: new Audio('attack.wav'),
     potion: new Audio('potion.wav'),
     hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
     pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
     dungeon: new Audio('dungeon.mp3'),
-desert: new Audio('desert.mp3'),
-hell: new Audio('hell.mp3'),
-paradise: new Audio('paradise.mp3'),
-ruins: new Audio('ruins.mp3'),
-hideout: new Audio('hideout.mp3'),
+    desert: new Audio('desert.mp3'),
+    hell: new Audio('hell.mp3'),
+    paradise: new Audio('paradise.mp3'),
+    ruins: new Audio('ruins.mp3'),
+    hideout: new Audio('hideout.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
     secret: new Audio('secret.wav'),
@@ -2364,54 +2366,49 @@ hideout: new Audio('hideout.mp3'),
     unique_monster: { buffer: null, url: 'unique_monster.wav', isPlaying: false, duration: 1400 }
 };
 
-// Volume control
+// Volume control – global defaults
 let soundVolume = localStorage.getItem('soundVolume') || 1.0;
 let musicVolume = localStorage.getItem('musicVolume') || 1.0;
 
 function setSoundVolume(volume) {
     soundVolume = Math.max(0, Math.min(1, volume));
     localStorage.setItem('soundVolume', soundVolume);
-    
-    // Update all sound volumes
-    Object.entries(sounds).forEach(([key, sound]) => {
-        // Skip music tracks which are handled by musicManager
-        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout') {
-            return; // Skip music tracks
-        }
-        if (sound.buffer) {
-            // Web Audio sounds need to be handled via gain nodes - we'll handle this in playWebAudioSound
-            return;
-        }
-        if (sound instanceof Audio) {
-            sound.volume = soundVolume;
-        }
-    });
+
+// Update legacy Audio objects
+Object.entries(sounds).forEach(([key, sound]) => {
+if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout') return; // Skip music
+if (sound instanceof Audio) {
+sound.volume = soundVolume;
+}
+});
+if (currentTalkSpeech && currentTalkSpeech.gainNode) {
+currentTalkSpeech.gainNode.gain.value = soundVolume * 0.10;
+}
 }
 
 function setMusicVolume(volume) {
     musicVolume = Math.max(0, Math.min(1, volume));
     localStorage.setItem('musicVolume', musicVolume);
-    
-    // Update music manager volume
+
     if (musicManager) {
         musicManager.volume = musicVolume;
         if (musicManager.current && musicManager.audios[musicManager.current]) {
-            const currentAudio = musicManager.audios[musicManager.current];
-            currentAudio.volume = musicManager.muted ? 0 : musicVolume;
+            musicManager.audios[musicManager.current].volume = musicManager.muted ? 0 : musicVolume;
         }
     }
 }
 
-// Load Web Audio buffers
+// Web Audio buffer loading (no play during load)
 function loadSoundBuffer(url, key) {
     fetch(url)
         .then(response => response.arrayBuffer())
         .then(data => audioContext.decodeAudioData(data))
         .then(buffer => {
             sounds[key].buffer = buffer;
-                    })
+        })
         .catch(e => console.error(`Failed to load Web Audio buffer for ${key}: ${url}`, e));
 }
+
 loadSoundBuffer('hit.wav', 'hit');
 loadSoundBuffer('pickup.wav', 'pickup');
 loadSoundBuffer('heads.wav', 'heads');
@@ -2426,6 +2423,7 @@ loadSoundBuffer('town_portal.wav', 'town_portal');
 loadSoundBuffer('buzz.wav', 'buzz');
 loadSoundBuffer('unique_monster.wav', 'unique_monster');
 
+// MusicManager class (after sounds + volumes)
 class MusicManager {
   constructor() {
     this.audios = {
@@ -2438,13 +2436,14 @@ class MusicManager {
     };
     this.current = null;
     this.muted = false;
-    this.volume = 1.0;
+    this.volume = musicVolume;
     Object.values(this.audios).forEach(audio => {
       audio.loop = true;
       audio.onerror = () => console.error(`Failed to load music: ${audio.src}`);
-      audio.volume = musicVolume; // Set initial volume from global
+      audio.volume = musicVolume;
     });
   }
+
   play(theme) {
     if (!this.audios[theme]) return;
     const audio = this.audios[theme];
@@ -2457,14 +2456,15 @@ class MusicManager {
     if (this.current) {
       this.fadeOut(this.audios[this.current]);
     }
-audio.volume = this.muted ? 0 : musicVolume; // Set initial volume based on muted state
-audio.muted = this.muted;
-audio.play().catch(e => console.error('Music play failed:', e));
-if (!this.muted) {
-  this.fadeIn(audio); // Ensure fadeIn is called only if not muted
-}
+    audio.volume = this.muted ? 0 : musicVolume;
+    audio.muted = this.muted;
+    audio.play().catch(e => console.error('Music play failed:', e));
+    if (!this.muted) {
+      this.fadeIn(audio);
+    }
     this.current = theme;
   }
+
   fadeOut(audio) {
     let vol = audio.volume;
     const interval = setInterval(() => {
@@ -2477,6 +2477,7 @@ if (!this.muted) {
       }
     }, 100);
   }
+
   fadeIn(audio) {
     let vol = 0;
     const interval = setInterval(() => {
@@ -2487,6 +2488,7 @@ if (!this.muted) {
       }
     }, 100);
   }
+
   mute(muted) {
     this.muted = muted;
     if (this.current) {
@@ -2495,7 +2497,53 @@ if (!this.muted) {
     }
   }
 }
+
 const musicManager = new MusicManager();
+
+// Platform-specific gain helper (makes sense – Android boost for quiet Web Audio)
+function getPlatformMasterGain() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isAndroid = /android/i.test(ua);
+    const calmLevel = 0.5;
+    return isAndroid ? calmLevel * 1.8 : calmLevel; // 0.9 Android, 0.5 others
+}
+
+// Preload function – safe for iOS (no play() call)
+function preloadSounds() {
+    const savedSoundVolume = soundVolume;
+
+    if (isIOSorSafari()) {
+        // iOS: Only create Audio objects (no play – prevents suspension)
+        Object.entries(sounds).forEach(([key, sound]) => {
+            if (['dungeon','desert','hell','paradise','ruins','hideout'].includes(key)) return;
+            if (sound instanceof Audio && sound.src) {
+                const temp = new Audio(sound.src);
+                temp.volume = 0;
+            }
+        });
+    } else {
+        // Non-iOS: Safe preload with play/pause at 0 volume
+        Object.entries(sounds).forEach(([key, sound]) => {
+            if (['dungeon','desert','hell','paradise','ruins','hideout'].includes(key)) return;
+            if (sound instanceof Audio && sound.src) {
+                sound.volume = 0;
+                sound.play().then(() => {
+                    sound.pause();
+                    sound.currentTime = 0;
+                    sound.volume = 0;
+                }).catch(() => {});
+            }
+        });
+    }
+
+    // Restore volume after preload
+    setTimeout(() => setSoundVolume(savedSoundVolume), 100);
+}
+
+// Start preload immediately (after AudioContext init)
+preloadSounds();
+
+// ... rest of your code (playWebAudioSound, talkSpeak, wispSpeak, etc.) ...
 
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
@@ -2646,9 +2694,9 @@ function talkSpeak(lineIndex) {
     }
 
     // Apply volume scaling (TalkJs exposes .gainNode on the returned promise)
-    if (currentTalkSpeech && currentTalkSpeech.gainNode) {
-      currentTalkSpeech.gainNode.gain.value = soundVolume * 0.7;
-    }
+if (currentTalkSpeech && currentTalkSpeech.gainNode) {
+    currentTalkSpeech.gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1) * 0.7;
+}
 
     currentTalkSpeech.catch(err => {
       console.error("Talk speech error:", err);
@@ -6598,7 +6646,7 @@ if (map[ny][nx] === 32 && inHideout && window.currentBounty) {
         bountyText += ' (cousin)';
     }
     html += `<p style="font-size:clamp(28px, 7vw, 42px);color:#ff4444;margin:10px 0;">Most Wanted: ${bountyText}</p>`;
-    html += `<p style="font-size:clamp(20px, 5vw, 28px);">Reward: 1% of your current BTC on kill!</p>`;
+    html += `<p style="font-size:clamp(20px, 5vw, 28px);">Reward: Slay and get paid in BTC!</p>`;
     html += `<p style="font-size:clamp(16px, 4vw, 22px);margin-top:20px;">Use B Button / Tap / Enter to confirm</p>`;
 
     content.innerHTML = html;
@@ -10930,8 +10978,8 @@ F............#
 #LLLL........#
 #HLvL........#
 ##LLL........#
-###..........#
-#....B..B.B..#
+###.......B..#
+#....B.......#
 #............#
 #.........@..#
 #.....C......#
@@ -11997,65 +12045,83 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         }
 
 
-// ── Draw unique monster spell effects – breathing only, floor stays static ──
-const now = Date.now();
-const FADE_DURATION = 1000;   // ms – length of the fade‑out
-const BREATH_PERIOD = 3000;   // ms – breathing loop length
+    // ── Draw unique monster spell effects – breathing only, floor stays static ──
+    const now = Date.now();
+    const FADE_DURATION = 1000; // ms – length of the fade‑out
+    const BREATH_PERIOD = 3000; // ms – breathing loop length
 
-dangerousAreas.forEach(area => {
-    // only draw the tile we are currently processing
-    if (area.x !== x || area.y !== y) return;
+    dangerousAreas.forEach(area => {
+        // only draw the tile we are currently processing
+        if (area.x !== x || area.y !== y) return;
 
-    // ---------- pick the correct spell image ----------
-    let img;
-    switch (area.spellType) {
-        case SPELL_TYPES.POISON_CLOUD:    img = assets.um_poisonCloud;    break;
-        case SPELL_TYPES.FROST_NOVA:      img = assets.um_frostNova;      break;
-        case SPELL_TYPES.LIGHTNING_STORM: img = assets.um_lightningStorm; break;
-        case SPELL_TYPES.FIRE_WALL:       img = assets.um_fireWall;       break;
-        default: return;
-    }
-    if (!img?.complete) return;
+        // ---------- pick the correct spell image ----------
+        let img;
+        switch (area.spellType) {
+            case SPELL_TYPES.POISON_CLOUD: img = assets.um_poisonCloud; break;
+            case SPELL_TYPES.FROST_NOVA: img = assets.um_frostNova; break;
+            case SPELL_TYPES.LIGHTNING_STORM: img = assets.um_lightningStorm; break;
+            case SPELL_TYPES.FIRE_WALL: img = assets.um_fireWall; break;
+            default: return;
+        }
+        if (!img?.complete) return;
 
-    // ---------- draw the static floor ----------
-    const floorImg = (currentTheme === 'hell' && snowyHellActive)
-        ? assets.themes.hell.snowy_floor
-        : assets.themes[currentTheme].floor;
-    c.drawImage(floorImg, x * S, y * S, S, S);
+        // ---------- draw the static floor ----------
+        const floorImg = (currentTheme === 'hell' && snowyHellActive)
+            ? assets.themes.hell.snowy_floor
+            : assets.themes[currentTheme].floor;
+        c.drawImage(floorImg, x * S, y * S, S, S);
 
-    // ---------- breathing opacity ----------
-    const phase   = ((now - area.startTime) % BREATH_PERIOD) / BREATH_PERIOD;
-    const sinVal  = Math.sin(phase * Math.PI * 2);
-    const minAlpha = 0.25;
-    const maxAlpha = 0.90;
-    const breathAlpha = minAlpha + (maxAlpha - minAlpha) * (sinVal * 0.5 + 0.5);
+        // ---------- breathing opacity ----------
+        const phase = ((now - area.startTime) % BREATH_PERIOD) / BREATH_PERIOD;
+        const sinVal = Math.sin(phase * Math.PI * 2);
+        const minAlpha = 0.25;
+        const maxAlpha = 0.90;
+        const breathAlpha = minAlpha + (maxAlpha - minAlpha) * (sinVal * 0.5 + 0.5);
 
-    // ---------- fade‑out after monster death ----------
-    let fadeAlpha = 1;
-    if (area.deathTime) {
-        const elapsed = now - area.deathTime;
-        if (elapsed >= FADE_DURATION) return;               // fully faded → skip drawing
-        fadeAlpha = 1 - elapsed / FADE_DURATION;            // linear fade
-    }
-
-    const finalAlpha = Math.min(breathAlpha, fadeAlpha);
-
-    // ---------- draw the spell overlay (no rotation) ----------
-    c.save();
-    c.translate(x * S, y * S);          // static position, no rotation or scaling
-    c.globalAlpha = finalAlpha;
-    c.drawImage(img, 0, 0, S, S);
-    c.restore();
-});
-
-
-    // Cleanup fully faded spell areas (prevents lingering damage)
-    dangerousAreas = dangerousAreas.filter(area => {
+        // ---------- fade‑out after monster death ----------
+        let fadeAlpha = 1;
         if (area.deathTime) {
             const elapsed = now - area.deathTime;
-            return elapsed < 2000; // keep during fade-out only
+            fadeAlpha = Math.max(0, 1 - elapsed / FADE_DURATION); // linear fade
         }
-        return true; // active spells stay until deathTime set
+
+        const finalAlpha = breathAlpha * fadeAlpha;
+
+        // Skip drawing if fully invisible (syncs with cleanup)
+        if (finalAlpha < 0.01) return;
+
+        // ---------- draw the spell overlay (no rotation) ----------
+        c.save();
+        c.translate(x * S, y * S); // static position
+        c.globalAlpha = finalAlpha;
+        c.drawImage(img, 0, 0, S, S);
+        c.restore();
+    });
+
+
+    // Cleanup spell areas: remove when alpha drops below threshold
+    dangerousAreas = dangerousAreas.filter(area => {
+        // Compute current alpha (mirrors draw logic exactly)
+        const age = now - area.startTime;
+        let baseAlpha = 1.0;
+        if (age < 800) baseAlpha *= age / 800; // fade-in
+
+        let fadeAlpha = 1;
+        if (area.deathTime) {
+            const elapsed = now - area.deathTime;
+            fadeAlpha = Math.max(0, 1 - elapsed / FADE_DURATION);
+        }
+
+        const phase = (age % BREATH_PERIOD) / BREATH_PERIOD;
+        const sinVal = Math.sin(phase * Math.PI * 2);
+        const breathAlpha = 0.25 + 0.65 * (sinVal * 0.5 + 0.5);
+
+        const currentAlpha = baseAlpha * fadeAlpha * breathAlpha;
+
+        // Remove if too faint (syncs perfectly with visual disappearance)
+        if (currentAlpha < 0.01) return false;
+
+        return true;
     });
        
         if (map[y][x] === 2) c.drawImage(assets.potion, x * S, y * S, S, S);
@@ -14538,6 +14604,38 @@ document.addEventListener('keydown', function (e) {
 document.getElementById('battle-events').addEventListener('focus', function() {
     this.blur();
 });
+
+// Pause RAF + force redraw on visibility change (fixes Firefox Android black canvas after sleep/app switch)
+let rafId = null;
+const startGameLoop = () => {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(gameLoop);
+};
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        // Pause loop when tab hidden/sleep
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+            console.log('Game paused (tab hidden)');
+        }
+    } else {
+        // Resume + force redraw when back
+        startGameLoop();
+        // Firefox Android canvas redraw hack
+        canvas.style.transform = 'translateZ(0)';
+        setTimeout(() => {
+            canvas.style.transform = 'none';
+            needsRedraw = true;
+            console.log('Game resumed + canvas forced redraw');
+        }, 100);
+    }
+});
+
+// Start initial loop
+startGameLoop();
+
     </script>
 </body>
 </html>
