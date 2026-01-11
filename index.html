@@ -13455,7 +13455,6 @@ if (redMazeActive && redMaze) {
 }
 
 function gameLoop(timestamp) {
-    if (document.hidden) return; // double-safety: skip processing if tab hidden
     if (!map?.[0] || !p || !enemies || !rooms?.length) {
         console.error('Invalid state');
         initMap();
@@ -14606,36 +14605,38 @@ document.getElementById('battle-events').addEventListener('focus', function() {
     this.blur();
 });
 
-// Pause/resume animation loop on visibility change (smooth, no stale enemies)
+// Pause/resume animation loop on visibility change (no janky resume)
 let rafId = null;
 const resumeLoop = () => {
     if (!rafId) {
         rafId = requestAnimationFrame(gameLoop);
     }
 };
+
+// Visibility change: just pause/resume RAF, no heavy reset
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        // Pause animation (stop requesting new frames)
         if (rafId) {
             cancelAnimationFrame(rafId);
             rafId = null;
             console.log('Game animation paused (tab hidden)');
         }
     } else {
-        // Resume smoothly
         resumeLoop();
-        // Force redraw + tiny nudge to fix stale canvas on Firefox/Android
+        // Light nudge for Firefox/Android stale canvas (no full redraw needed)
         needsRedraw = true;
-        canvas.style.transform = 'translateZ(0)';
+        canvas.style.opacity = '0.99';
         setTimeout(() => {
-            canvas.style.transform = 'none';
+            canvas.style.opacity = '1';
         }, 50);
-        console.log('Game animation resumed');
+        console.log('Game animation resumed smoothly');
     }
 });
 
-// Start initial loop
-startGameLoop();
+// Start initial loop (only once)
+if (!rafId) {
+    rafId = requestAnimationFrame(gameLoop);
+}
 
     </script>
 </body>
