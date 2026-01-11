@@ -2544,8 +2544,6 @@ function preloadSounds() {
 // Start preload immediately (after AudioContext init)
 preloadSounds();
 
-// ... rest of your code (playWebAudioSound, talkSpeak, wispSpeak, etc.) ...
-
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
         s.volume = 1.0;
@@ -2656,7 +2654,13 @@ const talkLines = [
   "HA HA. Shwrimp!",				// 6
   "take your time, no rush",			// 7
   "take, a breac!",				// 8
-  "Oh no."					// 9
+  "Oh no.",					// 9
+  "hello you , go go go",			// 10
+  "yes , Bitcoin from bounty",			// 11
+  "yes, Deiamond. Soul-Orb . RIP",		// 12
+  "yes, Pick.axe , RIP",			// 13
+  "yes, Pick.axe",				// 14
+  "too strong, run away"			// 15
 ];
 
 // Current speech (for stopping if needed)
@@ -4389,7 +4393,7 @@ exit = null;
     // Global wisp "take a break" reminder every 25 floors
     if (floor % 25 === 0 && floor > 0 && !window.breakReminderSpoken) {
         if (wisps.length > 0) {
-            talkSpeak(8); // "take a break" or your chosen index
+            talkSpeak(8); // "take, a breac!"
             window.breakReminderSpoken = true;
         }
     }
@@ -5144,6 +5148,7 @@ if (floor > 1 && Math.random() < 0.10) {
             if (window.currentBounty && randomUniqueName === window.currentBounty.name) {
                 newEnemy.hp *= 10; // 10× instead of 2×
                 logBattleEvent(`Bounty Target Detected! ${randomUniqueName}`);
+                talkSpeak(15); // "too strong, run away"
             }
         
         // Assign a spell to this unique monster
@@ -6398,6 +6403,7 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
         setTimeout(() => playWebAudioSound(sounds.pickup), 100);
         setTimeout(() => playWebAudioSound(sounds.pickup), 200);
         floorIndicator.textContent = `Floor ${floor} - Wisp joined!`;
+        talkSpeak(10); //'hello you , go go go'
         wispPromptTimeout = setTimeout(() => {
             floorIndicator.textContent = `Floor ${floor}`;
         }, 3000);
@@ -6648,7 +6654,7 @@ if (map[ny][nx] === 32 && inHideout && window.currentBounty) {
     }
     html += `<p style="font-size:clamp(28px, 7vw, 42px);color:#ff4444;margin:10px 0;">Most Wanted: ${bountyText}</p>`;
     html += `<p style="font-size:clamp(20px, 5vw, 28px);">Reward: Slay and get paid in BTC!</p>`;
-    html += `<p style="font-size:clamp(16px, 4vw, 22px);margin-top:20px;">Use B Button / Tap / Enter to confirm</p>`;
+    html += `<p style="font-size:clamp(16px, 4vw, 22px);margin-top:20px;">Use B Button / Tap / Enter to exit</p>`;
 
     content.innerHTML = html;
 
@@ -8948,17 +8954,20 @@ function handleUniqueMonsterReward(hit) {
             }
         });
         
-    // Bounty reward: 1% current sats if matching current bounty
+    // Bounty reward: 10% current sats if matching current bounty
     if (window.currentBounty && hit.uniqueName === window.currentBounty.name) {
         const totalSats = Object.values(satsEarned).reduce((a, b) => a + b, 0);
-        const bountyReward = Math.floor(totalSats * 0.01);
+        const bountyReward = Math.floor(totalSats * 0.10);
         
-        // Distribute 1% proportionally across types
+        // Distribute 10% proportionally across types
         Object.keys(satsEarned).forEach(key => {
-            satsEarned[key] += Math.floor(satsEarned[key] * 0.01);
+            satsEarned[key] += Math.floor(satsEarned[key] * 0.10);
         });
         
         logBattleEvent(`Bounty Claimed! +${bountyReward} sats for killing ${hit.uniqueName}!`);
+        if (wisps.length > 0) {
+        talkSpeak(11); // 'yes , Bitcoin from bounty'
+        }
         
         // Track seen type for "cousin" NEXT time (before reset)
         if (!window.seenBountyTypes.includes(window.currentBounty.type)) {
@@ -11151,15 +11160,24 @@ if (floor >= 30) {
     p.soulOrbs += 1;
     p.runes.push('r','i','p');
     logBattleEvent("LEGENDARY REWARD: +1 Diamond +1 Soul Orb + RIP runes!");
+    if (wisps.length > 0) {
+    talkSpeak(12); // "yes, Deiamond. Soul-Orb . RIP"
+    }
 } else if (floor >= 15) {
     // Rare tier floors — always give pickaxe + RIP runes
     p.pickaxes += 1;
     p.runes.push('r','i','p');
     logBattleEvent("RARE REWARD: +1 Pickaxe + RIP runes!");
+    if (wisps.length > 0) {
+    talkSpeak(13); // "yes, Pick.axe , RIP"
+    }
 } else {
     // Common tier floors — just pickaxe
     p.pickaxes += 1;
     logBattleEvent("Trial complete! +1 Pickaxe");
+    if (wisps.length > 0) {
+    talkSpeak(14); // "yes, Pick.axe"
+    }
 }
 
 // ——— EXIT PUZZLE ROOM ———
