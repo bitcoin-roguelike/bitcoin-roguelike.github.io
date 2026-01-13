@@ -1562,6 +1562,8 @@ window.breakReminderSpoken = false; // Track if reminder fired this 25-floor blo
 window.currentBounty = null;
 window.seenBountyTypes = []; // optional – for "cousin" tracking
 
+let tileVariantMap = []; // H x W variant indices (-1 = default single tile)
+
 let map = [],
 p = {
 x: 2,
@@ -1716,6 +1718,10 @@ let ruinsRainActive = false;
 let rainAmbienceTimer = null; // restart loop timer
 let rainNoiseSource = null; // source node for looping rain (use global context)
 let rainAmbiencePlayed = false; // track if we've started rain sound this run
+let fireplaceNoiseSource = null;
+let fireplaceAmbienceTimer = null;
+let lfo = null;               // ember‑flicker LFO
+let popTimeout = null;        // handle for the next pop burst
 let raindrops = [];
 let floorSplashes = [];
 let ruinsRainAngle = 0;  // diagonal direction for rain streaks (set once per block)
@@ -1998,6 +2004,72 @@ Object.values(assets).forEach(asset => {
         assets.themes.ruins.floor.src = 'ring_floor.png';
         assets.themes.ruins.wall.src = 'ring_wall.png';
         assets.themes.ruins.special.src = 'ring_hole.png';
+        
+// Random tile variants for desert, paradise, hell, ruins (normal only)
+assets.themes.desert.floors = [
+    assets.themes.desert.floor,
+    new Image(), new Image(), new Image()
+];
+assets.themes.desert.floors[1].src = 'sand_floor2.png';
+assets.themes.desert.floors[2].src = 'sand_floor3.png';
+assets.themes.desert.floors[3].src = 'sand_floor4.png';
+
+assets.themes.desert.walls = [
+    assets.themes.desert.wall,
+    new Image(), new Image(), new Image()
+];
+assets.themes.desert.walls[1].src = 'sand_wall2.png';
+assets.themes.desert.walls[2].src = 'sand_wall3.png';
+assets.themes.desert.walls[3].src = 'sand_wall4.png';
+
+assets.themes.paradise.floors = [
+    assets.themes.paradise.floor,
+    new Image(), new Image(), new Image()
+];
+assets.themes.paradise.floors[1].src = 'paradise_floor2.png';
+assets.themes.paradise.floors[2].src = 'paradise_floor3.png';
+assets.themes.paradise.floors[3].src = 'paradise_floor4.png';
+
+assets.themes.paradise.walls = [
+    assets.themes.paradise.wall,
+    new Image(), new Image(), new Image()
+];
+assets.themes.paradise.walls[1].src = 'paradise_wall2.png';
+assets.themes.paradise.walls[2].src = 'paradise_wall3.png';
+assets.themes.paradise.walls[3].src = 'paradise_wall4.png';
+
+assets.themes.hell.floors = [
+    assets.themes.hell.floor,
+    new Image(), new Image(), new Image()
+];
+assets.themes.hell.floors[1].src = 'hell_floor2.png';
+assets.themes.hell.floors[2].src = 'hell_floor3.png';
+assets.themes.hell.floors[3].src = 'hell_floor4.png';
+
+assets.themes.hell.walls = [
+    assets.themes.hell.wall,
+    new Image(), new Image(), new Image()
+];
+assets.themes.hell.walls[1].src = 'hell_wall2.png';
+assets.themes.hell.walls[2].src = 'hell_wall3.png';
+assets.themes.hell.walls[3].src = 'hell_wall4.png';
+
+assets.themes.ruins.floors = [
+    assets.themes.ruins.floor,
+    new Image(), new Image(), new Image()
+];
+assets.themes.ruins.floors[1].src = 'ring_floor2.png';
+assets.themes.ruins.floors[2].src = 'ring_floor3.png';
+assets.themes.ruins.floors[3].src = 'ring_floor4.png';
+
+assets.themes.ruins.walls = [
+    assets.themes.ruins.wall,
+    new Image(), new Image(), new Image()
+];
+assets.themes.ruins.walls[1].src = 'ring_wall2.png';
+assets.themes.ruins.walls[2].src = 'ring_wall3.png';
+assets.themes.ruins.walls[3].src = 'ring_wall4.png';
+        
         assets.potion.src = 'potion.png';
         assets.gnome.src = 'gnome.png';
 	assets.player.src = 'player.png';
@@ -2658,8 +2730,8 @@ const talkLines = [
   "hello you , go go go",			// 10
   "yes , Bitcoin from bounty",			// 11
   "yes, Deiamond. Soul-Orb . RIP",		// 12
-  "yes, Pick.axe , RIP",			// 13
-  "yes, Pick.axe",				// 14
+  "yes,. PiickAaXe , RIP",			// 13
+  "yes,. PiickAaXe",				// 14
   "too strong, run away"			// 15
 ];
 
@@ -3193,6 +3265,180 @@ function startRainAmbience() {
     rainNoiseSource.start(now);
 
     rainAmbienceTimer = true;
+}
+
+// COZY FIREPLACE AMBIENCE – same loudness as rain, warm crackling feel
+// Fireplace ambience start
+function startFireplaceAmbience() {
+    if (fireplaceAmbienceTimer) return;               // already running
+
+    // ---- make sure the AudioContext is active (user gesture required once) ----
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e =>
+            console.error('Failed to resume AudioContext for fireplace:', e)
+        );
+    }
+    const now = audioContext.currentTime;
+
+    // ------------------- 1. Brown‑noise base -------------------
+    const bufferSize = 4 * audioContext.sampleRate;   // ~4 s of noise
+    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < bufferSize; i++) {
+        last += (Math.random() * 2 - 1) * 0.02;        // random‑walk → brown noise
+        data[i] = last;
+        if (Math.abs(last) > 1) last *= 0.95;         // gentle clamp
+    }
+
+    fireplaceNoiseSource = audioContext.createBufferSource();
+    fireplaceNoiseSource.buffer = noiseBuffer;
+    fireplaceNoiseSource.loop = true;
+
+    // ------------------- 2. Filters -------------------
+    const lowpass = audioContext.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime(1200, now);
+
+    const bandpass = audioContext.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime(800, now);
+    bandpass.Q.setValueAtTime(1, now);
+
+    const crackleBand = audioContext.createBiquadFilter();
+    crackleBand.type = 'bandpass';
+    crackleBand.frequency.setValueAtTime(3000, now);
+    crackleBand.Q.setValueAtTime(2, now);
+    // gentle sweep to keep the crackle lively
+    crackleBand.frequency.linearRampToValueAtTime(2500, now + 30);
+    crackleBand.frequency.linearRampToValueAtTime(3500, now + 60);
+
+    // ------------------- 3. Main gain (original envelope) -------------------
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.38 * soundVolume, now + 1.8);
+    gain.gain.setValueAtTime(0.36 * soundVolume, now + 30);
+
+    // ------------------- 4. Ember‑flicker LFO -------------------
+    lfo = audioContext.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(0.07, now); // ~14 s period
+
+    const lfoGain = audioContext.createGain();
+    lfoGain.gain.setValueAtTime(0.03 * soundVolume, now);
+    lfo.connect(lfoGain).connect(gain.gain);
+    lfo.start(now);
+
+    // ------------------- 5. Per‑sound boost (Android) -------------------
+    const boostGain = audioContext.createGain();
+    // same factor the growl uses – makes the raw waveform louder on Android
+    boostGain.gain.setTargetAtTime(soundVolume * 2, now, 0.01);
+
+    // ------------------- 6. Platform‑aware master gain -------------------
+    const masterGain = audioContext.createGain();
+    masterGain.gain.value = 9.6;
+
+    // ------------------- 7. Connect the whole chain -------------------
+    fireplaceNoiseSource
+        .connect(lowpass)
+        .connect(bandpass)
+        .connect(crackleBand)
+        .connect(gain)          // internal dynamics
+        .connect(boostGain)     // Android boost
+        .connect(masterGain)    // platform‑aware final volume
+        .connect(audioContext.destination);
+    fireplaceNoiseSource.start(now);
+
+    // ------------------- 8. Random pop‑bursts (sparks) -------------------
+    function schedulePop() {
+        const now = audioContext.currentTime;
+        const popSource = audioContext.createBufferSource();
+
+        // 20 ms white‑noise burst
+        const popBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.02, audioContext.sampleRate);
+        const popData = popBuffer.getChannelData(0);
+        for (let i = 0; i < popData.length; i++) {
+            // exponential fade‑out for a crisp spark
+            popData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (popData.length * 0.3));
+        }
+        popSource.buffer = popBuffer;
+
+        const popGain = audioContext.createGain();
+        popGain.gain.setValueAtTime(0, now);
+        popGain.gain.linearRampToValueAtTime(0.12 * soundVolume, now + 0.001);
+        popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+
+        popSource.connect(popGain).connect(audioContext.destination);
+        popSource.start(now);
+
+        // schedule next spark (0.3‑2 s random)
+        const nextIn = 0.3 + Math.random() * 1.7;
+        popTimeout = setTimeout(schedulePop, nextIn * 1000);
+    }
+
+    schedulePop();
+    fireplaceAmbienceTimer = true;
+}
+
+// ------------------------------------------------------------------
+// Stop the ambience
+function stopFireplaceAmbience() {
+    if (fireplaceNoiseSource) {
+        fireplaceNoiseSource.stop();
+        fireplaceNoiseSource.disconnect();
+        fireplaceNoiseSource = null;
+    }
+    if (lfo) {
+        lfo.stop();
+        lfo.disconnect();
+        lfo = null;
+    }
+    if (popTimeout) {
+        clearTimeout(popTimeout);
+        popTimeout = null;
+    }
+    fireplaceAmbienceTimer = null;
+}
+
+
+
+// ------------------------------------------------------------
+function stopFireplaceAmbience() {
+    if (fireplaceNoiseSource) {
+        fireplaceNoiseSource.stop();
+        fireplaceNoiseSource.disconnect();
+        fireplaceNoiseSource = null;
+    }
+    if (lfo) {
+        lfo.stop();
+        lfo.disconnect();
+        lfo = null;
+    }
+    if (popTimeout) {
+        clearTimeout(popTimeout);
+        popTimeout = null;
+    }
+    fireplaceAmbienceTimer = null;
+}
+
+// ------------------------------------------------------------
+function stopFireplaceAmbience() {
+    if (fireplaceNoiseSource) {
+        fireplaceNoiseSource.stop();
+        fireplaceNoiseSource.disconnect();
+        fireplaceNoiseSource = null;
+    }
+    // stop auxiliary nodes
+    if (lfo) {
+        lfo.stop();
+        lfo.disconnect();
+        lfo = null;
+    }
+    if (popTimeout) {
+        clearTimeout(popTimeout);
+        popTimeout = null;
+    }
+    fireplaceAmbienceTimer = null;
 }
 
 // ---------------------------------------------------------------
@@ -3902,7 +4148,7 @@ const newTheme = selectNewTheme(currentTheme);
 // DEBUG THEME
 //let newTheme;
 //if (floor === 3) {
-//    newTheme = 'ruins'; // DEBUG: Force ruins on floor 3
+//    newTheme = 'hell'; // DEBUG: Force X theme on floor 3
 //} else {
 //    newTheme = selectNewTheme(currentTheme);
 //}
@@ -4086,6 +4332,34 @@ updateSnowState(); // keeps snowflakes in sync
 
         // Ensure map is valid
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
+
+            // Pre-randomize tile variants once per floor (prevents per-frame dizziness)
+            tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1)); // -1 = no variant (use single tile)
+
+if (['desert', 'paradise', 'hell', 'ruins'].includes(currentTheme) && !(currentTheme === 'hell' && snowyHellActive)) {
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] === 0) { // floor tile – full random variant
+                tileVariantMap[y][x] = Math.floor(Math.random() * assets.themes[currentTheme].floors.length);
+            } else if (map[y][x] === 1) { // wall tile
+                if (currentTheme === 'hell') {
+                    // Hell normal walls: pre-compute phase offset 0-3 for desynced animation
+                    tileVariantMap[y][x] = Math.floor(Math.random() * 4); // 0-3 only
+                } else {
+                    // Other themes: full random variant
+                    tileVariantMap[y][x] = Math.floor(Math.random() * assets.themes[currentTheme].walls.length);
+                }
+            }
+        }
+    }
+}
+
+            // Cozy fireplace ambience for regular hell
+            if (currentTheme === 'hell' && !snowyHellActive) {
+                startFireplaceAmbience();
+            } else {
+                stopFireplaceAmbience();
+            }
 
 // Place player
 p.x = rooms[0].x + 1; p.y = rooms[0].y + 1;
@@ -11169,14 +11443,14 @@ if (floor >= 30) {
     p.runes.push('r','i','p');
     logBattleEvent("RARE REWARD: +1 Pickaxe + RIP runes!");
     if (wisps.length > 0) {
-    talkSpeak(13); // "yes, Pick.axe , RIP"
+    talkSpeak(13); // "yes,. PiickAaXe , RIP"
     }
 } else {
     // Common tier floors — just pickaxe
     p.pickaxes += 1;
     logBattleEvent("Trial complete! +1 Pickaxe");
     if (wisps.length > 0) {
-    talkSpeak(14); // "yes, Pick.axe"
+    talkSpeak(14); // "yes,. PiickAaXe"
     }
 }
 
@@ -11520,6 +11794,12 @@ function restart() {
     skillTreeActive = false;
     skillTreeSelectedOption = 0;
 
+    tileVariantMap = [];
+
+    fireplaceNoiseSource = null;
+    fireplaceAmbienceTimer = null;
+    lfo = null;               // ember‑flicker LFO
+    popTimeout = null;        // handle for the next pop burst
     // Hide and clear skill tree overlay
     const overlay = document.getElementById('skill-tree-overlay');
     if (overlay) {
@@ -12000,28 +12280,41 @@ if (rainNoiseSource) {
     const radius = 4;
 // ───── WALLS ONLY (with Snowy Hell tint) ─────
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (map[y][x] === 1) { // walls only
-        if (snowyHellActive) {
-            c.save();
-            c.drawImage(assets.themes.hell.wall, x * S, y * S, S, S);
-            c.globalCompositeOperation = 'source-atop';
-            c.fillStyle = 'rgba(190,240,255,0.85)'; // icy tint on walls
-            c.fillRect(x * S, y * S, S, S);
-            c.restore();
-        } else {
-            c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
+        if (map[y][x] === 1) { // walls only
+            if (currentTheme === 'hell' && !snowyHellActive) {
+                // Per-tile random cycle speed 600–2400ms (position-seeded for determinism + variety)
+                const seed = (x * 31 + y * 37) & 0xFFFF; // simple hash for good spread
+                const speed = 600 + (seed % 1801); // 600 to 2400ms range
+                const tileFrame = Math.floor(Date.now() / speed);
+                const phaseOffset = tileVariantMap[y][x]; // pre-randomized 0-3 phase
+                const animIndex = (tileFrame + phaseOffset) % assets.themes.hell.walls.length;
+                c.drawImage(assets.themes.hell.walls[animIndex], x * S, y * S, S, S);
+            } else {
+                const variant = tileVariantMap[y][x];
+                if (variant >= 0 && assets.themes[currentTheme]?.walls) {
+                    const walls = assets.themes[currentTheme].walls;
+                    c.drawImage(walls[variant], x * S, y * S, S, S);
+                } else if (currentTheme === 'hell' && snowyHellActive) {
+                    c.save();
+                    c.drawImage(assets.themes.hell.wall, x * S, y * S, S, S);
+                    c.globalCompositeOperation = 'source-atop';
+                    c.fillStyle = 'rgba(190,240,255,0.85)'; // icy tint
+                    c.fillRect(x * S, y * S, S, S);
+                    c.restore();
+                } else {
+                    c.drawImage(assets.themes[currentTheme].wall, x * S, y * S, S, S);
+                }
+            }
+
+            // Red Maze tint (unchanged)
+            if (redMazeActive && currentTheme === 'dungeon') {
+                c.save();
+                c.globalCompositeOperation = 'source-atop';
+                c.fillStyle = 'rgba(200, 0, 0, 0.4)';
+                c.fillRect(x * S, y * S, S, S);
+                c.restore();
+            }
         }
-        
-// Red Maze: tint dungeon walls red + transparent
-if (redMazeActive && currentTheme === 'dungeon') {
-    c.save();
-    c.globalCompositeOperation = 'source-atop';
-    c.fillStyle = 'rgba(200, 0, 0, 0.4)'; // slight red transparency
-    c.fillRect(x * S, y * S, S, S);
-    c.restore();
-}
-        
-    }
 }
 // Save floor state before entering hideout (moved here to run once per draw)
 if (!inHideout) {
@@ -12052,8 +12345,12 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
     if (isVisible && map[y][x] !== 1) {
 
-        // Draw floor — snowy hell only when BOTH in hell theme AND snowy block is active
-        if (currentTheme === 'hell' && snowyHellActive) {
+        // Pre-randomized variant floor (stable per floor – no dizziness)
+        const variant = tileVariantMap[y][x];
+        if (variant >= 0 && assets.themes[currentTheme]?.floors) {
+            const floors = assets.themes[currentTheme].floors;
+            c.drawImage(floors[variant], x * S, y * S, S, S);
+        } else if (currentTheme === 'hell' && snowyHellActive) {
             c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
         } else {
             c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
