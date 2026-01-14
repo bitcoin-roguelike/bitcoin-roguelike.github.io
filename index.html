@@ -1517,6 +1517,10 @@ let redMazeLazerTime = 0;           // Timestamp for next lazer volley
 let activeLazers = [];  // Array of active lazer beams for drawing {wallX, wallY, px, py, startTime}
 let redMazeAuraGiven = false;       // Has the player received the red aura reward this run?
 
+let sandworm = null; // {x, y, currentX, currentY, hp: 50, nextBurrowTime}
+let sandwormBurrowPaused = false; // pause burrow timer in special areas
+let desertStreakHasSandworm = false; // one sandworm per desert streak
+
 let enemyBgFrameTimes = new Map(); // Track per-enemy bg animation start time
 let shrinePositions = [];
 let auraHitStartTime = 0; // New: Track aura hit flash start
@@ -2276,6 +2280,10 @@ assets.satoshi_scourge.onerror = () => console.error('Failed to load satoshi_sco
 assets.cat = new Image();
 assets.cat.src = 'black_cat.png';
 assets.cat.onerror = () => console.error('Failed to load black_cat.png');
+
+// Sandworm asset (32x32 or whatever size you made)
+assets.sandworm = new Image();
+assets.sandworm.src = 'sandworm.png';
 
 // New top-right UI assets (16x16)
 assets.inv_cloth = new Image();
@@ -4148,7 +4156,7 @@ const newTheme = selectNewTheme(currentTheme);
 // DEBUG THEME
 //let newTheme;
 //if (floor === 3) {
-//    newTheme = 'hell'; // DEBUG: Force X theme on floor 3
+//    newTheme = 'desert'; // DEBUG: Force X theme on floor 3
 //} else {
 //    newTheme = selectNewTheme(currentTheme);
 //}
@@ -4216,6 +4224,13 @@ if (rainNoiseSource) {
 }
         currentTheme = newTheme;
     }
+
+        // Reset sandworm streak when leaving desert
+        if (currentTheme !== 'desert') {
+            desertStreakHasSandworm = false;
+            sandworm = null;
+        }    
+
 } else {
     // Not a theme-change floor → preserve current variants if active
     if (currentTheme === 'hell' && currentThemeBlock === 'hell_snowy') {
@@ -4241,7 +4256,8 @@ if (rainNoiseSource) {
 }
 
 updateSnowState(); // keeps snowflakes in sync
-        
+sandwormBurrowPaused = false; // resume burrow on normal floors
+
         // Update text color based on theme
         let textColor;
         switch (currentTheme) {
@@ -4620,6 +4636,28 @@ if (!inHideout && !inPuzzleRoom && puzzleStaticCanvas === null && Math.random() 
         attempts--;
     } while (attempts > 0);
 }
+
+        // Sandworm spawn: 25% chance once per desert streak (not puzzle/hideout)
+        if (currentTheme === 'desert' && !desertStreakHasSandworm && Math.random() < 0.25 && !inPuzzleRoom && !inHideout) {
+            // Find random floor tile far from player
+            let attempts = 100;
+            let sx, sy;
+            do {
+                sx = Math.floor(Math.random() * W);
+                sy = Math.floor(Math.random() * H);
+            } while (attempts-- > 0 && (map[sy][sx] !== 0 || Math.abs(sx - p.x) + Math.abs(sy - p.y) < 8));
+
+            if (attempts > 0) {
+                sandworm = {
+                    x: sx, y: sy,
+                    currentX: sx * S, currentY: sy * S,
+                    hp: 50, // arbitrary, adjust as needed
+                    nextBurrowTime: performance.now() + 3000 + Math.random() * 4000 // first burrow 3-7s
+                };
+                desertStreakHasSandworm = true;
+                logBattleEvent(`Floor ${floor} - A Sandworm emerges from the dunes!`);
+            }
+        }
 
 // Initialize dangerous areas array for spells
 dangerousAreas = [];
@@ -5120,6 +5158,15 @@ if (p.hp <= 0 && !gameOver) {
             logBattleEvent(
                 `Floor ${floor} - Echo Warden revives you with ${lifeMsg} HP! (${wardenUses}/3 uses)`
             );
+            
+            // Reset skill tree system
+            playerXP = 0;
+            playerLevel = 1;
+            playerClass = null;
+            pendingSkillTreeLevel = null;
+            skillTreeActive = false;
+            skillTreeSelectedOption = 0;
+            
             updateSatsDisplay();
             needsRedraw = true;
             wardenFlashStart = Date.now();
@@ -5949,9 +5996,10 @@ p.previousY = p.y;
         return; // Don't start animation
     }
 
-// Block movement if enemy or Red Maze eye is on target tile
+// Block movement if enemy, Red Maze eye, or sandworm is on target tile
 if (enemies.some(e => e.x === nx && e.y === ny) ||
-    (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny)) {
+    (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) ||
+    (sandworm && sandworm.x === nx && sandworm.y === ny)) {
     p.anim.direction = newDirection;
     needsRedraw = true;
     return; // Don't start animation
@@ -6755,6 +6803,7 @@ if (map[ny][nx] === 12 && !inHideout) {
 
     inHideout = true;
     initMap();  // this actually switches to hideout map/theme
+    sandwormBurrowPaused = true; // pause burrow in hideout
     needsRedraw = true;  // force immediate redraw
     return;
 }
@@ -6781,6 +6830,7 @@ if (map[ny][nx] === 25) {
         }
 
         logBattleEvent("You step into the shimmering rift... a sacred trial begins!");
+        sandwormBurrowPaused = true; // pause burrow while in puzzle
         startPuzzleRoom();
         return;
     }
@@ -9645,6 +9695,8 @@ if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y -
         color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
     });
 }
+
+
         
         // Wisp sync attack: Assist player's target
         if (wisps.length > 0) {
@@ -9964,6 +10016,40 @@ if (redMazeActive && redMaze) {
             color: 'rgba(247, 147, 26, 0.8)'
         });
     }
+}
+
+// Sandworm melee hit (sword types only — no wisp)
+if (sx === sandworm?.x && sy === sandworm?.y) {
+    sandworm.hp -= p.atk; // or higher damage if you want
+    playWebAudioSound(sounds.hit);
+    logBattleEvent(`Sandworm takes ${p.atk} damage! (${sandworm.hp} HP left)`);
+
+    if (sandworm.hp <= 0) {
+        // Rewards
+        const maxHP = 36 + (p.hasArmor ? 12 : 0);
+        p.hp = maxHP;
+        p.soulStormCharges = 256;
+
+        // Drop diamond
+        if (map[sandworm.y][sandworm.x] === 0) {
+            map[sandworm.y][sandworm.x] = 10; // diamond tile
+        } else {
+            // Try adjacent if center occupied
+            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+            for (let d of dirs) {
+                const nx = sandworm.x + d.dx, ny = sandworm.y + d.dy;
+                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                    map[ny][nx] = 10;
+                    break;
+                }
+            }
+        }
+
+        logBattleEvent(`Sandworm defeated! Full HP restored + 256 soul charges + Diamond!`);
+        playWebAudioSound(sounds.secret); // reuse secret sound for dramatic death/reward
+        sandworm = null;
+    }
+    needsRedraw = true;
 }
     
     moveEnemies();
@@ -11835,6 +11921,8 @@ entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 window.spokenUniques = new Set();
 window.breakReminderSpoken = false;
 
+    sandwormBurrowPaused = false; // pause burrow timer in special areas
+
     lastMessageTime = 0;  
     redMazeSavedMuteState = null; 
     // Reset shrine tracking
@@ -13370,6 +13458,15 @@ entangleAnimations.forEach(ent => {
         
 }); // END OF DRAWING OF ENEMIES ETC ..
 
+// Draw sandworm on top — hide completely in puzzle room or hideout
+if (sandworm && !inPuzzleRoom && !inHideout) {
+    const dist = Math.sqrt((sandworm.x - p.x)**2 + (sandworm.y - p.y)**2);
+    const isVisible = fogMap[sandworm.y][sandworm.x] === 1 || dist <= radius;
+    if (isVisible && assets.sandworm.complete) {
+        c.drawImage(assets.sandworm, sandworm.currentX, sandworm.currentY, S, S);
+    }
+}
+
     document.getElementById('potions').textContent = p.potions;
     document.getElementById('health').textContent = Math.max(0, p.hp);
 
@@ -13800,6 +13897,26 @@ if (gameOver) {
 }
     
 updateProjectiles();
+
+// Sandworm burrow
+if (sandworm && !sandwormBurrowPaused && performance.now() > sandworm.nextBurrowTime) {
+    // Pick random floor tile
+    let attempts = 50;
+    let nx, ny;
+    do {
+        nx = Math.floor(Math.random() * W);
+        ny = Math.floor(Math.random() * H);
+    } while (attempts-- > 0 && map[ny][nx] !== 0);
+
+    if (attempts > 0) {
+        sandworm.x = nx;
+        sandworm.y = ny;
+        sandworm.currentX = nx * S;
+        sandworm.currentY = ny * S;
+    }
+    sandworm.nextBurrowTime = performance.now() + 3000 + Math.random() * 4000;
+    needsRedraw = true;
+}
 
 // Update frost nova projectiles
 frostNovaProjectiles = frostNovaProjectiles.filter(nova => {
