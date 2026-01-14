@@ -5072,22 +5072,16 @@ if (p.hp <= 0 && !gameOver) {
     // -------------------------------------------------
     // 2️⃣ Echo Warden revival attempt (integer math)
     // -------------------------------------------------
-    // Allow up to 3 revives (wardenUses 0‑2). The roll itself decides success.
     if (wardenUses < 3 && !wardenRollPending) {
-        wardenRollPending = true;               // guard against double‑rolls
-
-        // Integer roll 1‑100 inclusive
+        wardenRollPending = true; // guard against double-rolls
         const roll = Math.floor(Math.random() * 100) + 1;
         const success = roll <= soulResonance;
-
-        // Debug line (optional)
-        // logBattleEvent(`Roll ${roll} vs resonance ${soulResonance}%`);
 
         if (success) {
             // ----- successful revival -----
             wardenUses++;
-            soulResonance = 0;                  // consume resonance
-            wardenRollPending = false;          // allow next death to roll again
+            soulResonance = 0; // consume resonance
+            wardenRollPending = false;
 
             const reviveHP = wardenUses === 1 ? 100 :
                              wardenUses === 2 ? 10 : 1;
@@ -5116,7 +5110,6 @@ if (p.hp <= 0 && !gameOver) {
             });
             enemies = [];
 
-            // place the warden tile (24) at the player's current location
             const wx = p.x;
             const wy = p.y;
             echoWardenPos = { x: wx, y: wy };
@@ -5130,70 +5123,42 @@ if (p.hp <= 0 && !gameOver) {
             updateSatsDisplay();
             needsRedraw = true;
             wardenFlashStart = Date.now();
-            gameOver = false;                    // keep the game running
+            gameOver = false;
+
+            return; // ← CRITICAL: Exit early - NO death penalties on success!
         } else {
             // ----- failed roll – instant death -----
             logBattleEvent(
                 `Floor ${floor} - Echo Warden fails... (${Math.floor(soulResonance)}% chance missed, rolled ${roll})`
             );
-
-            // Normal‑death handling (same as the “no resonance” branch)
-            p.hp = 0;
-            diamonds = 0;
-
-            if (p.farmLocked) {
-                logBattleEvent(
-                    `Floor ${floor} - Your farm withered... all planted SATS lost forever.`
-                );
-                p.farmLocked = false;
-                p.farmLockedFloor = 0;
-                p.farmLockedSats = 0;
-            }
-
-            playerXP = 0;          // reset XP meter on death
-            playerLevel = 1;           // reset level to 1
-            updateXPBar();         // immediately update the bar to 0
-            
-            logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-            gameOver = true;
-            inputBlocked = true;
-            setTimeout(() => {
-                inputBlocked = false;
-            }, 1000);
-
-            wardenRollPending = false; // reset for any future death checks
         }
-
-        // -------------------------------------------------
-        // End of warden‑revival attempt
-        // -------------------------------------------------
-    } else {
-        // -------------------------------------------------
-        // 3️⃣ Normal death (no revives left or roll already pending)
-        // -------------------------------------------------
-        p.hp = 0;
-        diamonds = 0;
-
-        if (p.farmLocked) {
-            logBattleEvent(
-                `Floor ${floor} - Your farm withered... all planted SATS lost forever.`
-            );
-            p.farmLocked = false;
-            p.farmLockedFloor = 0;
-            p.farmLockedSats = 0;
-        }
-
-            playerXP = 0;          // reset XP meter on death
-            playerLevel = 1;           // reset level to 1
-            updateXPBar();         // immediately update the bar to 0
-
-        logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
-        gameOver = true;
-        inputBlocked = true;
-        setTimeout(() => {
-            inputBlocked = false;
-        }, 1000);
     }
+
+    // -------------------------------------------------
+    // 3️⃣ Normal death (no revives left / failed roll / no resonance)
+    // -------------------------------------------------
+    p.hp = 0;
+    diamonds = 0;
+
+    if (p.farmLocked) {
+        logBattleEvent(
+            `Floor ${floor} - Your farm withered... all planted SATS lost forever.`
+        );
+        p.farmLocked = false;
+        p.farmLockedFloor = 0;
+        p.farmLockedSats = 0;
+    }
+
+    playerXP = 0;
+    playerLevel = 1;
+    updateXPBar();
+
+    logBattleEvent(`Floor ${floor} - Hero Fell! Reached Floor ${floor}`);
+    gameOver = true;
+    inputBlocked = true;
+    setTimeout(() => {
+        inputBlocked = false;
+    }, 1000);
 }
 
     needsRedraw = true;
@@ -7502,40 +7467,42 @@ enemies.forEach(e => {
 
 
     // Dolphin push (one-time, smooth interpolated)
-    if (e.type.name === 'Dolphin' && !e.pushUsed && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1) {
-        e.pushUsed = true;
-        const pushX = p.x + (p.x - e.x); // opposite direction
-        const pushY = p.y + (p.y - e.y);
-        
-        // Validate push path
-        const dx = pushX - p.x;
-        const dy = pushY - p.y;
-        const steps = Math.max(Math.abs(dx), Math.abs(dy));
-        let valid = true;
-        for (let i = 1; i <= steps; i++) {
-            const checkX = Math.round(p.x + (dx / steps) * i);
-            const checkY = Math.round(p.y + (dy / steps) * i);
-            if (checkX < 0 || checkX >= W || checkY < 0 || checkY >= H || map[checkY][checkX] !== 0) {
-                valid = false;
-                break;
-            }
-        }
-        
-        if (valid) {
-            // Start smooth push animation (same as huge shrimp)
-            p.startX = p.x; p.startY = p.y;
-            p.x = pushX; p.y = pushY;
-            p.targetTileX = pushX; p.targetTileY = pushY;
-            p.deltaX = (pushX - p.startX) * 2;
-            p.deltaY = (pushY - p.startY) * 2;
-            p.stepsLeft = 8;
-            p.moving = true;
-            p.moveStartTime = performance.now();
-            p.moveDuration = 200;
-            logBattleEvent(`Floor ${floor} - Dolphin pushes you away!`);
-            needsRedraw = true;
+if (e.type.name === 'Dolphin' && !e.pushUsed && 
+    Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1 &&
+    !e.frozen) {  // ← added: no push if frozen
+    e.pushUsed = true;
+    const pushX = p.x + (p.x - e.x); // opposite direction
+    const pushY = p.y + (p.y - e.y);
+    
+    // Validate push path
+    const dx = pushX - p.x;
+    const dy = pushY - p.y;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    let valid = true;
+    for (let i = 1; i <= steps; i++) {
+        const checkX = Math.round(p.x + (dx / steps) * i);
+        const checkY = Math.round(p.y + (dy / steps) * i);
+        if (checkX < 0 || checkX >= W || checkY < 0 || checkY >= H || map[checkY][checkX] !== 0) {
+            valid = false;
+            break;
         }
     }
+    
+    if (valid) {
+        // Start smooth push animation (same as huge shrimp)
+        p.startX = p.x; p.startY = p.y;
+        p.x = pushX; p.y = pushY;
+        p.targetTileX = pushX; p.targetTileY = pushY;
+        p.deltaX = (pushX - p.startX) * 2;
+        p.deltaY = (pushY - p.startY) * 2;
+        p.stepsLeft = 8;
+        p.moving = true;
+        p.moveStartTime = performance.now();
+        p.moveDuration = 200;
+        logBattleEvent(`Floor ${floor} - Dolphin pushes you away!`);
+        needsRedraw = true;
+    }
+}
     
     if (e.frozen && e.frozenTurns > 0) {
         e.frozenTurns--;
@@ -11862,7 +11829,7 @@ p.farmLocked = false;
 p.farmLockedFloor = 0;
 p.farmLockedSats = 0;
 
-rostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
+frostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
 entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 
 window.spokenUniques = new Set();
