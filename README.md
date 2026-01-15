@@ -29,7 +29,6 @@ A button = potion<br/>
 Y = mute music / activate screen saver<br/>
 X = start the game / restart the game<br/>
 <br/>
-Note! At startup, (one time only) you need to click or touch the "Start button" on screen to start the game<br/>
-Due to a compability issue on IOS and Android devices. They require audio to be activated by click or touch<br/>
+Note: On first launch, click or tap the Start button—iOS/Android require a tap to enable audio<br/>
 <br/>
 Have fun! :)<br/>
