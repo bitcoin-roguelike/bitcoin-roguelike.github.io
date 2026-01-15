@@ -30,6 +30,6 @@ Y = mute music / activate screen saver<br/>
 X = start the game / restart the game<br/>
 <br/>
 Note! At startup, (one time only) you need to click or touch the "Start button" on screen to start the game<br/>
-This is a compability limitation due to Safari on IOS requiring audio to be activated by click or touch<br/>
+Due to a compability issue on IOS and Android devices. They require audio to be activated by click or touch<br/>
 <br/>
 Have fun! :)<br/>
