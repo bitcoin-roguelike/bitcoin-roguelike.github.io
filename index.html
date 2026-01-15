@@ -3744,7 +3744,7 @@ function toggleMute() {
 }
 
 function logWhaleHashId(txid) {
-    const newEntry = `Floor ${floor} - <a href="https://mempool.space/tx/${txid}" target="_blank">${txid}</a>`;
+    const newEntry = `Floor ${floor}: <a href="https://mempool.space/tx/${txid}" target="_blank">${txid}</a>`;
     whaleHashIds.push(newEntry);
     if (whaleHashIds.length > 50) {
         whaleHashIds = ['Whale Transactions:', ...whaleHashIds.slice(-49)];
@@ -4701,18 +4701,17 @@ exit = null;
             }
         }
 
-
-    // Global wisp "take a break" reminder every 25 floors
-    if (floor % 25 === 0 && floor > 0 && !window.breakReminderSpoken) {
-        if (wisps.length > 0) {
-            talkSpeak(8); // "take, a breac!"
-            window.breakReminderSpoken = true;
-        }
-    }
-    // Reset spoken flag on new floor if needed (optional)
-    if (floor % 25 !== 0) {
-        window.breakReminderSpoken = false;
-    }
+// Global wisp "take a break" reminder every 25 floors
+    if (floor % 25 === 0 && floor > 0 && !window.breakReminderSpoken) {
+        if (wisps.length > 0) {
+            talkSpeak(8); // "take, a breac!"
+            window.breakReminderSpoken = true;
+        }
+    }
+    // Reset spoken flag on new floor if needed (optional)
+    if (floor % 25 !== 0) {
+        window.breakReminderSpoken = false;
+    }
 
         // Check runewords at floor start
         checkRunewordsAtFloorStart();
@@ -8876,7 +8875,7 @@ if (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) {
     const eyeDmg = Math.floor(p.atk * 0.5); // half damage like normal ranged
     redMaze.hp -= eyeDmg;
     logBattleEvent(`Floor ${floor} - Shooting Sword hits Red Maze eye! ${eyeDmg} DMG (HP: ${redMaze.hp}/100)`);
-    playWebAudioSound(sounds.hit);
+    playShrimpRageGrowl(); // rage growl on hit
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
@@ -10021,8 +10020,16 @@ if (redMazeActive && redMaze) {
 // Sandworm melee hit (sword types only — no wisp)
 if (sx === sandworm?.x && sy === sandworm?.y) {
     sandworm.hp -= p.atk; // or higher damage if you want
-    playWebAudioSound(sounds.hit);
+    playShrimpRageGrowl();
     logBattleEvent(`Sandworm takes ${p.atk} damage! (${sandworm.hp} HP left)`);
+
+// Red flash on hit
+    highlightTiles.push({
+        x: sandworm.x,
+        y: sandworm.y,
+        highlightStart: Date.now(),
+        color: 'rgba(247, 147, 26, 0.7)'
+    });
 
     if (sandworm.hp <= 0) {
         // Rewards
@@ -10163,9 +10170,6 @@ checkRunewords();
     addTerminalLineToContent(`Soul Shards: ${p.soulShards}`);
     addTerminalLineToContent(`Soul Orbs: ${p.soulOrbs}`);
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
-let fee = p.coolROI > 0 ? 49 - (p.coolROI - 1) * 1 : 50; // 49% at 1 ROI, 50% if none
-fee = Math.max(25, fee); // cap at minimum 25%
-addTerminalLineToContent(`Farm Spot Fee: ${fee}%`);
     addTerminalLineToContent('');
 
     // Display regular inventory items
@@ -10196,6 +10200,9 @@ if (p.hasCursedRing) {
     addTerminalLineToContent(`Pickaxes: ${p.pickaxes}`);
     addTerminalLineToContent(`Diamonds: ${diamonds}`);
     addTerminalLineToContent(`Perfectly Cut Diamonds: ${document.getElementById('perfectlyCutDiamonds').textContent}`);
+let fee = p.coolROI > 0 ? 49 - (p.coolROI - 1) * 1 : 50; // 49% at 1 ROI, 50% if none
+fee = Math.max(25, fee); // cap at minimum 25%
+addTerminalLineToContent(`Farm Spot Fee: ${fee}%`);    
     //addTerminalLineToContent(`Runes: ${document.getElementById('runes').textContent}`); // all runes
     // Get runes text and filter out runes ending with 0 (like p0)
     let runesText = document.getElementById('runes').textContent;
