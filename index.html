@@ -4161,11 +4161,11 @@ if (!window.currentBounty) {
 // Side Quest assignment  ← NEW, ALSO KEEP
 if (!window.currentSideQuest || (window.currentSideQuest && window.currentSideQuest.progress >= window.currentSideQuest.quota)) {
     const questOptions = [
-        {type: 'Shrimp', quota: 50},
-        {type: 'Crab', quota: 30},
-        {type: 'Squid', quota: 20},
+        {type: 'Shrimp', quota: 40},
+        {type: 'Crab', quota: 20},
+        {type: 'Squid', quota: 15},
         {type: 'Dolphin', quota: 10},
-        {type: 'Shark', quota: 10},
+        {type: 'Shark', quota: 7},
         {type: 'Whale', quota: 3}
     ];
     let available = questOptions.filter(q => q.type !== window.lastSideQuestType);
