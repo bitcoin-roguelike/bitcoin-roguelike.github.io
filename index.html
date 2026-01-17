@@ -8446,10 +8446,11 @@ function applyEnsnare() {
 function applyWispAttack(wisp, primaryTarget) {
     const now = Date.now();
     let hitEnemies = new Set(); // Track all affected enemies for flash
+    let novaTriggered = false; // Track if AOE freeze actually hit anyone
 
     // ——— MAIN TARGET (always hits first) ———
     if (wisp.type.damage > 0) {
-        // Fire / Earth / Chain respect bit shield — Cold (freeze) ignores it
+        // Fire / Earth / Chain respect bit shield — Cold (now only AOE) ignores it
         if (primaryTarget.bitAmmo > 0 && wisp.type.effect !== 'freeze') {
             primaryTarget.bitAmmo--;
             primaryTarget.bits = primaryTarget.bitAmmo;
@@ -8474,38 +8475,22 @@ function applyWispAttack(wisp, primaryTarget) {
         hitEnemies.add(primaryTarget);
     }
     else if (wisp.type.effect === 'freeze') {
-        // Cold = freeze (ignores shield, no damage, no mercy needed)
-        // Cursed Trader immune to wisp freeze
-        if (primaryTarget.type.name !== 'Cursed Trader') {
-            primaryTarget.frozen = true;
-            primaryTarget.frozenTurns = 2;
-            delete primaryTarget.frozenByEnsnare; // ensure wisp freeze shows frozen overlay
-            
-            // Throttled message — once every 1 second
-            const now = performance.now();
-            if (now - lastMessageTime >= 1000) {
-                logBattleEvent(`Wisp freezes ${primaryTarget.type.name}! [FROST LOCK]`);
-                lastMessageTime = now;
-            }
-        } else {
-            logBattleEvent(`Wisp ${wisp.type.name.toUpperCase()} fails against Cursed Trader!`);
-        }
-        playWebAudioSound(sounds.attack);
-        hitEnemies.add(primaryTarget);
+        // Cold wisp: NO single-target freeze anymore (nerf)
+        // Primary target gets nothing (silent — no log, no sound here)
+        // AOE Frost Nova handled below
+        hitEnemies.add(primaryTarget); // still count for flash if AOE hits
     }
 
     // ——— AOE EFFECTS (only apply to nearby enemies) ———
     const range = wisp.type.range;
-
     enemies.forEach(enemy => {
         if (enemy === primaryTarget) return;
         const dist = Math.abs(enemy.x - wisp.x) + Math.abs(enemy.y - wisp.y);
         if (dist > range) return;
-
         let affected = false;
 
         if (wisp.type.name === 'cold' && wisp.type.aoe === 'medium') {
-            // Medium AOE freeze
+            // Medium AOE freeze (unchanged)
             const dx = Math.abs(enemy.x - primaryTarget.x);
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if (dx <= 1 && dy <= 1) {
@@ -8521,12 +8506,11 @@ function applyWispAttack(wisp, primaryTarget) {
                         enemy.frozenTurns = 2;
                         delete enemy.frozenByEnsnare; // wisp freeze priority — show frozen overlay
                         affected = true;
+                        novaTriggered = true;
                     }
                 }
-
                 // Spawn drifting Frost Nova projectile toward this enemy
                 frostNovaProjectiles.push({
-                
                     x: wisp.x,
                     y: wisp.y,
                     currentX: wisp.x * S,
@@ -8536,12 +8520,11 @@ function applyWispAttack(wisp, primaryTarget) {
                     frameIndex: 0,
                     startTime: performance.now()
                 });
-                
-                // Play Frost Nova sound (once per nova burst)
-                if (frostNovaProjectiles.length === 1) { // first nova this turn
+
+                // Play Frost Nova sound once per burst
+                if (frostNovaProjectiles.length === 1 || novaTriggered) {
                     playFrostNovaSound();
                 }
-                
             }
         }
         else if (wisp.type.name === 'chain' && wisp.type.aoe === 'large') {
@@ -8583,6 +8566,15 @@ function applyWispAttack(wisp, primaryTarget) {
             enemy.wispHitFlash = { time: now, type: wisp.type.name };
         }
     });
+
+    // Log Frost Nova only if it actually froze someone
+    if (novaTriggered) {
+        // Throttled message — once every 1 second
+        if (now - lastMessageTime >= 1000) {
+            logBattleEvent(`Wisp unleashes Frost Nova! [FROST NOVA]`);
+            lastMessageTime = now;
+        }
+    }
 
     // ——— FINAL FLASH ON ALL HIT ENEMIES ———
     hitEnemies.forEach(e => {
