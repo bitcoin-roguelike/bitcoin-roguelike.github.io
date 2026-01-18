@@ -1570,7 +1570,9 @@ window.currentSideQuest = null;
 window.lastSideQuestType = null;
 
 let tileVariantMap = []; // H x W variant indices (-1 = default single tile)
-let bountyBoardWalls = []; // Array of {x, y, originalTile} to restore later
+
+let infoSignActive = false;
+let bountyBoardActive = false;
 
 let map = [],
 p = {
@@ -2287,6 +2289,11 @@ assets.cat.onerror = () => console.error('Failed to load black_cat.png');
 
 assets.elixir = new Image();
 assets.elixir.src = 'elixir.png';
+
+assets.info_sign = new Image();
+assets.info_sign.src = 'info_sign.png';
+assets.info_tile = new Image();
+assets.info_tile.src = 'info_tile.png';
 
 // Sandworm — 3-frame animation
 assets.sandworm = [new Image(), new Image(), new Image()];
@@ -4086,12 +4093,19 @@ function initMap() {
             });
 
             // Place billboard 2 tiles ABOVE jeweller (main room, north side)
-            const billboardX = jewellerPos.x;
+            const billboardX = jewellerPos.x + 1;
             const billboardY = jewellerPos.y - 2;
             if (billboardY >= 0 && map[billboardY][billboardX] === 0) {
                 map[billboardY][billboardX] = 32; // Billboard tile ID (pick any unused, e.g. 32)
             } else {
                 console.warn('Failed to place billboard: occupied or out of bounds at', billboardX, billboardY);
+            }
+
+            // (after placing billboard)
+            const infoSignX = billboardX - 2;
+            const infoSignY = billboardY;
+            if (infoSignY >= 0 && infoSignX >= 0 && map[infoSignY][infoSignX] === 0) {
+                map[infoSignY][infoSignX] = 34; // new tile ID for info sign
             }
 
             // Place blacksmith (unchanged)
@@ -6973,131 +6987,76 @@ if (!musicMuted && !inPuzzleRoom) {
 /* -------------------------------------------------------------
    Bounty‑board overlay – fixed key handling
    ------------------------------------------------------------- */
-if (map[ny][nx] === 32 && inHideout && window.currentBounty) {
-    // ---------- Create / reuse overlay ----------
+// In move() - after player position update (replace your current bounty board logic)
+const bountyTile = 32;
+const onBounty = map[p.y][p.x] === bountyTile && inHideout;
+
+if (onBounty && !bountyBoardActive) {
+    // Create/reuse overlay
     let overlay = document.getElementById('bounty-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = 'bounty-overlay';
-        overlay.style.cssText = `
-            position:fixed;top:0;left:0;width:100%;height:100%;
-            background:rgba(0,0,0,0.85);z-index:1000;
-            display:flex;flex-direction:column;align-items:center;
-            justify-content:center;font-family:"VT323",monospace;
-            color:#ff8c00;pointer-events:none;
-        `;
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"VT323",monospace;color:#ff8c00;pointer-events:none;';
         document.body.appendChild(overlay);
     }
-
-    // ---------- Create / reuse content container ----------
     let content = document.getElementById('bounty-content');
     if (!content) {
         content = document.createElement('div');
         content.id = 'bounty-content';
-        content.style.cssText = `
-            width:90%;max-width:800px;height:80%;
-            background:rgba(17,17,17,0.95);border:4px solid #ff8c00;
-            padding:20px;box-sizing:border-box;
-            display:flex;flex-direction:column;align-items:center;
-            justify-content:center;text-align:center;
-        `;
+        content.style.cssText = 'width:90%;max-width:800px;height:80%;background:rgba(17,17,17,0.95);border:4px solid #ff8c00;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;';
         overlay.appendChild(content);
     }
 
-    // ---------- Build HTML ----------
-    let html = `<h2 style="font-size:clamp(32px,8vw,48px);margin:0 0 20px 0;">
-        Most Wanted</h2>`;
+    // Build HTML
+    let html = `<h2 style="font-size:clamp(32px, 8vw, 48px);margin:0 0 20px 0;">Most Wanted</h2>`;
     html += `<hr style="border:0;height:2px;background:#ff4444;margin:10px 0;width:80%;">`;
-
     let bountyText = window.currentBounty.name;
     if (window.seenBountyTypes?.includes(window.currentBounty.type)) {
         bountyText += ' (cousin)';
     }
-    html += `<p style="font-size:clamp(28px,7vw,42px);color:#ff4444;margin:10px 0;font-weight:bold;">
-        ${bountyText}</p>`;
-    html += `<p style="font-size:clamp(20px,5vw,28px);color:#ff4444;">
-        Reward: Slay and get paid in BTC!</p>`;
+    html += `<p style="font-size:clamp(28px, 7vw, 42px);color:#ff4444;margin:10px 0;font-weight:bold;">${bountyText}</p>`;
+    html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#ff4444;">Reward: Slay and get paid in BTC!</p>`;
     html += `<hr style="border:0;height:2px;background:#ff8c00;margin:30px 0;width:80%;">`;
-
-    html += `<h2 style="font-size:clamp(32px,8vw,48px);margin:0 0 20px 0;">
-        Side Quest</h2>`;
+    html += `<h2 style="font-size:clamp(32px, 8vw, 48px);margin:0 0 20px 0;">Side Quest</h2>`;
     html += `<hr style="border:0;height:2px;background:#00ff00;margin:10px 0;width:80%;">`;
-
     if (window.currentSideQuest) {
-        html += `<p style="font-size:clamp(24px,6vw,36px);margin:10px 0;">
-            Kill ${window.currentSideQuest.quota} ${window.currentSideQuest.type}s</p>`;
-        html += `<p style="font-size:clamp(22px,5.5vw,32px);margin:10px 0;">
-            Progress: ${window.currentSideQuest.progress}/${window.currentSideQuest.quota}</p>`;
-        html += `<p style="font-size:clamp(20px,5vw,28px);color:#00ff00;margin-top:15px;">
-            Reward: Elixir</p>`;
+        html += `<p style="font-size:clamp(24px, 6vw, 36px);color:#00e8d8;margin:10px 0;">Slay ${window.currentSideQuest.quota} ${window.currentSideQuest.type}s</p>`;
+        html += `<p style="font-size:clamp(22px, 5.5vw, 32px);color:#00e8d8;margin:10px 0;">Progress: ${window.currentSideQuest.progress}/${window.currentSideQuest.quota}</p>`;
+        html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#00e8d8;margin-top:15px;">Reward: Elixir</p>`;
     } else {
-        html += `<p style="font-size:clamp(20px,5vw,28px);color:#888;">
-            No active side quest</p>`;
+        html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#888;">No active side quest</p>`;
     }
-
-    html += `<p style="font-size:clamp(16px,4vw,22px);margin-top:40px;color:#ff8c00;">
-        Press B / Enter / Space / Tap / Click to close</p>`;
-
+    html += `<p style="font-size:clamp(16px, 4vw, 22px);margin-top:40px;color:#ff8c00;">Step off to close</p>`;
     content.innerHTML = html;
 
-    // ---------- Show overlay ----------
+    // Show overlay
     overlay.style.display = 'flex';
-    overlay.offsetHeight;               // force reflow for transition
+    overlay.offsetHeight;
     overlay.classList.add('visible');
-    overlay.style.pointerEvents = 'none';
-    setTimeout(() => overlay.style.pointerEvents = 'auto', 500);
 
-    // ---------- Invisible walls around player ----------
-    bountyBoardWalls = [];               // clear old walls
-    const dirs = [
-        {dx:-1, dy:0}, {dx:1, dy:0},
-        {dx:0, dy:-1}, {dx:0, dy:1},
-        {dx:-1, dy:-1}, {dx:-1, dy:1},
-        {dx:1, dy:-1}, {dx:1, dy:1}
-    ];
-    dirs.forEach(d => {
-        const wx = p.x + d.dx;
-        const wy = p.y + d.dy;
-        if (wx >= 0 && wx < W && wy >= 0 && wy < H) {
-            const original = map[wy][wx];
-            if (original !== 1) {               // not already a wall
-                bountyBoardWalls.push({x:wx, y:wy, original});
-                map[wy][wx] = 1;                // invisible wall
-            }
-        }
-    });
+    // Fade-in tap/click (harmless)
+    overlay.style.pointerEvents = 'none';
+    setTimeout(() => {
+        overlay.style.pointerEvents = 'auto';
+    }, 500);
+
+    bountyBoardActive = true;
     needsRedraw = true;
 
-    // ---------- Close routine ----------
-    const closeBounty = () => {
+    logBattleEvent(`Bounty Board: Most Wanted - ${window.currentBounty.name} (${window.currentBounty.type})`);
+} else if (!onBounty && bountyBoardActive) {
+    // Hide when stepping off
+    const overlay = document.getElementById('bounty-overlay');
+    if (overlay) {
         overlay.style.display = 'none';
         overlay.classList.remove('visible');
-        overlay.onclick = null;
-        overlay.ontouchend = null;
-        document.removeEventListener('keydown', keyClose, true); // capture phase
+    }
 
-        // restore original tiles
-        bountyBoardWalls.forEach(w => map[w.y][w.x] = w.original);
-        bountyBoardWalls = [];
-        needsRedraw = true;
+    bountyBoardActive = false;
+    needsRedraw = true;
 
-        logBattleEvent('Bounty Board closed');
-    };
-
-    overlay.onclick = closeBounty;
-    overlay.ontouchend = closeBounty;
-
-    // ---------- Keyboard close (Enter / Space) ----------
-    const keyClose = e => {
-        if (['Enter', ' '].includes(e.key)) {
-            e.preventDefault();   // stop scrolling / default action
-            closeBounty();
-        }
-    };
-    // capture phase ensures this runs before any movement handler
-    document.addEventListener('keydown', keyClose, { capture: true });
-
-    logBattleEvent(`Bounty Board: Most Wanted - ${window.currentBounty.name} (${window.currentBounty.type})`);
+    logBattleEvent('Bounty Board inspected');
 }
 
 // Handle soul stash interaction
@@ -7214,6 +7173,42 @@ if (map[ny][nx] === 33) {
     map[ny][nx] = 0;
     updatePlayerState();
     needsRedraw = true;
+}
+
+// In move() - after player position update
+const infoSignTile = 34; // your info sign tile ID
+const onInfoSign = map[p.y][p.x] === infoSignTile;
+if (onInfoSign && !infoSignActive) {
+    // Show full-screen info
+    const splashScreen = document.getElementById('splash-screen');
+    splashScreen.style.display = 'block';
+    splashScreen.style.zIndex = '60'; // above game, below overlays
+
+    // Hide Start button and info icon
+    document.getElementById('start-button').style.display = 'none';
+    document.getElementById('info-icon').style.display = 'none';
+
+    currentSplashImage = 'info_tile.png';
+    splashImg.src = currentSplashImage;
+    splashCanvas.clearRect(0, 0, 320, 320);
+    splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+
+    infoSignActive = true;
+    needsRedraw = true;
+} else if (!onInfoSign && infoSignActive) {
+    // Hide when moving off
+    document.getElementById('splash-screen').style.display = 'none';
+
+    // Restore buttons (only if not on normal splash screen)
+    if (!splashActive) {
+        document.getElementById('start-button').style.display = 'block';
+        document.getElementById('info-icon').style.display = 'flex'; // or 'block' if that's original
+    }
+
+    infoSignActive = false;
+    needsRedraw = true;
+    
+    logBattleEvent('Info Board inspected');
 }
 
 // Add soul orb statue interaction
@@ -12062,6 +12057,16 @@ function restart() {
     // Reset fetch flag
     isFetchingTxs = false;
 
+splashActive = true;
+
+    // ADD THESE LINES HERE
+    infoSignActive = false;
+    const splashScreen = document.getElementById('splash-screen');
+    if (splashScreen) {
+        splashScreen.style.display = 'none';
+    }
+    currentSplashImage = 'splash.png';
+
     // Reset skill tree system
     playerXP = 0;
     playerLevel = 1;
@@ -12073,7 +12078,9 @@ function restart() {
 window.currentSideQuest = null;
 window.lastSideQuestType = null;
 
-bountyBoardWalls = []; // Ugly hack, you're welcome .. :/
+    infoSignActive = false;
+    bountyBoardActive = false;
+    
     tileVariantMap = [];
 
     fireplaceNoiseSource = null;
@@ -12823,7 +12830,10 @@ if (map[y][x] === 25) { // Puzzle portal tile
         if (map[y][x] === 33) {
             c.drawImage(assets.elixir, x * S, y * S, S, S);
         }
-        
+	if (map[y][x] === 34) {
+	    c.drawImage(assets.info_sign, x * S, y * S, S, S);
+	}
+
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
 if (inPuzzleRoom && puzzleStaticCanvas) {
     c.clearRect(0, 0, 320, 320);
@@ -14845,42 +14855,32 @@ if (!splashActive && !gameOver && inputBlocked) {
         lastMoveTime = nowTime; // Update lastMoveTime to maintain consistency with other actions
     }
 
-    // B Button (1) - attack, skill tree confirm, bounty close, or game over actions
-    if (buttons[1].pressed && !lastButtonsState[1]) {
-        // Bounty overlay close (first priority)
-        const bountyOverlay = document.getElementById('bounty-overlay');
-        if (bountyOverlay && bountyOverlay.style.display === 'flex') {
-            const closeBounty = bountyOverlay.onclick || bountyOverlay.ontouchend;
-            if (closeBounty) closeBounty();
-            // No return - let gamepad continue polling
-        }
-
-        // Skill tree confirm
-        if (skillTreeActive && !window.skillTreeInputBlocked) {
-            selectSkillTreeOption();
-        }
-
-        // Normal gameplay attack
-        else if (!splashActive && !gameOver) {
-            attack();
-            lastMoveTime = nowTime;
-        }
-
-        // Game over actions
-        else if (gameOver && gamepadIndex !== null && !inputBlocked) {
-            if (!gameOverBPressed) {
-                if (!scoreSubmitted && floor >= 3) {
-                    submitScoreWithRandomName();
-                } else if (floor < 3) {
-                    document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
-                    document.getElementById('leaderboard-output').style.display = 'block';
-                }
-                gameOverBPressed = true;
-            } else {
-                restart();
+// B Button (1) - attack, skill tree confirm, or game over actions
+if (buttons[1].pressed && !lastButtonsState[1]) {
+    // Skill tree confirm
+    if (skillTreeActive && !window.skillTreeInputBlocked) {
+        selectSkillTreeOption();
+    }
+    // Normal gameplay attack
+    else if (!splashActive && !gameOver) {
+        attack();
+        lastMoveTime = nowTime;
+    }
+    // Game over actions
+    else if (gameOver && gamepadIndex !== null && !inputBlocked) {
+        if (!gameOverBPressed) {
+            if (!scoreSubmitted && floor >= 3) {
+                submitScoreWithRandomName();
+            } else if (floor < 3) {
+                document.getElementById('leaderboard-output').textContent = 'Reach at least Floor 3 to submit your score!';
+                document.getElementById('leaderboard-output').style.display = 'block';
             }
+            gameOverBPressed = true;
+        } else {
+            restart();
         }
     }
+}
 
     // Select Button (2) - toggleMute
     if (buttons[2].pressed && !lastButtonsState[2] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
