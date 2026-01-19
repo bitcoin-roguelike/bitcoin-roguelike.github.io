@@ -1573,6 +1573,7 @@ let tileVariantMap = []; // H x W variant indices (-1 = default single tile)
 
 let infoSignActive = false;
 let bountyBoardActive = false;
+let infoGracePeriod = false;
 
 let map = [],
 p = {
@@ -5894,6 +5895,10 @@ function isSolid(x, y) {
 function move(dir) {
     if (gameOver || splashActive || inputBlocked || skillTreeActive) return;
 
+if (infoGracePeriod) {
+    return; // Block ALL movement during 0.5s grace period
+}
+
     // Check if player is in hideout and trying to pause from waypoint tile
     if (inHideout && map[p.y][p.x] === 16) {
         // Allow pausing when on waypoint in hideout
@@ -6395,7 +6400,7 @@ if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
         if (candidates.length > 0) {
             const portalPos = candidates[0]; // take the closest valid spot
 
-            if (Math.random() < 0) {
+            if (Math.random() < 0.5) {
                 // 50% → Puzzle Portal
                 map[portalPos.y][portalPos.x] = 25;
                 portals.push({
@@ -6984,10 +6989,6 @@ if (!musicMuted && !inPuzzleRoom) {
     musicManager.play(currentTheme);
 }
 
-/* -------------------------------------------------------------
-   Bounty‑board overlay – fixed key handling
-   ------------------------------------------------------------- */
-// In move() - after player position update (replace your current bounty board logic)
 const bountyTile = 32;
 const onBounty = map[p.y][p.x] === bountyTile && inHideout;
 
@@ -7033,43 +7034,29 @@ if (onBounty && !bountyBoardActive) {
     overlay.offsetHeight;
     overlay.classList.add('visible');
 
-    // Fade-in tap/click (harmless)
+    // Start 0.5s grace period (blocks taps + movement) .. we are borrowing this from the info board
+    infoGracePeriod = true;
     overlay.style.pointerEvents = 'none';
+
     setTimeout(() => {
-        overlay.style.pointerEvents = 'auto';
+        infoGracePeriod = false; // Unlock movement .. we are borrowing this from the info board
+        overlay.style.pointerEvents = 'auto'; // Allow intentional tap close
+
+        // Optional intentional tap close after grace
+        const closeBounty = () => {
+            overlay.style.display = 'none';
+            overlay.classList.remove('visible');
+            overlay.onclick = null;
+            overlay.ontouchend = null;
+            bountyBoardActive = false;
+            needsRedraw = true;
+        };
+        overlay.onclick = closeBounty;
+        overlay.ontouchend = closeBounty;
     }, 500);
 
     bountyBoardActive = true;
     needsRedraw = true;
-
-    // Enable interaction after brief delay (prevents accidental close)
-    overlay.style.pointerEvents = 'none';
-    setTimeout(() => {
-        overlay.style.pointerEvents = 'auto';
-    }, 500);
-
-    inputBlocked = false; // we keep input allowed for navigation
-
-    // Close on tap/click/Enter/Space
-    const closeBounty = () => {
-        overlay.style.display = 'none';
-        overlay.classList.remove('visible');
-        overlay.onclick = null;
-        overlay.ontouchend = null;
-        document.removeEventListener('keydown', keyClose);
-    };
-
-    overlay.onclick = closeBounty;
-    overlay.ontouchend = closeBounty;
-
-    const keyClose = e => {
-        if ([' ', 'Enter'].includes(e.key)) {
-            e.preventDefault();
-            closeBounty();
-        }
-    };
-    document.addEventListener('keydown', keyClose, { once: true });    
-
     logBattleEvent(`Bounty Board: Most Wanted - ${window.currentBounty.name} (${window.currentBounty.type})`);
 } else if (!onBounty && bountyBoardActive) {
     // Hide when stepping off
@@ -7078,11 +7065,9 @@ if (onBounty && !bountyBoardActive) {
         overlay.style.display = 'none';
         overlay.classList.remove('visible');
     }
-
     bountyBoardActive = false;
     needsRedraw = true;
-
-    logBattleEvent('Bounty Board inspected');
+    logBattleEvent('Bounty Board closed');
 }
 
 // Handle soul stash interaction
@@ -7201,74 +7186,74 @@ if (map[ny][nx] === 33) {
     needsRedraw = true;
 }
 
-// In move() – after player position update
-const infoSignTile = 34;                     // ID of the info‑sign tile
+// Updated info sign block in move()
+const infoSignTile = 34;
 const onInfoSign = map[p.y][p.x] === infoSignTile;
 
 if (onInfoSign && !infoSignActive) {
-    // ---------- Show the info board ----------
+    // Show the info board
     const splashScreen = document.getElementById('splash-screen');
     splashScreen.style.display = 'block';
-    splashScreen.style.zIndex = '60';        // above game, below overlays
+    splashScreen.style.zIndex = '60';
 
-    // Hide UI elements while the board is up
+    // Hide UI elements
     document.getElementById('start-button').style.display = 'none';
     document.getElementById('info-icon').style.display = 'none';
 
-    // Load the info image
     currentSplashImage = 'info_tile.png';
     splashImg.src = currentSplashImage;
     splashCanvas.clearRect(0, 0, 320, 320);
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
 
-    // Prevent immediate closing
+    // Start 0.5s grace period (blocks movement + taps)
+    infoGracePeriod = true;
     splashScreen.style.pointerEvents = 'none';
-    setTimeout(() => {
-        splashScreen.style.pointerEvents = 'auto';
 
-        // ----- Attach close handlers (tap / click / key) -----
+    setTimeout(() => {
+        infoGracePeriod = false; // Unlock movement
+        splashScreen.style.pointerEvents = 'auto'; // Allow taps
+
         const closeInfoBoard = () => {
             splashScreen.style.display = 'none';
-            // Restore UI elements
             if (!splashActive) {
                 document.getElementById('start-button').style.display = 'block';
                 document.getElementById('info-icon').style.display = 'flex';
             }
             infoSignActive = false;
             needsRedraw = true;
-            // Clean up listeners
+
+            // Cleanup
             splashScreen.onclick = null;
             splashScreen.ontouchend = null;
             document.removeEventListener('keydown', keyClose);
         };
 
-        // Click / tap
+        // Intentional close handlers
         splashScreen.onclick = closeInfoBoard;
         splashScreen.ontouchend = closeInfoBoard;
 
-        // Space or Enter key (once)
         const keyClose = e => {
-            if (e.key === ' ' || e.key === 'Enter') {
+            if (['Enter', ' '].includes(e.key)) {
                 e.preventDefault();
                 closeInfoBoard();
             }
         };
         document.addEventListener('keydown', keyClose, { once: true });
-    }, 500);   // 0.5 s delay
+    }, 500);
 
-    // ---------- State flags ----------
     infoSignActive = true;
     needsRedraw = true;
     logBattleEvent('Info Board inspected');
-
 } else if (!onInfoSign && infoSignActive) {
-    // ---------- Hide when stepping off ----------
+    // Hide when stepping off
     const splashScreen = document.getElementById('splash-screen');
     splashScreen.style.display = 'none';
+
     if (!splashActive) {
         document.getElementById('start-button').style.display = 'block';
         document.getElementById('info-icon').style.display = 'flex';
     }
+
     infoSignActive = false;
     needsRedraw = true;
 }
@@ -8514,7 +8499,7 @@ function handleSideQuestKill(enemyType, enemyX, enemyY) {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 1) {
+    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
