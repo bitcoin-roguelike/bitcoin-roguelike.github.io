@@ -874,7 +874,7 @@ button:hover {
     <div style="border:4px solid #ff8c00;padding:20px;background:#111;max-width:90%;">
         <h1>Skill Tree</h1>
         <div id="skill-tree-content"></div>
-        <div style="margin-top:20px;font-size:18px;">Use ← → or gamepad to choose • B / Tap to confirm</div>
+        <div id="skill-tree-instructions" style="margin-top:20px;font-size:18px;display:${pendingSkillTreeLevel === 3 ? 'block' : 'none'};">Use ← → or gamepad to choose • B / Tap to confirm</div>
     </div>
 </div>
 
@@ -3147,6 +3147,12 @@ function showSkillTree() {
         html += `</div>`;
     }
     content.innerHTML = html;
+
+    // Hide instructions for non-level-3 screens
+    const instructions = document.getElementById('skill-tree-instructions');
+    if (instructions) {
+        instructions.style.display = pendingSkillTreeLevel === 3 ? 'block' : 'none';
+    }
 
     // Auto-close non-choice perk screens after 1 minute
     if (pendingSkillTreeLevel !== 3) {
