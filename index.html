@@ -8556,7 +8556,7 @@ function handleSideQuestKill(enemyType, enemyX, enemyY) {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+    if (!scrollDroppedThisFloor && Math.random() < 1) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
@@ -12167,6 +12167,35 @@ function initTouchControls() {
    Restart the game – reset state & re‑initialise listeners
    ------------------------------------------------------------------ */
 function restart() {
+// IMMEDIATELY nuke the splash screen to prevent ANY artifact/flash
+    const splashScreen = document.getElementById('splash-screen');
+    if (splashScreen) {
+        // Clear image source first (prevents old image from lingering in memory)
+        const splashImg = splashScreen.querySelector('img') || document.getElementById('splash-img');
+        if (splashImg) {
+            splashImg.src = ''; // blank source → kills old image load
+        }
+        
+        splashScreen.style.display = 'none';
+        splashScreen.style.zIndex = '';
+        splashScreen.onclick = null;
+        splashScreen.ontouchend = null;
+        
+        // Remove any lingering key listener
+        document.removeEventListener('keydown', splashScreen._keyClose);
+        if (splashScreen._keyClose) delete splashScreen._keyClose;
+    }
+    
+    // Force reflow + paint cycle to ensure hide happens now
+    document.body.offsetHeight;
+    void document.body.offsetWidth; // double reflow for stubborn browsers
+    
+    infoSignActive = false;
+    infoGracePeriod = false;
+    
+    // Now safe to set new state
+    splashActive = true;
+    currentSplashImage = 'splash.png';
 
     /* ------------------------------------------------------------------
        1. Clean up old listeners/timers
@@ -12176,16 +12205,6 @@ function restart() {
 
     // Reset fetch flag
     isFetchingTxs = false;
-
-splashActive = true;
-
-    // ADD THESE LINES HERE
-    infoSignActive = false;
-    const splashScreen = document.getElementById('splash-screen');
-    if (splashScreen) {
-        splashScreen.style.display = 'none';
-    }
-    currentSplashImage = 'splash.png';
 
     // Reset skill tree system
     playerXP = 0;
