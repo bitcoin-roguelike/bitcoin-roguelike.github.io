@@ -2768,7 +2768,8 @@ const talkLines = [
   "yesh, Deiamond. Soul-Orb . RIP.",		// 12
   "yesh, PickAaXe , RIP.",			// 13
   "yes,. PickAaXe",				// 14
-  "too strong, run away"			// 15
+  "too strong, run away",			// 15
+  "cool., Ealixyr from bounty"			// 16
 ];
 
 // Current speech (for stopping if needed)
@@ -4195,8 +4196,6 @@ if (!window.currentSideQuest || (window.currentSideQuest && window.currentSideQu
         quota: chosen.quota,
         progress: 0
     };
-// ← ADD THIS DEBUG LOG
-    console.log('[DEBUG Hideout Init] Side quest assigned:', window.currentSideQuest);
 }
 
 p.x = mainRoomX + 3;
@@ -7092,7 +7091,7 @@ if (onBounty && !bountyBoardActive) {
     }
     bountyBoardActive = false;
     needsRedraw = true;
-    logBattleEvent('Bounty Board closed');
+    logBattleEvent('Bounty Board inspected');
 }
 
 // Handle soul stash interaction
@@ -7207,6 +7206,9 @@ if (map[ny][nx] === 33) {
     logBattleEvent(`Elixir consumed! +24 HP and +256 Soul Charges`);
     playWebAudioSound(sounds.pickup);
     map[ny][nx] = 0;
+    if (wisps.length > 0) {
+        talkSpeak(16); // 'cool., Ealixyr from bounty'
+    }
     updatePlayerState();
     needsRedraw = true;
 }
@@ -7593,6 +7595,30 @@ if (currentRuneTile && !(p.x === currentRuneTile.x && p.y === currentRuneTile.y)
 
         // 1. FLASH FIRST
         wardenFlashStart = Date.now();
+
+// Force assign side quest at game start if missing
+if (!window.currentSideQuest) {
+    const questOptions = [
+        {type: 'Shrimp', quota: 40},
+        {type: 'Crab', quota: 20},
+        {type: 'Squid', quota: 15},
+        {type: 'Dolphin', quota: 10},
+        {type: 'Shark', quota: 7},
+        {type: 'Whale', quota: 3}
+    ];
+
+    let available = questOptions.filter(q => q.type !== window.lastSideQuestType);
+    if (available.length === 0) available = questOptions;
+
+    const chosen = available[Math.floor(Math.random() * available.length)];
+    window.currentSideQuest = {
+        type: chosen.type,
+        quota: chosen.quota,
+        progress: 0
+    };
+
+    //console.log('[DEBUG Startup] Side quest auto-assigned:', window.currentSideQuest);
+}
 
         // 2. AXIS-PRIORITY SPAWN: Right → Left → Down → Up → Diagonals → Safety
         setTimeout(() => {
@@ -8488,42 +8514,43 @@ function doScourgeSpinAttack() {
 }
 
 function handleSideQuestKill(enemyType, enemyX, enemyY) {
-    if (!window.currentSideQuest || window.currentSideQuest.type !== enemyType) return;
-
-    window.currentSideQuest.progress++;
-
-    if (window.currentSideQuest.progress >= window.currentSideQuest.quota) {
-        logBattleEvent(`Side Quest Complete! Elixir dropped from the ${enemyType}!`);
-        playWebAudioSound(sounds.secret);
-
-        // Try to drop elixir
-        let placed = false;
-        if (map[enemyY][enemyX] === 0) {
-            map[enemyY][enemyX] = 33;
-            placed = true;
-        } else {
-            const dirs = [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}];
-            for (const d of dirs) {
-                const nx = enemyX + d.dx;
-                const ny = enemyY + d.dy;
-                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
-                    map[ny][nx] = 33;
-                    placed = true;
-                    break;
+    // Only process if there's an active side quest and type matches
+    if (window.currentSideQuest && window.currentSideQuest.type === enemyType) {
+        window.currentSideQuest.progress++;
+        
+        if (window.currentSideQuest.progress >= window.currentSideQuest.quota) {
+            logBattleEvent(`Side Quest Complete! Elixir dropped from the ${enemyType}!`);
+            playWebAudioSound(sounds.secret);
+            
+            // Try to drop elixir
+            let placed = false;
+            if (map[enemyY][enemyX] === 0) {
+                map[enemyY][enemyX] = 33;
+                placed = true;
+            } else {
+                const dirs = [{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}];
+                for (const d of dirs) {
+                    const nx = enemyX + d.dx;
+                    const ny = enemyY + d.dy;
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                        map[ny][nx] = 33;
+                        placed = true;
+                        break;
+                    }
                 }
             }
+            
+            window.lastSideQuestType = window.currentSideQuest.type;
+            window.currentSideQuest = null;
+        } else {
+            logBattleEvent(`Side quest progress: ${window.currentSideQuest.progress}/${window.currentSideQuest.quota} ${enemyType}s`);
         }
-
-        window.lastSideQuestType = window.currentSideQuest.type;
-        window.currentSideQuest = null;
-    } else {
-        logBattleEvent(`Side quest progress: ${window.currentSideQuest.progress}/${window.currentSideQuest.quota} ${enemyType}s`);
     }
 }
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+    if (!scrollDroppedThisFloor && Math.random() < 1) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
@@ -12608,20 +12635,25 @@ camera.y += (targetY + camera.velocityY - camera.y) * 0.22;
 // ——— ECHO WARDEN FLASH: Divine ἀρχάγγελος ———
 if (wardenFlashStart > 0) {
     const elapsed = Date.now() - wardenFlashStart;
-    const duration = 700; // total flash duration
+    const duration = 5000; // total flash duration
 
     if (elapsed < duration) {
         // Smooth pulse: 0 → 1 → 0
         const progress = elapsed / duration;
         const intensity = Math.sin(progress * Math.PI); // 0 to 1 to 0
 
-        // Bitcoin orange (easy on eyes, but made it black instead)
-        c.fillStyle = `rgba(247, 147, 26, 1})`;
+        // Black flash (cover everything)
+        c.fillStyle = `rgba(0, 0, 0, ${intensity})`; // pure black pulse
         c.fillRect(0, 0, W * S, H * S);
-
     } else {
-        wardenFlashStart = 0;    
-    }    
+        // Flash ended → hide Warden completely (remove from map)
+        if (echoWardenPos) {
+            map[echoWardenPos.y][echoWardenPos.x] = 0; // clear tile
+            echoWardenPos = null;
+            logBattleEvent("Echo Warden returns to the void...");
+        }
+        wardenFlashStart = 0;
+    }
 }
 
     if (gameOver) {
