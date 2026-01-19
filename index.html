@@ -8550,7 +8550,7 @@ function handleSideQuestKill(enemyType, enemyX, enemyY) {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 1) {
+    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
