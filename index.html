@@ -6395,7 +6395,7 @@ if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
         if (candidates.length > 0) {
             const portalPos = candidates[0]; // take the closest valid spot
 
-            if (Math.random() < 0.5) {
+            if (Math.random() < 0) {
                 // 50% → Puzzle Portal
                 map[portalPos.y][portalPos.x] = 25;
                 portals.push({
@@ -7009,25 +7009,23 @@ if (onBounty && !bountyBoardActive) {
     }
 
     // Build HTML
-    let html = `<h2 style="font-size:clamp(32px, 8vw, 48px);margin:0 0 20px 0;">Most Wanted</h2>`;
-    html += `<hr style="border:0;height:2px;background:#ff4444;margin:10px 0;width:80%;">`;
+    let html = `<div style="margin:10px 0;"></div>`;
+    html += `<h2 style="font-size:clamp(32px, 8vw, 48px);color:#ff4444;margin:0 0 20px 0;">Most Wanted:</h2>`;
     let bountyText = window.currentBounty.name;
     if (window.seenBountyTypes?.includes(window.currentBounty.type)) {
         bountyText += ' (cousin)';
     }
-    html += `<p style="font-size:clamp(28px, 7vw, 42px);color:#ff4444;margin:10px 0;font-weight:bold;">${bountyText}</p>`;
+    html += `<p style="font-size:clamp(28px, 7vw, 42px);color:#ff4444;margin:0 0 20px 0;font-weight:bold;">${bountyText}</p>`;
     html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#ff4444;">Reward: Slay and get paid in BTC!</p>`;
-    html += `<hr style="border:0;height:2px;background:#ff8c00;margin:30px 0;width:80%;">`;
+    html += `<div style="margin:10px 0;"></div>`;
     html += `<h2 style="font-size:clamp(32px, 8vw, 48px);margin:0 0 20px 0;">Side Quest</h2>`;
-    html += `<hr style="border:0;height:2px;background:#00ff00;margin:10px 0;width:80%;">`;
     if (window.currentSideQuest) {
-        html += `<p style="font-size:clamp(24px, 6vw, 36px);color:#00e8d8;margin:10px 0;">Slay ${window.currentSideQuest.quota} ${window.currentSideQuest.type}s</p>`;
-        html += `<p style="font-size:clamp(22px, 5.5vw, 32px);color:#00e8d8;margin:10px 0;">Progress: ${window.currentSideQuest.progress}/${window.currentSideQuest.quota}</p>`;
-        html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#00e8d8;margin-top:15px;">Reward: Elixir</p>`;
+        html += `<p style="font-size:clamp(24px, 6vw, 36px);color:#ff8c00;margin:10px 0;">Slay ${window.currentSideQuest.quota} ${window.currentSideQuest.type}s</p>`;
+        html += `<p style="font-size:clamp(22px, 5.5vw, 32px);color:#ff8c00;margin:10px 0;">Progress: ${window.currentSideQuest.progress}/${window.currentSideQuest.quota}</p>`;
+        html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#ff8c00;margin-top:15px;">Reward: Elixir</p>`;
     } else {
         html += `<p style="font-size:clamp(20px, 5vw, 28px);color:#888;">No active side quest</p>`;
     }
-    html += `<p style="font-size:clamp(16px, 4vw, 22px);margin-top:40px;color:#ff8c00;">Step off to close</p>`;
     content.innerHTML = html;
 
     // Show overlay
@@ -7043,6 +7041,34 @@ if (onBounty && !bountyBoardActive) {
 
     bountyBoardActive = true;
     needsRedraw = true;
+
+    // Enable interaction after brief delay (prevents accidental close)
+    overlay.style.pointerEvents = 'none';
+    setTimeout(() => {
+        overlay.style.pointerEvents = 'auto';
+    }, 500);
+
+    inputBlocked = false; // we keep input allowed for navigation
+
+    // Close on tap/click/Enter/Space
+    const closeBounty = () => {
+        overlay.style.display = 'none';
+        overlay.classList.remove('visible');
+        overlay.onclick = null;
+        overlay.ontouchend = null;
+        document.removeEventListener('keydown', keyClose);
+    };
+
+    overlay.onclick = closeBounty;
+    overlay.ontouchend = closeBounty;
+
+    const keyClose = e => {
+        if ([' ', 'Enter'].includes(e.key)) {
+            e.preventDefault();
+            closeBounty();
+        }
+    };
+    document.addEventListener('keydown', keyClose, { once: true });    
 
     logBattleEvent(`Bounty Board: Most Wanted - ${window.currentBounty.name} (${window.currentBounty.type})`);
 } else if (!onBounty && bountyBoardActive) {
@@ -7175,40 +7201,76 @@ if (map[ny][nx] === 33) {
     needsRedraw = true;
 }
 
-// In move() - after player position update
-const infoSignTile = 34; // your info sign tile ID
+// In move() – after player position update
+const infoSignTile = 34;                     // ID of the info‑sign tile
 const onInfoSign = map[p.y][p.x] === infoSignTile;
+
 if (onInfoSign && !infoSignActive) {
-    // Show full-screen info
+    // ---------- Show the info board ----------
     const splashScreen = document.getElementById('splash-screen');
     splashScreen.style.display = 'block';
-    splashScreen.style.zIndex = '60'; // above game, below overlays
+    splashScreen.style.zIndex = '60';        // above game, below overlays
 
-    // Hide Start button and info icon
+    // Hide UI elements while the board is up
     document.getElementById('start-button').style.display = 'none';
     document.getElementById('info-icon').style.display = 'none';
 
+    // Load the info image
     currentSplashImage = 'info_tile.png';
     splashImg.src = currentSplashImage;
     splashCanvas.clearRect(0, 0, 320, 320);
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
 
+    // Prevent immediate closing
+    splashScreen.style.pointerEvents = 'none';
+    setTimeout(() => {
+        splashScreen.style.pointerEvents = 'auto';
+
+        // ----- Attach close handlers (tap / click / key) -----
+        const closeInfoBoard = () => {
+            splashScreen.style.display = 'none';
+            // Restore UI elements
+            if (!splashActive) {
+                document.getElementById('start-button').style.display = 'block';
+                document.getElementById('info-icon').style.display = 'flex';
+            }
+            infoSignActive = false;
+            needsRedraw = true;
+            // Clean up listeners
+            splashScreen.onclick = null;
+            splashScreen.ontouchend = null;
+            document.removeEventListener('keydown', keyClose);
+        };
+
+        // Click / tap
+        splashScreen.onclick = closeInfoBoard;
+        splashScreen.ontouchend = closeInfoBoard;
+
+        // Space or Enter key (once)
+        const keyClose = e => {
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                closeInfoBoard();
+            }
+        };
+        document.addEventListener('keydown', keyClose, { once: true });
+    }, 500);   // 0.5 s delay
+
+    // ---------- State flags ----------
     infoSignActive = true;
     needsRedraw = true;
-} else if (!onInfoSign && infoSignActive) {
-    // Hide when moving off
-    document.getElementById('splash-screen').style.display = 'none';
+    logBattleEvent('Info Board inspected');
 
-    // Restore buttons (only if not on normal splash screen)
+} else if (!onInfoSign && infoSignActive) {
+    // ---------- Hide when stepping off ----------
+    const splashScreen = document.getElementById('splash-screen');
+    splashScreen.style.display = 'none';
     if (!splashActive) {
         document.getElementById('start-button').style.display = 'block';
-        document.getElementById('info-icon').style.display = 'flex'; // or 'block' if that's original
+        document.getElementById('info-icon').style.display = 'flex';
     }
-
     infoSignActive = false;
     needsRedraw = true;
-    
-    logBattleEvent('Info Board inspected');
 }
 
 // Add soul orb statue interaction
@@ -8452,7 +8514,7 @@ function handleSideQuestKill(enemyType, enemyX, enemyY) {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
+    if (!scrollDroppedThisFloor && Math.random() < 1) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
