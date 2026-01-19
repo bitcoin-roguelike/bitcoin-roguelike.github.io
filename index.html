@@ -1839,6 +1839,9 @@ let puzzleBoulders = [];     // {x,y}
 let puzzleHeartFramers = []; // array of {x,y} — collect ALL to open chest
 let puzzleChest = null;      // {x,y}
 
+let puzzleTotalHearts = 0;   // Initial number of hearts (set once)
+let puzzleCollectedHearts = 0; // How many picked up so far
+
 let farmSpot = null;
 
 let puzzleReturnPos = null;
@@ -3135,8 +3138,8 @@ function showSkillTree() {
         html += `</div>`;
     } else {
         const perks = {
-            druid: {10:'> Thorns: Enemies lose ~0.25 HP on attack',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose ~0.5 HP on attack',40:'> Shrine regenerate HP +2',50:'> Farm unlocked +1 Cool ROI'},
-            degen: {10:'> +1 Cool ROI',20:'> +1 Cool ROI',30:'> +1 Cool ROI',40:'> +1 Cool ROI',50:'> Soul charges +2 every 2 steps'}
+            druid: {10:'> Thorns: Enemies lose ~0.25 HP on attack',20:'> Ensnare: Entagle enemies',30:'> Thorns: Enemies lose ~0.5 HP on attack',40:'> Shrine regenerate HP +2',50:'> Farm unlocked +1 Mask of ROI'},
+            degen: {10:'> +1 Mask of ROI',20:'> +1 Mask of ROI',30:'> +1 Mask of ROI',40:'> +1 Mask of ROI',50:'> Soul charges +2 every 2 steps'}
         };
         html += `<div style="font-size:28px;padding:30px;background:#000;border:4px solid #f7931a;border-radius:0;box-shadow:0 0 20px #f7931a;margin:40px 0;text-align:center;color:#f7931a">`;
         html += `<strong>${perks[playerClass][pendingSkillTreeLevel]}</strong>`;
@@ -4006,6 +4009,7 @@ function initMap() {
         if (inHideout) {
             currentTheme = 'hideout';
             updateSnowState();
+            stopFireplaceAmbience(); // Stop ambience in hideout
             document.documentElement.style.setProperty('--text-color', '#ff8c00');
             document.querySelectorAll('#whale-log, #whale-hash-ids a, #battle-log, #battle-log textarea, #inventory, #floor-indicator, #sats-calc').forEach(el => {
                 el.style.color = '#ff8c00';
@@ -4664,6 +4668,7 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
 }
 
 // Cool ROI drop – 2.5% chance on any normal floor (not hideout or puzzle)
+// Also called "Mask of ROI"
 if (!inHideout && !inPuzzleRoom && Math.random() < 0.025) {
     let attempts = 50;
     do {
@@ -4671,7 +4676,7 @@ if (!inHideout && !inPuzzleRoom && Math.random() < 0.025) {
         const y = Math.floor(Math.random() * H);
         if (map[y][x] === 0 && !(x === p.x && y === p.y)) {
             map[y][x] = 30; // new tile ID for Cool ROI
-            logBattleEvent(`Floor ${floor} - A magical Cool ROI bean appears!`);
+            logBattleEvent(`Floor ${floor} - An ancient Mask of ROI appears!`);
             break;
         }
         attempts--;
@@ -4697,33 +4702,41 @@ if (!inHideout && !inPuzzleRoom && puzzleStaticCanvas === null && Math.random() 
             catPos = {x, y};
             catVisible = false; // Start invisible, fade in
             catAnimStart = performance.now();
+            logBattleEvent(`Floor ${floor} - A black cat lurks in the shadows...`);
             break;
         }
         attempts--;
     } while (attempts > 0);
+} else {
+    // Safety clear if in special area
+    catPos = null;
+    catVisible = false;
 }
 
-        // Sandworm spawn: 25% chance once per desert streak (not puzzle/hideout)
-        if (currentTheme === 'desert' && !desertStreakHasSandworm && Math.random() < 0.25 && !inPuzzleRoom && !inHideout) {
-            // Find random floor tile far from player
-            let attempts = 100;
-            let sx, sy;
-            do {
-                sx = Math.floor(Math.random() * W);
-                sy = Math.floor(Math.random() * H);
-            } while (attempts-- > 0 && (map[sy][sx] !== 0 || Math.abs(sx - p.x) + Math.abs(sy - p.y) < 8));
+// Sandworm spawn: 25% chance once per desert streak (NEVER in puzzle/hideout)
+if (currentTheme === 'desert' && !desertStreakHasSandworm && Math.random() < 0.25 && !inPuzzleRoom && !inHideout) {
+    let attempts = 100;
+    let sx, sy;
+    do {
+        sx = Math.floor(Math.random() * W);
+        sy = Math.floor(Math.random() * H);
+    } while (attempts-- > 0 && (map[sy][sx] !== 0 || Math.abs(sx - p.x) + Math.abs(sy - p.y) < 8));
 
-            if (attempts > 0) {
-                sandworm = {
-                    x: sx, y: sy,
-                    currentX: sx * S, currentY: sy * S,
-                    hp: 50,
-                    nextBurrowTime: performance.now() + 3000 + Math.random() * 4000 // first burrow 3-7s
-                };
-                desertStreakHasSandworm = true;
-                logBattleEvent(`Floor ${floor} - A Sandworm emerges from the dunes!`);
-            }
-        }
+    if (attempts > 0) {
+        sandworm = {
+            x: sx, y: sy,
+            currentX: sx * S, currentY: sy * S,
+            hp: 50,
+            nextBurrowTime: performance.now() + 3000 + Math.random() * 4000
+        };
+        desertStreakHasSandworm = true;
+        logBattleEvent(`Floor ${floor} - A Sandworm emerges from the dunes!`);
+    }
+} else {
+    // Explicit clear in non-desert or special areas
+    sandworm = null;
+    desertStreakHasSandworm = false; // Reset streak if leaving desert
+}
 
 // Initialize dangerous areas array for spells
 dangerousAreas = [];
@@ -6876,6 +6889,12 @@ if (map[ny][nx] === 12 && !inHideout) {
     }
 
     inHideout = true;
+    
+catPos = null;
+catVisible = false;
+sandworm = null;
+desertStreakHasSandworm = false;
+    
     initMap();  // this actually switches to hideout map/theme
     sandwormBurrowPaused = true; // pause burrow in hideout
     needsRedraw = true;  // force immediate redraw
@@ -6959,6 +6978,12 @@ camera.y = 0;
 needsRedraw = true;
 
 inHideout = false;
+
+// Restart ambience if returning to regular hell
+    if (currentTheme === 'hell' && !snowyHellActive) {
+        startFireplaceAmbience();
+    }
+
 document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
 updateFogMap(p.x, p.y);
 needsRedraw = true;
@@ -7099,9 +7124,9 @@ if (!p.farmLocked) {
     // Can only plant if player has at least 1 Cool ROI
     if (p.coolROI < 1) {
         const floorIndicator = document.getElementById('floor-indicator');
-        floorIndicator.textContent = `Farm: Need Cool ROI!`;
+        floorIndicator.textContent = `Farm: Need Mask of ROI!`;
         setTimeout(() => floorIndicator.textContent = `Floor ${floor}`, 3000);
-        logBattleEvent(`Floor ${floor} - Farm locked — find a Cool ROI first!`);
+        logBattleEvent(`Floor ${floor} - Farm locked — find an ancient Mask of ROI first!`);
         return;
     }
 
@@ -7167,7 +7192,7 @@ if (map[ny][nx] === 30) {
     p.coolROI++;
     map[ny][nx] = 0;
     playWebAudioSound(sounds.pickup);
-    logBattleEvent(`Floor ${floor} - Cool ROI collected! (${p.coolROI} total)`);
+    logBattleEvent(`Floor ${floor} - An ancient Mask of ROI collected! (${p.coolROI} total)`);
     // If we have an active farm, automatically place one if possible
     if (p.farmLocked && p.farmROI === undefined) p.farmROI = 0; // init if needed
     if (p.farmLocked) p.farmROI++;
@@ -7393,14 +7418,13 @@ if (inPuzzleRoom) {
         puzzleHeartFramers.splice(heartIndex, 1);
         playWebAudioSound(sounds.pickup);
 
-        const totalHearts = puzzleHeartFramers.length + 1; // +1 because we just picked one up
-        const collected = totalHearts - puzzleHeartFramers.length;
+        puzzleCollectedHearts++; // Increment collected
 
-        logBattleEvent(`Heart Key ${collected}/${totalHearts} collected!`);
+        logBattleEvent(`Heart Key ${puzzleCollectedHearts}/${puzzleTotalHearts} collected!`);
         needsRedraw = true;
     }
 
-    // Step on chest when all hearts are collected
+    // Step on chest when all hearts collected
     if (puzzleHeartFramers.length === 0 && puzzleChest && p.x === puzzleChest.x && p.y === puzzleChest.y) {
         finishPuzzleRoom();
     }
@@ -10644,7 +10668,7 @@ case 'reset':
         addTerminalLineToContent('Type "help" for help.');
         break;
     }
-
+    puzzleCollectedHearts = 0;
     addTerminalLineToContent('Trial is reset!');
     addTerminalLineToContent('Type exit or press start on the gamepad.');
     addTerminalLineToContent('_____________________');
@@ -11605,9 +11629,14 @@ F.L.L.L.L.L..#
 
 function startPuzzleRoom() {
     inPuzzleRoom = true;
+catPos = null;
+catVisible = false;
+sandworm = null;
+desertStreakHasSandworm = false;
     puzzleReturnPos = { x: p.x, y: p.y };
     puzzlePreviousTheme = currentTheme;
     enemies = [];
+    stopFireplaceAmbience(); // Stop ambience in puzzle rooms
     // Kill ALL enemies instantly (including invisible Cursed Trader) — ensures death effects/drops if any carry over
     enemies.forEach(e => e.hp = 0);
     isFetchingTxs = true;
@@ -11729,6 +11758,9 @@ if (map[y][x] === 27) {
         }
     });
 
+puzzleTotalHearts = puzzleHeartFramers.length;
+puzzleCollectedHearts = 0; // safety reset
+
     // UI
     document.getElementById('floor-indicator').textContent =
         floor >= 30 ? 'LEGENDARY TRIAL' :
@@ -11823,6 +11855,11 @@ if (rainNoiseSource) {
     }
 }
 
+// Restart ambience if back to regular hell
+if (currentTheme === 'hell' && !snowyHellActive) {
+    startFireplaceAmbience();
+}
+
     // Restore music without triggering full initMap reset
     if (!musicMuted && !inPuzzleRoom) {
         musicManager.play(currentTheme);  // play the restored theme directly
@@ -11849,6 +11886,9 @@ if (rainNoiseSource) {
     puzzleCurrentLayout = null;  // ← NEW: prevents reusing old layout on next floor
     puzzleStaticCanvas = null;
     puzzleStaticCtx = null;
+
+puzzleTotalHearts = 0;
+puzzleCollectedHearts = 0;
 
     // Stairs appear under player
     exit = { x: p.x, y: p.y };
@@ -12127,8 +12167,11 @@ window.lastSideQuestType = null;
 
     infoSignActive = false;
     bountyBoardActive = false;
-    
+    infoGracePeriod = false;
     tileVariantMap = [];
+
+puzzleTotalHearts = 0;
+puzzleCollectedHearts = 0;
 
     fireplaceNoiseSource = null;
     fireplaceAmbienceTimer = null;
@@ -12203,6 +12246,11 @@ window.spokenUniques = new Set();
 window.breakReminderSpoken = false;
 
     sandwormBurrowPaused = false; // pause burrow timer in special areas
+
+catPos = null;
+catVisible = false;
+sandworm = null;
+desertStreakHasSandworm = false;
 
     lastMessageTime = 0;  
     redMazeSavedMuteState = null; 
