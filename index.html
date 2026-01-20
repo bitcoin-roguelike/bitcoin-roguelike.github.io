@@ -4089,24 +4089,41 @@ function initMap() {
                 map[mainRoomY + 3][x] = 0;
             }
 
-            // Place jeweller (unchanged)
-            jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
-            map[jewellerPos.y][jewellerPos.x] = 14;
+// Place jeweller (unchanged)
+jewellerPos = { x: mainRoomX + 3, y: mainRoomY + 3 };
+map[jewellerPos.y][jewellerPos.x] = 14;
 
-            const diamondWallTiles = [
-                {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
-                {x: mainRoomX + 2, y: mainRoomY + 3}, {x: mainRoomX + 4, y: mainRoomY + 3},
-                {x: mainRoomX + 2, y: mainRoomY + 4}, {x: mainRoomX + 4, y: mainRoomY + 4}
-            ];
-            diamondWallTiles.forEach(pos => {
-                if (pos.x >= 0 && pos.x < W && pos.y >= 0 && pos.y < H) {
-                    map[pos.y][pos.x] = 13;
-                }
-            });
+// All diamond‑wall positions
+const diamondWallTiles = [
+    {x: mainRoomX + 2, y: mainRoomY + 2}, {x: mainRoomX + 3, y: mainRoomY + 2}, {x: mainRoomX + 4, y: mainRoomY + 2},
+    {x: mainRoomX + 2, y: mainRoomY + 3},                               {x: mainRoomX + 4, y: mainRoomY + 3},
+    {x: mainRoomX + 2, y: mainRoomY + 4},                               {x: mainRoomX + 4, y: mainRoomY + 4}
+];
 
-            // Place billboard 2 tiles ABOVE jeweller (main room, north side)
+// Tiles that should stay as diamond walls (the north side)
+const keepWallTiles = new Set([
+    `${mainRoomX + 2},${mainRoomY + 2}`,
+    `${mainRoomX + 3},${mainRoomY + 2}`,
+    `${mainRoomX + 4},${mainRoomY + 2}`,
+    `${mainRoomX + 2},${mainRoomY + 3}`,
+    `${mainRoomX + 4},${mainRoomY + 3}`
+]);
+
+// Place walls, skipping the southern tiles
+diamondWallTiles.forEach(pos => {
+    if (pos.x < 0 || pos.x >= W || pos.y < 0 || pos.y >= H) return; // bounds check
+    const key = `${pos.x},${pos.y}`;
+    if (!keepWallTiles.has(key)) {
+        // southern tiles become empty (0) instead of a wall (13)
+        map[pos.y][pos.x] = 0;
+    } else {
+        map[pos.y][pos.x] = 13;
+    }
+});
+
+            // Place billboard 3 tiles ABOVE jeweller (main room, north side)
             const billboardX = jewellerPos.x + 1;
-            const billboardY = jewellerPos.y - 2;
+            const billboardY = jewellerPos.y - 3;
             if (billboardY >= 0 && map[billboardY][billboardX] === 0) {
                 map[billboardY][billboardX] = 32; // Billboard tile ID (pick any unused, e.g. 32)
             } else {
@@ -8556,7 +8573,7 @@ function handleSideQuestKill(enemyType, enemyX, enemyY) {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 1) {
+    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
