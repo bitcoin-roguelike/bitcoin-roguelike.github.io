@@ -14,7 +14,7 @@ O = H => {
 var e = new Uint8Array(2);
 return e[0] = H, e[1] = H >> 8, e
 },
-I = null,
+I = null,  // Removed—use global audioContext instead
 R = H => {
 let e = new Uint8Array(44 + H.length),
 A = 0,
@@ -472,7 +472,6 @@ n = v(H, n, S, E[255 & U])
 N = E[U], W = .75 * N | 0, I = 0, Y = 0, l = 0
 }
 };
-
 function X(H) {
 var e, A, E, r, t, O = 1 < arguments.length && void 0 !== arguments[1] ? arguments[1] : {},
 H = (H => {
@@ -531,13 +530,12 @@ E = new Float32Array(A.length);
 for (let H = 0; H < A.length; H++) E[H] = (A[H] - 128) / 256;
 return E
 };
-
 function H(H) {
 let A = H || {},
 E = (H, e) => e || A.phonetic ? H.toUpperCase() : F(H);
 this.buf8 = (H, e) => g(E(H, e), A), this.buf32 = (H, e) => p(E(H, e), A), this.speak = (e, H) => {
-if (e = this.buf32(e, H), I = null === I ? new AudioContext : I) {
-var O = I,
+if (e = this.buf32(e, H), true) {  // Removed I check—assume audioContext exists
+var O = audioContext,  // Use global audioContext
 R = e;
 let t, H = new Promise((H, e) => {
 let A = O.createBufferSource(),
@@ -546,10 +544,10 @@ r = E.getChannelData(0);
 for (let H = 0; H < R.length; H++) r[H] = R[H];
 A.buffer = E;
 let gainNode = O.createGain();
-gainNode.gain.value = 1.0;
+gainNode.gain.value = 2;  // Scaled up for TTS (adjust if needed)
 A.connect(gainNode);
-gainNode.connect(O.destination);
-H.gainNode = gainNode;
+gainNode.connect(masterGain);  // Connect to masterGain instead of destination
+H.gainNode = gainNode;  // Still expose for potential use
 A.onended = () => {
 H(!0)
 }, t = H => {
@@ -558,13 +556,12 @@ A.disconnect(), e(H)
 });
 return H.abort = t, H
 }
-throw new Error
+throw new Error  // Keep fallback
 }
 }
 return H.buf8 = g, H.buf32 = p, H.convert = F, H
 }
 var e = this;
-
 if (typeof exports === "object" && typeof module !== "undefined") {
 // CommonJS
 module.exports = H();

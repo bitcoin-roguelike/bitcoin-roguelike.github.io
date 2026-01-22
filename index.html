@@ -2437,9 +2437,52 @@ function placeStairs() {
 // AudioContext setup – early init for iOS compatibility
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 let audioContext = null;
+let masterGain = null;  // NEW: Master gain for all Web Audio
+
+// Volume control – global defaults (MOVED UP to fix initialization order)
+let soundVolume = localStorage.getItem('soundVolume') || 1.0;
+let musicVolume = localStorage.getItem('musicVolume') || 1.0;
+function setSoundVolume(volume) {
+    soundVolume = Math.max(0, Math.min(1, volume));
+    localStorage.setItem('soundVolume', soundVolume);
+    // Update legacy Audio objects
+    Object.entries(sounds).forEach(([key, sound]) => {
+        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout') return; // Skip music
+        if (sound instanceof Audio) {
+            sound.volume = soundVolume;
+        }
+    });
+    // NEW: Update masterGain for Web Audio (including ongoing TTS)
+    if (masterGain) {
+        masterGain.gain.value = soundVolume * getPlatformMasterGain();
+    }
+}
+function setMusicVolume(volume) {
+    musicVolume = Math.max(0, Math.min(1, volume));
+    localStorage.setItem('musicVolume', musicVolume);
+    if (musicManager) {
+        musicManager.volume = musicVolume;
+        if (musicManager.current && musicManager.audios[musicManager.current]) {
+            musicManager.audios[musicManager.current].volume = musicManager.muted ? 0 : musicVolume;
+        }
+    }
+}
+
+// Platform-specific gain helper (makes sense – Android boost for quiet Web Audio)
+// (MOVED UP if it was after, but it's function-hoisted anyway)
+function getPlatformMasterGain() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isAndroid = /android/i.test(ua);
+    const calmLevel = 0.5;
+    return isAndroid ? calmLevel * 1.8 : calmLevel; // 0.9 Android, 0.5 others
+}
+
 function getAudioContext() {
     if (!audioContext) {
         audioContext = new AudioContext();
+        masterGain = audioContext.createGain();
+        masterGain.gain.value = soundVolume * getPlatformMasterGain();
+        masterGain.connect(audioContext.destination);
     }
     return audioContext;
 }
@@ -2474,39 +2517,6 @@ const sounds = {
     unique_monster: { buffer: null, url: 'unique_monster.wav', isPlaying: false, duration: 1400 }
 };
 
-// Volume control – global defaults
-let soundVolume = localStorage.getItem('soundVolume') || 1.0;
-let musicVolume = localStorage.getItem('musicVolume') || 1.0;
-
-function setSoundVolume(volume) {
-    soundVolume = Math.max(0, Math.min(1, volume));
-    localStorage.setItem('soundVolume', soundVolume);
-
-// Update legacy Audio objects
-Object.entries(sounds).forEach(([key, sound]) => {
-if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout') return; // Skip music
-if (sound instanceof Audio) {
-sound.volume = soundVolume;
-}
-});
-if (currentTalkSpeech && currentTalkSpeech.gainNode) {
-// does not work as intended, oh well. I will be back!
-currentTalkSpeech.gainNode.gain.value = soundVolume * 0.25;
-}
-}
-
-function setMusicVolume(volume) {
-    musicVolume = Math.max(0, Math.min(1, volume));
-    localStorage.setItem('musicVolume', musicVolume);
-
-    if (musicManager) {
-        musicManager.volume = musicVolume;
-        if (musicManager.current && musicManager.audios[musicManager.current]) {
-            musicManager.audios[musicManager.current].volume = musicManager.muted ? 0 : musicVolume;
-        }
-    }
-}
-
 // Web Audio buffer loading (no play during load)
 function loadSoundBuffer(url, key) {
     fetch(url)
@@ -2517,7 +2527,6 @@ function loadSoundBuffer(url, key) {
         })
         .catch(e => console.error(`Failed to load Web Audio buffer for ${key}: ${url}`, e));
 }
-
 loadSoundBuffer('hit.wav', 'hit');
 loadSoundBuffer('pickup.wav', 'pickup');
 loadSoundBuffer('heads.wav', 'heads');
@@ -2552,7 +2561,6 @@ class MusicManager {
       audio.volume = musicVolume;
     });
   }
-
   play(theme) {
     if (!this.audios[theme]) return;
     const audio = this.audios[theme];
@@ -2573,7 +2581,6 @@ class MusicManager {
     }
     this.current = theme;
   }
-
   fadeOut(audio) {
     let vol = audio.volume;
     const interval = setInterval(() => {
@@ -2586,7 +2593,6 @@ class MusicManager {
       }
     }, 100);
   }
-
   fadeIn(audio) {
     let vol = 0;
     const interval = setInterval(() => {
@@ -2597,7 +2603,6 @@ class MusicManager {
       }
     }, 100);
   }
-
   mute(muted) {
     this.muted = muted;
     if (this.current) {
@@ -2606,21 +2611,11 @@ class MusicManager {
     }
   }
 }
-
 const musicManager = new MusicManager();
 
-// Platform-specific gain helper (makes sense – Android boost for quiet Web Audio)
-function getPlatformMasterGain() {
-    const ua = navigator.userAgent || navigator.vendor || window.opera;
-    const isAndroid = /android/i.test(ua);
-    const calmLevel = 0.5;
-    return isAndroid ? calmLevel * 1.8 : calmLevel; // 0.9 Android, 0.5 others
-}
-
-// Preload function – safe for iOS (no play() call)
+// Preload function – safe for iOS (no play during load)
 function preloadSounds() {
     const savedSoundVolume = soundVolume;
-
     if (isIOSorSafari()) {
         // iOS: Only create Audio objects (no play – prevents suspension)
         Object.entries(sounds).forEach(([key, sound]) => {
@@ -2644,30 +2639,25 @@ function preloadSounds() {
             }
         });
     }
-
     // Restore volume after preload
     setTimeout(() => setSoundVolume(savedSoundVolume), 100);
 }
-
 // Start preload immediately (after AudioContext init)
 preloadSounds();
-
 Object.values(sounds).forEach(s => {
     if (s instanceof Audio) {
         s.volume = 1.0;
         s.onerror = () => console.error(`Failed to load sound: ${s.src}`);
     }
 });
-
 function isIOSorSafari() {
     const ua = navigator.userAgent;
     return /iPad|iPhone|iPod/.test(ua) || /Safari/.test(ua);
 }
-
 function preloadSounds() {
     // Save current volume before setting to 0
     const savedSoundVolume = soundVolume;
-    
+   
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
@@ -2709,13 +2699,12 @@ function preloadSounds() {
         }
     });
 }
-    
+   
     // Restore original volume after preloading is complete
     setTimeout(() => {
         setSoundVolume(savedSoundVolume);
     }, 100);
 }
-
 function playWebAudioSound(soundObj) {
     if (!soundObj.buffer) {
         console.warn(`Buffer not loaded for ${soundObj.url}`);
@@ -2732,9 +2721,9 @@ function playWebAudioSound(soundObj) {
     const source = audioContext.createBufferSource();
     source.buffer = soundObj.buffer;
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = soundVolume; // Use global sound volume setting
+    gainNode.gain.value = 1.0;  // NEW: Let masterGain handle scaling
     source.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(masterGain);  // NEW: Connect to masterGain
     source.start(0);
         source.onended = () => {
         soundObj.isPlaying = false; // Clear flag
@@ -2746,35 +2735,30 @@ function playWebAudioSound(soundObj) {
                     }
     }, soundObj.duration);
 }
-
-
 // TTS Wisps voice
 const talkOpts = {speed: 72, pitch: 28, throat: 128, mouth: 128};
-
 // wisp voice lines
 const talkLines = [
-  "DUMMY LINE, DO NOT USE",			// 0
-  "BITCoOIN,",					// 1
-  "Nooo. -Shark",				// 2
-  "BOSS-TIME! - GO GO GO",			// 3
-  "Watch out",					// 4
-  "winning",					// 5
-  "HA HA. Shwrimp!",				// 6
-  "take your time, no rush",			// 7
-  "take, a breac!",				// 8
-  "Oh no.",					// 9
-  "hello you , go go go",			// 10
-  "yesh, Bitcoin from bounty",			// 11
-  "yesh, Deiamond. Soul-Orb . RIP.",		// 12
-  "yesh, PickAaXe , RIP.",			// 13
-  "yes,. PickAaXe",				// 14
-  "too strong, run away",			// 15
-  "cool., Ealixyr from bounty"			// 16
+  "DUMMY LINE, DO NOT USE", // 0
+  "BITCoOIN,", // 1
+  "Nooo. -Shark", // 2
+  "BOSS-TIME! - GO GO GO", // 3
+  "Watch out", // 4
+  "winning", // 5
+  "HA HA. Shwrimp!", // 6
+  "take your time, no rush", // 7
+  "take, a breac!", // 8
+  "Oh no.", // 9
+  "hello you , go go go", // 10
+  "yesh, Bitcoin from bounty", // 11
+  "yesh, Deiamond. Soul-Orb . RIP.", // 12
+  "yesh, PickAaXe , RIP.", // 13
+  "yes,. PickAaXe", // 14
+  "too strong, run away", // 15
+  "cool., Ealixyr from bounty" // 16
 ];
-
 // Current speech (for stopping if needed)
 let currentTalkSpeech = null;
-
 // Speak a wisp line by index (0-Infinity)
 // Call this from your game events
 function talkSpeak(lineIndex) {
@@ -2782,36 +2766,23 @@ function talkSpeak(lineIndex) {
     console.warn("Invalid wisp line index:", lineIndex);
     return;
   }
-
   const text = talkLines[lineIndex];
-
   // Stop any ongoing speech
   if (currentTalkSpeech && currentTalkSpeech.abort) {
     currentTalkSpeech.abort();
   }
-
+  if (soundVolume === 0) {
+    console.log("Wisp speech muted (soundVolume = 0)");
+    return;
+  }
   try {
     // Ensure AudioContext is resumed
     if (audioContext && audioContext.state === "suspended") {
       audioContext.resume().catch(e => console.error("Failed to resume AudioContext for talk:", e));
     }
-
     const talk = new TalkJs(talkOpts);
-
     currentTalkSpeech = talk.speak(text);
-
-    // Force wisp speech to use 70% of current soundVolume (like your purr)
-    if (typeof soundVolume === 'undefined') soundVolume = 1;
-    if (soundVolume === 0) {
-      console.log("Wisp speech muted (soundVolume = 0)");
-      return;
-    }
-
-    // Apply volume scaling (TalkJs exposes .gainNode on the returned promise)
-if (currentTalkSpeech && currentTalkSpeech.gainNode) {
-    currentTalkSpeech.gainNode.gain.value = (typeof soundVolume !== 'undefined' ? soundVolume : 1) * 0.7;
-}
-
+    // No manual gain set here—masterGain handles it
     currentTalkSpeech.catch(err => {
       console.error("Talk speech error:", err);
     });
@@ -2819,7 +2790,6 @@ if (currentTalkSpeech && currentTalkSpeech.gainNode) {
     console.error("Talk speak failed:", err);
   }
 }
-
 // Stop current wisp speech
 function talkStop() {
   if (currentTalkSpeech && currentTalkSpeech.abort) {
@@ -2827,12 +2797,10 @@ function talkStop() {
   }
   currentTalkSpeech = null;
 }
-
 // Example calls:
 // talkSpeak(0); // greeting
 // talkSpeak(3); // danger warning
-// talkStop();   // silence the wisp
-
+// talkStop(); // silence the wisp
 
 // Ultra low-fi 8-bit / C64 style wisp voice + music ducking
 function wispSpeak(type) {
@@ -2901,22 +2869,6 @@ function wispSpeak(type) {
         // Danger warning: music stays ducked until some other game logic restores it
         wispIsSpeaking = false;
     };
-}
-
-// ---------------------------------------------------------------
-// Helper: returns a gain factor that is higher on Android devices
-// ---------------------------------------------------------------
-function getPlatformMasterGain() {
-    const ua = navigator.userAgent || navigator.vendor || window.opera;
-
-    // Simple Android detection (covers Chrome, Samsung Internet, etc.)
-    const isAndroid = /android/i.test(ua);
-
-    // Base calm level (same for all platforms)
-    const calmLevel = 0.5; // 50 % of the boosted signal
-
-    // On Android we add extra headroom to overcome the compressor
-    return isAndroid ? calmLevel * 1.8 : calmLevel; // ≈ 0.9 on Android, 0.5 elsewhere
 }
 
 function playThrowSpear() {
@@ -4192,6 +4144,26 @@ diamondWallTiles.forEach(pos => {
                 console.warn('Failed to place hooded heirloom: tile occupied at', heirloomX, heirloomY);
             }
 
+p.x = mainRoomX + 3;
+p.y = mainRoomY + 6;
+p.currentX = p.x * S;
+p.currentY = p.y * S;
+p.moving = false;
+p.stepsLeft = 0;
+p.deltaX = 0;
+p.deltaY = 0;
+p.targetTileX = p.x;
+p.targetTileY = p.y;
+camera.x = 0;
+camera.y = 0;
+needsRedraw = true;
+updateFogMap(p.x, p.y);
+            needsRedraw = true;
+            logBattleEvent(`Hideout - Entered the secret hideout!`);
+            document.getElementById('floor-indicator').textContent = `Hideout`;
+            return;
+        }
+
 // Set bounty if none exists (random unique from any type)  ← OLD CODE, KEEP THIS
 if (!window.currentBounty) {
     const allTypes = Object.keys(uniqueMonsterNames);
@@ -4220,26 +4192,6 @@ if (!window.currentSideQuest || (window.currentSideQuest && window.currentSideQu
         progress: 0
     };
 }
-
-p.x = mainRoomX + 3;
-p.y = mainRoomY + 6;
-p.currentX = p.x * S;
-p.currentY = p.y * S;
-p.moving = false;
-p.stepsLeft = 0;
-p.deltaX = 0;
-p.deltaY = 0;
-p.targetTileX = p.x;
-p.targetTileY = p.y;
-camera.x = 0;
-camera.y = 0;
-needsRedraw = true;
-updateFogMap(p.x, p.y);
-            needsRedraw = true;
-            logBattleEvent(`Hideout - Entered the secret hideout!`);
-            document.getElementById('floor-indicator').textContent = `Hideout`;
-            return;
-        }
 
 // ——— THEME BLOCK CONSISTENCY ———
 if (floor % 3 === 0 && floor > 1) {
@@ -10849,7 +10801,6 @@ case 'set':
         addTerminalLineToContent('Type "help" for help.');
     } else {
         const subCmd = args[0].toLowerCase();
-
         if (subCmd === 'sound') {
             if (args.length < 2) {
                 addTerminalLineToContent('Usage: set sound [volume]');
