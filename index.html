@@ -1888,7 +1888,8 @@ const types = [
     new EnemyType('Squid', 0.1, 1, 4, 2, 2),
     new EnemyType('Dolphin', 1, 10, 4, 3, 2),
     new EnemyType('Shark', 10, 100, 5, 5, 2),
-    new EnemyType('Whale', 100, Infinity, 6, 4, 2)
+    new EnemyType('Whale', 100, Infinity, 6, 4, 2),
+    new EnemyType('Jester', 0, 0, 10, 2, 1) // 10 HP, 2 ATK, 1 move, no sats
 ];
 
 // Wisp types (companion spells)
@@ -1957,36 +1958,36 @@ types.forEach((type, index) => {
     type.anim.frames[1].src = `${type.name.toLowerCase()}_2.png`;
     type.anim.frames[2].src = `${type.name.toLowerCase()}_3.png`;
     
-    // Special handling for Hell Shrimp
-    // Theme-specific frames for ALL enemies (paradise, ruins, desert, hell)
-    type.anim.paradiseFrames = [new Image(), new Image(), new Image()];
-    type.anim.ruinsFrames = [new Image(), new Image(), new Image()];
-    type.anim.desertFrames = [new Image(), new Image(), new Image()];
-    type.anim.hellFrames = type.anim.hellFrames || [new Image(), new Image(), new Image()];
+    // Theme-specific frames — skip Jester (uses custom jester_frames)
+    if (type.name !== 'Jester') {
+        type.anim.paradiseFrames = [new Image(), new Image(), new Image()];
+        type.anim.ruinsFrames = [new Image(), new Image(), new Image()];
+        type.anim.desertFrames = [new Image(), new Image(), new Image()];
+        type.anim.hellFrames = type.anim.hellFrames || [new Image(), new Image(), new Image()];
 
-    const prefix = type.name.toLowerCase();
-    type.anim.paradiseFrames[0].src = `p_${prefix}_1.png`;
-    type.anim.paradiseFrames[1].src = `p_${prefix}_2.png`;
-    type.anim.paradiseFrames[2].src = `p_${prefix}_3.png`;
-    type.anim.ruinsFrames[0].src = `r_${prefix}_1.png`;
-    type.anim.ruinsFrames[1].src = `r_${prefix}_2.png`;
-    type.anim.ruinsFrames[2].src = `r_${prefix}_3.png`;
-    type.anim.desertFrames[0].src = `d_${prefix}_1.png`;
-    type.anim.desertFrames[1].src = `d_${prefix}_2.png`;
-    type.anim.desertFrames[2].src = `d_${prefix}_3.png`;
-    type.anim.hellFrames[0].src = `h_${prefix}_1.png`;
-    type.anim.hellFrames[1].src = `h_${prefix}_2.png`;
-    type.anim.hellFrames[2].src = `h_${prefix}_3.png`;
+        const prefix = type.name.toLowerCase();
+        type.anim.paradiseFrames[0].src = `p_${prefix}_1.png`;
+        type.anim.paradiseFrames[1].src = `p_${prefix}_2.png`;
+        type.anim.paradiseFrames[2].src = `p_${prefix}_3.png`;
+        type.anim.ruinsFrames[0].src = `r_${prefix}_1.png`;
+        type.anim.ruinsFrames[1].src = `r_${prefix}_2.png`;
+        type.anim.ruinsFrames[2].src = `r_${prefix}_3.png`;
+        type.anim.desertFrames[0].src = `d_${prefix}_1.png`;
+        type.anim.desertFrames[1].src = `d_${prefix}_2.png`;
+        type.anim.desertFrames[2].src = `d_${prefix}_3.png`;
+        type.anim.hellFrames[0].src = `h_${prefix}_1.png`;
+        type.anim.hellFrames[1].src = `h_${prefix}_2.png`;
+        type.anim.hellFrames[2].src = `h_${prefix}_3.png`;
 
-    // Optional error logging for all themed frames
-    ['paradiseFrames', 'ruinsFrames', 'desertFrames', 'hellFrames'].forEach(arrayName => {
-        type.anim[arrayName].forEach((frame, i) => {
-            frame.onerror = () => console.error(`Failed to load ${arrayName} ${prefix} frame ${i+1}`);
+        // Error logging for themed frames
+        ['paradiseFrames', 'ruinsFrames', 'desertFrames', 'hellFrames'].forEach(arrayName => {
+            type.anim[arrayName].forEach((frame, i) => {
+                frame.onerror = () => console.error(`Failed to load ${arrayName} ${prefix} frame ${i+1}`);
+            });
         });
-    });
+    }
+    
 });
-
-
 
 Object.values(assets).forEach(asset => {
         if (asset instanceof Image) {
@@ -2307,6 +2308,20 @@ assets.sandworm[2].src = 'sandworm3.png';
 assets.sandworm.frameIndex = 0;
 assets.sandworm.lastFrameTime = 0;
 assets.sandworm.frameDuration = 400; // same speed as enemies
+
+// Jester animation frames (3 frames)
+assets.jester_frames = [new Image(), new Image(), new Image()];
+assets.jester_frames[0].src = 'jester_1.png';
+assets.jester_frames[1].src = 'jester_2.png';
+assets.jester_frames[2].src = 'jester_3.png';
+
+// Jester shrine
+assets.jester_shrine = new Image();
+assets.jester_shrine.src = 'jester_shrine.png';
+
+// Acrobatics buff icon
+assets.jester_acrobatics = new Image();
+assets.jester_acrobatics.src = 'jester_acrobatics.png';
 
 // New top-right UI assets (16x16)
 assets.inv_cloth = new Image();
@@ -4641,6 +4656,21 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
+        // Jester Shrine spawn (10% chance, not in hideout/puzzle)
+        if (!inHideout && !inPuzzleRoom && Math.random() < 0.10) {
+            let attempts = 100;
+            while (attempts--) {
+                const x = Math.floor(Math.random() * W);
+                const y = Math.floor(Math.random() * H);
+                if (map[y][x] === 0 && 
+                    Math.abs(x - p.x) + Math.abs(y - p.y) > 5 && // far from player
+                    !enemies.some(e => e.x === x && e.y === y)) {
+                    map[y][x] = 35; // Jester shrine tile ID
+                    break;
+                }
+            }
+        }
+
 // Cool ROI drop – 2.5% chance on any normal floor (not hideout or puzzle)
 // Also called "Mask of ROI"
 if (!inHideout && !inPuzzleRoom && Math.random() < 0.025) {
@@ -4794,6 +4824,12 @@ if (currentTheme === 'dungeon' && !redMazeActive) {
         enemies.forEach(e => e.hp = 0);
         enemies = [];
         redMazeActive = true;
+        
+        if (p.hasAcrobaticsBuff) {
+            p.hasAcrobaticsBuff = false;
+            logBattleEvent(`Red Maze boss is not amused .. Acrobatics buff dispelled!`);
+        }
+        
         redMazeLastFloor = floor;
         
         // Save mute state
@@ -5185,7 +5221,7 @@ if (p.hp <= 0 && !gameOver) {
             // ----- clear enemies & spawn Echo Warden -----
             enemies.forEach(enemy => {
                 kills[enemy.type.name]++;
-                if (enemy.type.name !== 'Cursed Trader' && !enemy.uniqueName && !enemy.isHuge) {
+                if (enemy.type.name !== 'Cursed Trader' && enemy.type.name !== 'Jester' && !enemy.uniqueName && !enemy.isHuge) {
                     if (map[enemy.y][enemy.x] === 0) {
                         map[enemy.y][enemy.x] = 3;
                         satoshiDrops.push({
@@ -5686,6 +5722,7 @@ if (p.ripBlast && enemies.length > 0) {
         else if (enemy.type.name === 'Shark') xp = 5;
         else if (enemy.type.name === 'Whale') xp = 15;
         else if (enemy.type.name === 'Cursed Trader') xp = 10;
+        else if (enemy.type.name === 'Jester') xp = 2;
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
         playerXP += xp;
         checkLevelUp();
@@ -5698,7 +5735,7 @@ if (p.ripBlast && enemies.length > 0) {
 
         let dropPlaced = false;
         // No sats/BTC drop for uniques OR Cursed Trader
-        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge) {
+        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && enemy.type.name !== 'Jester' && !enemy.isHuge) {
             if (map[enemy.y][enemy.x] === 0) {
                 map[enemy.y][enemy.x] = 3;
                 satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -7188,6 +7225,53 @@ if (map[ny][nx] === 33) {
     needsRedraw = true;
 }
 
+if (map[ny][nx] === 35) { // Jester shrine
+    logBattleEvent(`Jester's Shrine activated! 5 Jesters appear!`);
+    playWebAudioSound(sounds.secret);
+
+    const jesterType = types.find(t => t.name === 'Jester');
+    if (jesterType) {
+        for (let i = 0; i < 5; i++) {
+            let attempts = 100; // more attempts for better placement
+            let jx, jy;
+            while (attempts--) {
+                jx = Math.floor(Math.random() * W);
+                jy = Math.floor(Math.random() * H);
+
+                // Better validation: floor tile, not player, not occupied, some distance
+                const distFromPlayer = Math.abs(jx - p.x) + Math.abs(jy - p.y);
+                if (map[jy][jx] === 0 &&
+                    !(jx === p.x && jy === p.y) &&
+                    !enemies.some(e => e.x === jx && e.y === jy) &&
+                    distFromPlayer > 3 && distFromPlayer < 12) { // avoid too close/far
+                    const jester = {
+                        x: jx, y: jy,
+                        currentX: jx * S, currentY: jy * S,
+                        type: jesterType,
+                        hp: 10,
+                        atk: 2,
+                        move: 1,
+                        isJester: true,
+                        fleeing: false,
+                        sats: 0, // No sats
+                        uniqueName: 'Jester', // Treat as unique for fog invisibility
+                        anim: {
+                            frames: assets.jester_frames,
+                            frameIndex: Math.floor(Math.random() * 3), // random start frame
+                            lastFrameTime: performance.now()
+                        }
+                    };
+                    enemies.push(jester);
+                    break;
+                }
+            }
+        }
+    }
+
+    map[ny][nx] = 0; // remove shrine after activation
+    needsRedraw = true;
+}
+
 // Updated info sign block in move()
 const infoSignTile = 34;
 const onInfoSign = map[p.y][p.x] === infoSignTile;
@@ -7790,6 +7874,67 @@ while (steps < moves) {
     steps++;
     tempDx = p.x - finalX; tempDy = p.y - finalY;
 }
+
+if (e.type.name === 'Jester') {
+
+    // Jester logic (runs even if not visible — flee/buff can happen off-screen)
+    const livingJesters = enemies.filter(en => en.type.name === 'Jester' && en.hp > 0).length;
+
+    if (livingJesters === 1 && !e.fleeing) {
+        e.fleeing = true;
+        e.fleeStartTime = performance.now();
+        logBattleEvent(`Last Jester flees in terror!`);
+if (!p.hasAcrobaticsBuff) {
+    // Jester invisible in fog of war
+fogMap = Array(H).fill().map(() => Array(W).fill(0));
+    p.hasAcrobaticsBuff = true;
+    logBattleEvent(`Jester's Acrobatics buff granted! 20% dodge chance.`);
+    logBattleEvent(`Jester lurks in the shadows, ready to ambush.`);
+} else {
+    logBattleEvent(`Jester's Acrobatics already active, no additional buff.`);
+}
+    }
+
+    if (e.fleeing) {
+        // Flee fast (2 steps per turn)
+        for (let step = 0; step < 2; step++) {
+            const dirs = [{dx:-1,dy:0},{dx:1,dy:0},{dx:0,dy:-1},{dx:0,dy:1}];
+            const playerDirX = p.x - e.x;
+            const playerDirY = p.y - e.y;
+            const awayDirs = dirs.filter(d => d.dx * playerDirX + d.dy * playerDirY <= 0);
+            const chosen = awayDirs.length > 0 ? awayDirs[Math.floor(Math.random() * awayDirs.length)] : dirs[Math.floor(Math.random() * dirs.length)];
+
+            const nx = e.x + chosen.dx;
+            const ny = e.y + chosen.dy;
+
+            // Collision check
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(en => en.x === nx && en.y === ny && en !== e)) {
+                e.x = nx;
+                e.y = ny;
+                e.currentX = nx * S;
+                e.currentY = ny * S;
+            }
+        }
+    } else {
+        // Normal move toward player
+        const dx = p.x - e.x;
+        const dy = p.y - e.y;
+        const dist = Math.abs(dx) + Math.abs(dy);
+        if (dist > 1) {
+            const nx = e.x + (dx > 0 ? 1 : (dx < 0 ? -1 : 0));
+            const ny = e.y + (dy > 0 ? 1 : (dy < 0 ? -1 : 0));
+
+            // Collision check
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(en => en.x === nx && en.y === ny && en !== e)) {
+                e.x = nx;
+                e.y = ny;
+                e.currentX = nx * S;
+                e.currentY = ny * S;
+            }
+        }
+    }
+}
+
 if (numTileSteps > 0) {
     const totalDeltaX = (finalX - startX) * S;
     const totalDeltaY = (finalY - startY) * S;
@@ -7858,13 +8003,23 @@ if (e.isHuge && Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1) {
                 // Calculate base damage
                 const damage = e.type.name === 'Whale' ? Math.ceil(p.hp / 10) + 3 : e.type.atk;
 
-                // Birch Shield block
-                let damageTaken = true;
-                if (playerClass === 'druid' && Math.random() < 0.10) {
-                    logBattleEvent(`Birch Shield blocks the attack!`);
-                    highlightTiles.push({x: p.x, y: p.y, highlightStart: Date.now(), color: 'circle-white'});
-                    damageTaken = false; // fully block damage and skip thorns
-                }
+// Player dodge chances (Birch Shield + Acrobatics buff)
+let damageTaken = true;
+
+// Acrobatics buff (Jester reward) — 20% dodge chance vs any attack
+if (p.hasAcrobaticsBuff && Math.random() < 0.2) {
+    logBattleEvent(`Acrobatics dodge!`);
+
+    highlightTiles.push({x: p.x, y: p.y, highlightStart: performance.now(), color: 'circle-cyan'});
+    damageTaken = false;
+}
+
+// Birch Shield (Druid perk) — 10% block chance
+else if (playerClass === 'druid' && Math.random() < 0.10) {
+    logBattleEvent(`Birch Shield blocks the attack!`);
+    highlightTiles.push({x: p.x, y: p.y, highlightStart: performance.now(), color: 'circle-white'});
+    damageTaken = false;
+}
 
                 if (damageTaken) {
                     // Aura absorbs first if active
@@ -7908,7 +8063,7 @@ if (playerClass === 'druid' && playerLevel >= 10) {
                 tryDropScroll(e.x, e.y);
 
                 // Drop sats if not unique or Cursed Trader
-                if (!e.uniqueName && e.type.name !== 'Cursed Trader' && !e.isHuge) {
+                if (!e.uniqueName && e.type.name !== 'Cursed Trader' && e.type.name !== 'Jester' && !e.isHuge) {
                     if (map[e.y][e.x] === 0) {
                         map[e.y][e.x] = 3;
                         satoshiDrops.push({x: e.x, y: e.y, sats: e.sats, type: e.type.name});
@@ -8411,6 +8566,7 @@ function doScourgeSpinAttack() {
                 else if (enemy.type.name === 'Shark') xp = 5;
                 else if (enemy.type.name === 'Whale') xp = 15;
                 else if (enemy.type.name === 'Cursed Trader') xp = 10;
+                else if (enemy.type.name === 'Jester') xp = 2;
                 if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
                 playerXP += xp;
@@ -8425,7 +8581,7 @@ function doScourgeSpinAttack() {
                 tryDropScroll(enemy.x, enemy.y);
 
                 // Normal sats drop for non-unique enemies (skip Cursed Trader to avoid bitcoin glitch)
-                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge && map[y][x] === 0) {
+                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && enemy.type.name !== 'Jester' && !enemy.isHuge && map[y][x] === 0) {
                     map[y][x] = 3;
                     satoshiDrops.push({x, y, sats: enemy.sats, type: enemy.type.name});
                 }
@@ -8711,7 +8867,7 @@ function applyWispAttack(wisp, primaryTarget) {
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if (dx <= 1 && dy <= 1) {
                 // Skip Cursed Trader (immune to wisp freeze)
-                if (enemy.type.name === 'Cursed Trader') {
+                if (enemy.type.name === 'Cursed Trader' && enemy.type.name === 'Jester') {
                     affected = true; // still counts for visuals/sound
                 } else {
                     // Skip if already ensnared — Ensnare has lower priority
@@ -8960,6 +9116,7 @@ else if (hit.type.name === 'Dolphin') xp = 4;
 else if (hit.type.name === 'Shark') xp = 5;
 else if (hit.type.name === 'Whale') xp = 15;
 else if (hit.type.name === 'Cursed Trader') xp = 10;
+else if (hit.type.name === 'Jester') xp = 2;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
 playerXP += xp;
 //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -9006,7 +9163,7 @@ updateXPBar(); // Only called on kills - super efficient
                             }
                         } else {
                             // Normal enemies only (including uniques — they get handled in handleUniqueMonsterReward)
-                            if (!hit.uniqueName && hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
+                            if (!hit.uniqueName && hit.type.name !== 'Cursed Trader' && hit.type.name !== 'Jester' && !hit.isHuge) {
                                 let dropPlaced = false;
                                 if (map[hit.y][hit.x] === 0) {
                                     map[hit.y][hit.x] = 3;
@@ -9475,7 +9632,7 @@ function handleUniqueMonsterReward(hit) {
     
     // Add bitcoin drops around the monster position (skip for Cursed Trader)
     let dropPlaced = false;
-    if (hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
+    if (hit.type.name !== 'Cursed Trader' && hit.type.name !== 'Jester' && !hit.isHuge) {
         if (map[hit.y][hit.x] === 0) {
             map[hit.y][hit.x] = 3;
             satoshiDrops.push({x: hit.x, y: hit.y, sats: reward, type: hit.type.name});
@@ -9538,19 +9695,22 @@ function handleUniqueMonsterReward(hit) {
 }
 
     // === UNIQUE REWARD MESSAGE ===
-    const multiplier = Math.round(randomMultiplier * 10) / 10; // e.g., 2.7x
-    const rewardBtc = reward / 100000000;
-    const displayAmount = rewardBtc >= 0.001 
-        ? rewardBtc.toFixed(3) + ' BTC' 
-        : Math.round(reward) + ' sats';
-
-    logBattleEvent(`UNIQUE: ${hit.uniqueName} defeated!`);
-    logBattleEvent(`Multiplier: ${multiplier}x`);
-    logBattleEvent(`Reward: ${displayAmount}`);
+    if (hit.type.name !== 'Jester') {
+        const multiplier = Math.round(randomMultiplier * 10) / 10;
+        const rewardBtc = reward / 100000000;
+        const displayAmount = rewardBtc >= 0.001
+            ? rewardBtc.toFixed(3) + ' BTC'
+            : Math.round(reward) + ' sats';
+        logBattleEvent(`UNIQUE: ${hit.uniqueName} defeated!`);
+        logBattleEvent(`Multiplier: ${multiplier}x`);
+        logBattleEvent(`Reward: ${displayAmount}`);
+    } else {
+        logBattleEvent(`Jester defeated!`); // optional minimal message
+    }
 
     activeUniqueMonsterName = null; // Also clear any lingering visible name
     // Add reward to earned stats (skip Cursed Trader)
-    if (hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
+    if (hit.type.name !== 'Cursed Trader' && hit.type.name !== 'Jester' && !hit.isHuge) {
         satsEarned[hit.type.name] = (satsEarned[hit.type.name] || 0) + reward;
     }
     // Clear harbinger if it was this monster
@@ -9767,6 +9927,7 @@ if (hit) {
                         else if (enemy.type.name === 'Shark') xp = 5;
                         else if (enemy.type.name === 'Whale') xp = 15;
                         else if (enemy.type.name === 'Cursed Trader') xp = 10;
+                        else if (enemy.type.name === 'Jester') xp = 2;
                         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
                         playerXP += xp;
@@ -9783,7 +9944,7 @@ if (hit) {
 tryDropScroll(enemy.x, enemy.y);
                         
                         // Drop satoshi — ONLY for normal blockchain enemies (not uniques or Cursed Trader)
-                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge) {
+                        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && enemy.type.name !== 'Jester' && !enemy.isHuge) {
                             if (map[enemy.y][enemy.x] === 0) {
                                 map[enemy.y][enemy.x] = 3;
                                 satoshiDrops.push({x: enemy.x, y: enemy.y, sats: enemy.sats, type: enemy.type.name});
@@ -9966,8 +10127,6 @@ if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y -
         color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
     });
 }
-
-
         
         // Wisp sync attack: Assist player's target
         if (wisps.length > 0) {
@@ -9985,6 +10144,7 @@ else if (hit.type.name === 'Dolphin') xp = 4;
 else if (hit.type.name === 'Shark') xp = 5;
 else if (hit.type.name === 'Whale') xp = 15;
 else if (hit.type.name === 'Cursed Trader') xp = 10;
+else if (hit.type.name === 'Jester') xp = 2;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
 playerXP += xp;
 //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -10029,7 +10189,7 @@ updateXPBar(); // Only called on kills - super efficient
                                     playWebAudioSound(sounds.pickup);
                                 }
                             }
-                        } else if (!hit.uniqueName && hit.type.name !== 'Cursed Trader' && !hit.isHuge) {
+                        } else if (!hit.uniqueName && hit.type.name !== 'Cursed Trader' && hit.type.name !== 'Jester' && !hit.isHuge) {
                             // Normal enemies only — drop sats visually
                             if (map[hit.y][hit.x] === 0) {
                                 map[hit.y][hit.x] = 3;
@@ -11044,6 +11204,7 @@ if (enemy) {
         else if (enemy.type.name === 'Shark') xp = 5;
         else if (enemy.type.name === 'Whale') xp = 15;
         else if (enemy.type.name === 'Cursed Trader') xp = 10;
+        else if (enemy.type.name === 'Jester') xp = 2;
         else if (enemy.type.name === 'Red Maze') xp = 30; // just in case
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
         playerXP += xp;
@@ -11058,7 +11219,7 @@ if (enemy) {
         tryDropScroll(enemy.x, enemy.y);
 
         // Drop satoshi (skip uniques & Cursed Trader)
-        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && !enemy.isHuge) {
+        if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && enemy.type.name !== 'Jester' && !enemy.isHuge) {
             let dropPlaced = false;
             if (map[enemy.y][enemy.x] === 0) {
                 map[enemy.y][enemy.x] = 3;
@@ -12259,6 +12420,8 @@ p.farmLocked = false;
 p.farmLockedFloor = 0;
 p.farmLockedSats = 0;
 
+p.hasAcrobaticsBuff = false;
+
 frostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
 entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 
@@ -12953,6 +13116,9 @@ if (map[y][x] === 25) { // Puzzle portal tile
 	if (map[y][x] === 34) {
 	    c.drawImage(assets.info_sign, x * S, y * S, S, S);
 	}
+        if (map[y][x] === 35) {
+            c.drawImage(assets.jester_shrine, x * S, y * S, S, S);
+        }
 
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
 if (inPuzzleRoom && puzzleStaticCanvas) {
@@ -13107,17 +13273,25 @@ if (catPos && catPos.x === x && catPos.y === y) {
 
 // Draw flash effect for diamond hand AOE damage
 highlightTiles.forEach(tile => {
-    if (Date.now() - tile.highlightStart < 200 && tile.x >= 0 && tile.x < W && tile.y >= 0 && tile.y < H && map[tile.y][tile.x] !== 1) {
+    const elapsed = performance.now() - tile.highlightStart; // consistent with push
+    if (elapsed < 200 && tile.x >= 0 && tile.x < W && tile.y >= 0 && tile.y < H && map[tile.y][tile.x] !== 1) {
         const dist = Math.sqrt((tile.x - p.x) ** 2 + (tile.y - p.y) ** 2);
         const isVisible = fogMap[tile.y][tile.x] === 1 || dist <= radius;
         if (isVisible) {
             c.save();
             if (tile.color === 'circle-white') {
                 // Circular white Birch Shield flash
-                const elapsed = Date.now() - tile.highlightStart;
                 const expand = 1 + (elapsed / 100); // expand over 100ms
                 c.globalAlpha = 0.8 * (1 - elapsed / 200);
                 c.fillStyle = 'rgba(255,255,255,0.9)';
+                c.beginPath();
+                c.arc(tile.x * S + S/2, tile.y * S + S/2, S * expand / 2, 0, Math.PI * 2);
+                c.fill();
+            } else if (tile.color === 'circle-cyan') {
+                // Circular cyan Acrobatics dodge flash
+                const expand = 1 + (elapsed / 100); // expand over 100ms
+                c.globalAlpha = 0.8 * (1 - elapsed / 200);
+                c.fillStyle = 'rgba(0,232,216,0.9)';
                 c.beginPath();
                 c.arc(tile.x * S + S/2, tile.y * S + S/2, S * expand / 2, 0, Math.PI * 2);
                 c.fill();
@@ -13562,10 +13736,10 @@ enemies.forEach(e => {
         
         // Check if this enemy is a unique monster
         const isUniqueMonster = e.uniqueName !== undefined;
-        // Invisible in fog for Cursed Trader
-        if (e.type.name === 'Cursed Trader' && fogMap[e.y][e.x] === 0) {
-            return; // Skip drawing
-        }
+// Invisible in fog for Cursed Trader OR Jester
+if ((e.type.name === 'Cursed Trader' || e.type.name === 'Jester') && fogMap[e.y][e.x] === 0) {
+    return; // Skip drawing
+}
         
         // Draw sword for Cursed Trader if attacking
         if (e.swordActive && Date.now() - e.swordStart < 200 && e.type.name === 'Cursed Trader') {
@@ -13650,7 +13824,7 @@ enemies.forEach(e => {
 
         // Apply unique monster poison green + red eyes overlay (safe across e/hit/enemy/dead)
         const currentEnemy = e || hit || enemy || dead;
-        if (currentEnemy && currentEnemy.uniqueName && currentEnemy.type.name !== 'Cursed Trader' && !currentEnemy.isHuge && isVisible) {
+        if (currentEnemy && currentEnemy.uniqueName && currentEnemy.type.name !== 'Cursed Trader' && currentEnemy.type.name !== 'Jester' && !currentEnemy.isHuge && isVisible) {
             const imageData = enemyTempCtx.getImageData(0, 0, S, S);
             const data = imageData.data;
 
@@ -13855,7 +14029,7 @@ let nameToShow = null;
 let isHarbinger = false;
 
 // Visible unique blockchain monsters (exclude Cursed Trader)
-const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && !e.isHuge && fogMap[e.y][e.x] === 1);
+const visibleUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Cursed Trader' && e.type.name !== 'Jester' && !e.isHuge && fogMap[e.y][e.x] === 1);
 if (visibleUniques.length > 0) {
     nameToShow = visibleUniques[0].uniqueName;
     // Trigger wisp TTS when first seeing a unique monster (only if wisp is alive)
@@ -14065,6 +14239,26 @@ if (exit) {
         img.style.display = 'block';
         img.style.margin = 'auto';
         armorIcon.appendChild(img);
+    }
+
+    // Jester's Acrobatics buff icon (left of armor)
+    if (p.hasAcrobaticsBuff) {
+        const acrobaticsContainer = document.getElementById('acrobatics-icon-container') || (() => {
+            const div = document.createElement('div');
+            div.id = 'acrobatics-icon-container';
+            div.style.cssText = 'position:absolute;top:0px;right:48px;width:48px;height:48px;z-index:20;pointer-events:none;';
+            document.getElementById('top-right-ui').insertBefore(div, document.getElementById('armor-icon-container'));
+            return div;
+        })();
+        acrobaticsContainer.innerHTML = '';
+        const img = assets.jester_acrobatics.cloneNode();
+        img.style.width = '48px';
+        img.style.height = '48px';
+        img.style.imageRendering = 'pixelated';
+        acrobaticsContainer.appendChild(img);
+    } else {
+        const container = document.getElementById('acrobatics-icon-container');
+        if (container) container.innerHTML = '';
     }
 
     // GUI for health and soul charges – crisp & screen-space ready (2x on zoom)
