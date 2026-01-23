@@ -6132,8 +6132,8 @@ if (inPuzzleRoom) {
                     patchStaticCanvas(pushX, pushY);
 
                     // Flash effect
-                    highlightTiles.push({x: oldX, y: oldY, highlightStart: performance.now(), color: 'rgba(120,120,120,0.7)'});
-                    highlightTiles.push({x: pushX, y: pushY, highlightStart: performance.now(), color: 'rgba(255,100,0,0.9)'});
+                    highlightTiles.push({x: oldX, y: oldY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
+                    highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
 
                     logBattleEvent("Boulder sinks and cools into permanent stone!");
                     playWebAudioSound(sounds.lava);
@@ -8229,7 +8229,7 @@ if (playerClass === 'druid' && playerLevel >= 10) {
                 highlightTiles.push({
                     x: e.x,
                     y: e.y,
-                    highlightStart: performance.now(),
+                    highlightStart: Date.now(),
                     color: 'rgba(139, 69, 19, 0.6)'
                 });
             }
@@ -8545,7 +8545,7 @@ if (sounds.secret) {
         updatePlayerState();
 
 // Flash cross-shaped red damage on player (center + N/E/S/W)
-const pinkFlash = { highlightStart: performance.now(), color: 'rgba(255, 0, 0, 0.6)' };
+const pinkFlash = { highlightStart: Date.now(), color: 'rgba(255, 0, 0, 0.6)' };
 highlightTiles.push({ ...pinkFlash, x: p.x, y: p.y }); // center
 
 // 4 directions (clamped to bounds)
@@ -9390,7 +9390,7 @@ if (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) {
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
-        highlightStart: performance.now(),
+        highlightStart: Date.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
     return false; // stop projectile
@@ -9405,7 +9405,7 @@ if (sandworm && sandworm.x === nx && sandworm.y === ny) {
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
-        highlightStart: performance.now(),
+        highlightStart: Date.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
 
@@ -10023,7 +10023,7 @@ if (hit) {
             
             // Check if tile is within bounds and not a wall
             if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
-                highlightTiles.push({x, y, highlightStart: performance.now()}); // Add tile to highlight
+                highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
                 // And add this ONCE per frame (best in draw() or gameLoop):
                 highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
                 // Check if there's an enemy at this tile
@@ -10242,7 +10242,7 @@ if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y -
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
-        highlightStart: performance.now(),
+        highlightStart: Date.now(),
         color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
     });
 }
@@ -10565,7 +10565,7 @@ if (redMazeActive && redMaze) {
         highlightTiles.push({
             x: redMaze.x,
             y: redMaze.y,
-            highlightStart: performance.now(),
+            highlightStart: Date.now(),
             color: 'rgba(247, 147, 26, 0.8)'
         });
     }
@@ -10581,7 +10581,7 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
-        highlightStart: performance.now(),
+        highlightStart: Date.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
 
@@ -11266,7 +11266,7 @@ function activateSoulStorm() {
         
         // Check if tile is within bounds and not a wall
         if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
-            highlightTiles.push({x, y, highlightStart: performance.now()}); // Add tile to highlight
+            highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
             // And add this ONCE per frame (best in draw() or gameLoop):
             highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
             // Check if there's an enemy at this tile
