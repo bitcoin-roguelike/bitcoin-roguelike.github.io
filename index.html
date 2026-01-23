@@ -2489,7 +2489,7 @@ function getPlatformMasterGain() {
     const ua = navigator.userAgent || navigator.vendor || window.opera;
     const isAndroid = /android/i.test(ua);
     const calmLevel = 0.5;
-    return isAndroid ? calmLevel * 1.8 : calmLevel; // 0.9 Android, 0.5 others
+    return isAndroid ? calmLevel * 1.5 : calmLevel; // 0.75 Android, 0.5 others
 }
 
 function getAudioContext() {
@@ -14246,7 +14246,7 @@ if (exit) {
         const acrobaticsContainer = document.getElementById('acrobatics-icon-container') || (() => {
             const div = document.createElement('div');
             div.id = 'acrobatics-icon-container';
-            div.style.cssText = 'position:absolute;top:0px;right:48px;width:48px;height:48px;z-index:20;pointer-events:none;';
+            div.style.cssText = 'position:absolute;top:0px;right:38px;width:48px;height:48px;z-index:20;pointer-events:none;';
             document.getElementById('top-right-ui').insertBefore(div, document.getElementById('armor-icon-container'));
             return div;
         })();
