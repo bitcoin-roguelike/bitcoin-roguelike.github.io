@@ -3466,6 +3466,62 @@ function playShrimpRageGrowl() {
     source.start();
 }
 
+function playJesterManiacalLaughter() {
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(e => console.error(e));
+    }
+
+    const duration = 1.8; // longer for full maniacal cackle
+    const sr = audioContext.sampleRate;
+    const buffer = audioContext.createBuffer(1, duration * sr, sr);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < data.length; i++) {
+        const t = i / sr;
+
+        // Base frequency — high-pitched for "small jester" feel
+        let baseFreq = 320 + 80 * Math.sin(2 * Math.PI * 4 * t); // quick pitch wobble
+
+        // Erratic "ha-ha-ha" bursts with rising/falling madness
+        const burst = Math.sin(2 * Math.PI * 6 * t); // 6 bursts per second
+        baseFreq += 120 * (burst > 0 ? 1 : 0); // jump up on "ha"
+
+        let wave = Math.sin(2 * Math.PI * baseFreq * t);
+
+        // Add harmonics for that unhinged cackle texture
+        wave += 0.4 * Math.sin(2 * Math.PI * baseFreq * 2 * t + 0.5);
+        wave += 0.2 * Math.sin(2 * Math.PI * baseFreq * 3 * t + 1);
+
+        // Fast vibrato for insanity
+        const vibrato = Math.sin(2 * Math.PI * 12 * t) * 15;
+        wave *= Math.sin(2 * Math.PI * (baseFreq + vibrato) * t);
+
+        // Envelope — quick attacks, laughing decay
+        const envelope = Math.min(1, t * 15) * Math.exp(-2.5 * t) * (1 + 0.3 * Math.sin(2 * Math.PI * 20 * t));
+
+        data[i] = wave * envelope * 0.7;
+    }
+
+    // Normalize
+    let max = 0;
+    for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i]));
+    if (max > 0) {
+        const scale = 0.95 / max; // almost full volume, but safe
+        for (let i = 0; i < data.length; i++) data[i] *= scale;
+    }
+
+    // Playback
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+
+    const gain = audioContext.createGain();
+    gain.gain.value = soundVolume * 1.1; // slightly boosted for impact
+
+    source.connect(gain);
+    gain.connect(audioContext.destination);
+    source.start();
+}
+
 function playShrimpTrollDeathScream() {
     if (audioContext.state === 'suspended') {
         audioContext.resume().catch(e => console.error('Failed to resume AudioContext for troll scream:', e));
@@ -4656,8 +4712,8 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
-        // Jester Shrine spawn (10% chance, not in hideout/puzzle)
-        if (!inHideout && !inPuzzleRoom && Math.random() < 0.10) {
+        // Jester Shrine spawn (20% chance, not in hideout/puzzle)
+        if (!inHideout && !inPuzzleRoom && Math.random() < 0.20) {
             let attempts = 50;
             while (attempts--) {
                 const x = Math.floor(Math.random() * W);
@@ -6046,8 +6102,8 @@ if (inPuzzleRoom) {
                     patchStaticCanvas(pushX, pushY);
 
                     // Flash effect
-                    highlightTiles.push({x: oldX, y: oldY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
-                    highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
+                    highlightTiles.push({x: oldX, y: oldY, highlightStart: performance.now(), color: 'rgba(120,120,120,0.7)'});
+                    highlightTiles.push({x: pushX, y: pushY, highlightStart: performance.now(), color: 'rgba(255,100,0,0.9)'});
 
                     logBattleEvent("Boulder sinks and cools into permanent stone!");
                     playWebAudioSound(sounds.lava);
@@ -7227,7 +7283,8 @@ if (map[ny][nx] === 33) {
 
 if (map[ny][nx] === 35) { // Jester shrine
     logBattleEvent(`Jester's Shrine activated! 5 Jesters appear!`);
-    playWebAudioSound(sounds.secret);
+    playJesterManiacalLaughter();
+    playJesterManiacalLaughter();
 
     const jesterType = types.find(t => t.name === 'Jester');
     if (jesterType) {
@@ -7887,6 +7944,8 @@ if (e.type.name === 'Jester') {
 if (!p.hasAcrobaticsBuff) {
     // Jester invisible in fog of war
 fogMap = Array(H).fill().map(() => Array(W).fill(0));
+    playJesterManiacalLaughter();
+    playJesterManiacalLaughter();
     p.hasAcrobaticsBuff = true;
     logBattleEvent(`Jester's Acrobatics buff granted! 20% dodge chance.`);
     logBattleEvent(`Jester lurks in the shadows, ready to ambush.`);
@@ -8142,7 +8201,7 @@ if (playerClass === 'druid' && playerLevel >= 10) {
                 highlightTiles.push({
                     x: e.x,
                     y: e.y,
-                    highlightStart: Date.now(),
+                    highlightStart: performance.now(),
                     color: 'rgba(139, 69, 19, 0.6)'
                 });
             }
@@ -8458,7 +8517,7 @@ if (sounds.secret) {
         updatePlayerState();
 
 // Flash cross-shaped red damage on player (center + N/E/S/W)
-const pinkFlash = { highlightStart: Date.now(), color: 'rgba(255, 0, 0, 0.6)' };
+const pinkFlash = { highlightStart: performance.now(), color: 'rgba(255, 0, 0, 0.6)' };
 highlightTiles.push({ ...pinkFlash, x: p.x, y: p.y }); // center
 
 // 4 directions (clamped to bounds)
@@ -8892,11 +8951,6 @@ function applyWispAttack(wisp, primaryTarget) {
                     frameIndex: 0,
                     startTime: performance.now()
                 });
-
-                // Play Frost Nova sound once per burst
-                if (frostNovaProjectiles.length === 1 || novaTriggered) {
-                    playFrostNovaSound();
-                }
             }
         }
         else if (wisp.type.name === 'chain' && wisp.type.aoe === 'large') {
@@ -8946,6 +9000,11 @@ function applyWispAttack(wisp, primaryTarget) {
             logBattleEvent(`Wisp unleashes Frost Nova! [FROST NOVA]`);
             lastMessageTime = now;
         }
+    }
+
+    // Play Frost Nova sound exactly once if any enemy was frozen this turn
+    if (novaTriggered) {
+        playFrostNovaSound();
     }
 
     // ——— FINAL FLASH ON ALL HIT ENEMIES ———
@@ -9271,7 +9330,7 @@ if (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) {
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
     return false; // stop projectile
@@ -9286,7 +9345,7 @@ if (sandworm && sandworm.x === nx && sandworm.y === ny) {
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
 
@@ -9904,7 +9963,7 @@ if (hit) {
             
             // Check if tile is within bounds and not a wall
             if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
-                highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
+                highlightTiles.push({x, y, highlightStart: performance.now()}); // Add tile to highlight
                 // And add this ONCE per frame (best in draw() or gameLoop):
                 highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
                 // Check if there's an enemy at this tile
@@ -10123,7 +10182,7 @@ if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y -
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
     });
 }
@@ -10446,7 +10505,7 @@ if (redMazeActive && redMaze) {
         highlightTiles.push({
             x: redMaze.x,
             y: redMaze.y,
-            highlightStart: Date.now(),
+            highlightStart: performance.now(),
             color: 'rgba(247, 147, 26, 0.8)'
         });
     }
@@ -10462,7 +10521,7 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
 
@@ -11147,7 +11206,7 @@ function activateSoulStorm() {
         
         // Check if tile is within bounds and not a wall
         if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
-            highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
+            highlightTiles.push({x, y, highlightStart: performance.now()}); // Add tile to highlight
             // And add this ONCE per frame (best in draw() or gameLoop):
             highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
             // Check if there's an enemy at this tile
@@ -13273,24 +13332,22 @@ if (catPos && catPos.x === x && catPos.y === y) {
 
 // Draw flash effect for diamond hand AOE damage
 highlightTiles.forEach(tile => {
-    const elapsed = performance.now() - tile.highlightStart; // consistent with push
-    if (elapsed < 200 && tile.x >= 0 && tile.x < W && tile.y >= 0 && tile.y < H && map[tile.y][tile.x] !== 1) {
+    const elapsed = performance.now() - tile.highlightStart;
+    if (elapsed < 400 && tile.x >= 0 && tile.x < W && tile.y >= 0 && tile.y < H && map[tile.y][tile.x] !== 1) {
         const dist = Math.sqrt((tile.x - p.x) ** 2 + (tile.y - p.y) ** 2);
         const isVisible = fogMap[tile.y][tile.x] === 1 || dist <= radius;
         if (isVisible) {
             c.save();
             if (tile.color === 'circle-white') {
-                // Circular white Birch Shield flash
-                const expand = 1 + (elapsed / 100); // expand over 100ms
-                c.globalAlpha = 0.8 * (1 - elapsed / 200);
+                const expand = 1 + (elapsed / 200);
+                c.globalAlpha = 0.8 * (1 - elapsed / 400); // match new duration
                 c.fillStyle = 'rgba(255,255,255,0.9)';
                 c.beginPath();
                 c.arc(tile.x * S + S/2, tile.y * S + S/2, S * expand / 2, 0, Math.PI * 2);
                 c.fill();
             } else if (tile.color === 'circle-cyan') {
-                // Circular cyan Acrobatics dodge flash
-                const expand = 1 + (elapsed / 100); // expand over 100ms
-                c.globalAlpha = 0.8 * (1 - elapsed / 200);
+                const expand = 1 + (elapsed / 200);
+                c.globalAlpha = 0.8 * (1 - elapsed / 400);
                 c.fillStyle = 'rgba(0,232,216,0.9)';
                 c.beginPath();
                 c.arc(tile.x * S + S/2, tile.y * S + S/2, S * expand / 2, 0, Math.PI * 2);
