@@ -1723,6 +1723,9 @@ let fogMap = [];
 let battleLogTimeout = null;
 let projectiles = [];
 let frostNovaProjectiles = []; // {x, y, currentX, currentY, targetX, targetY, frameIndex, startTime}
+let wispFireBoltProjectiles = [];
+let wispLightningProjectiles = [];
+let wispEarthquakeProjectiles = [];
 let entangleAnimations = []; // {x, y, frameIndex, startTime, enemyRef}
 let snowflakes = [];
 let ruinsRainActive = false;
@@ -1897,7 +1900,7 @@ const WISP_TYPES = [
     { name: 'cold', damage: 0, range: 3, aoe: 'medium', effect: 'freeze' }, // Freeze AOE, no dmg
     { name: 'fire', damage: 3, range: 2, aoe: 'single', effect: 'damage' }, // Strong single
     { name: 'chain', damage: 1, range: 3, aoe: 'large', effect: 'chain' }, // Weak large AOE
-    { name: 'earth', damage: 2, range: 2, aoe: 'small', effect: 'quake' } // Strong small AOE
+    { name: 'earth', damage: 2, range: 3, aoe: 'small', effect: 'quake' } // Strong small AOE
 ];
     // Add Cursed Trader as special enemy (not in types for tx spawning)
     const cursedTraderType = new EnemyType('Cursed Trader', 0, 0, 12, 2, 1); // Custom: 12 HP, 2 DMG, 1 move
@@ -2224,6 +2227,31 @@ assets.frostNova = [new Image(), new Image(), new Image()];
 assets.frostNova[0].src = 'wisp_nova1.png';
 assets.frostNova[1].src = 'wisp_nova2.png';
 assets.frostNova[2].src = 'wisp_nova3.png';
+
+// Wisp attack projectiles (3 frames each)
+assets.wispFireBolt = [new Image(), new Image(), new Image()];
+assets.wispLightning = [new Image(), new Image(), new Image()];
+assets.wispEarthquake = [new Image(), new Image(), new Image()];
+
+assets.wispFireBolt[0].src = 'wisp_firebolt1.png';
+assets.wispFireBolt[1].src = 'wisp_firebolt2.png';
+assets.wispFireBolt[2].src = 'wisp_firebolt3.png';
+
+assets.wispLightning[0].src = 'wisp_lightning1.png';
+assets.wispLightning[1].src = 'wisp_lightning2.png';
+assets.wispLightning[2].src = 'wisp_lightning3.png';
+
+assets.wispEarthquake[0].src = 'wisp_earthquake1.png';
+assets.wispEarthquake[1].src = 'wisp_earthquake2.png';
+assets.wispEarthquake[2].src = 'wisp_earthquake3.png';
+
+// Error handling
+[assets.wispFireBolt, assets.wispLightning, assets.wispEarthquake].forEach((frames, idx) => {
+    const names = ['Fire Bolt', 'Lightning', 'Earthquake'][idx];
+    frames.forEach((frame, i) => {
+        frame.onerror = () => console.error(`Failed to load ${names} frame ${i+1}`);
+    });
+});
 
 // Frozen enemy overlays (1 frame)
 const frozenTypes = ['shrimp', 'crab', 'squid', 'dolphin', 'shark', 'whale'];
@@ -4712,8 +4740,8 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
-        // Jester Shrine spawn (20% chance, not in hideout/puzzle)
-        if (!inHideout && !inPuzzleRoom && Math.random() < 0.20) {
+        // Jester Shrine spawn (15% chance, not in hideout/puzzle)
+        if (!inHideout && !inPuzzleRoom && Math.random() < 0.15) {
             let attempts = 50;
             while (attempts--) {
                 const x = Math.floor(Math.random() * W);
@@ -5582,7 +5610,9 @@ if (floor > 1 && Math.random() < 0.10) {
             if (window.currentBounty && randomUniqueName === window.currentBounty.name) {
                 newEnemy.hp *= 10; // 10× instead of 2×
                 logBattleEvent(`Bounty Target Detected! ${randomUniqueName}`);
+                if (wisps.length > 0) {
                 talkSpeak(15); // "too strong, run away"
+                }
             }
         
         // Assign a spell to this unique monster
@@ -7284,7 +7314,6 @@ if (map[ny][nx] === 33) {
 if (map[ny][nx] === 35) { // Jester shrine
     logBattleEvent(`Jester's Shrine activated! 5 Jesters appear!`);
     playJesterManiacalLaughter();
-    playJesterManiacalLaughter();
 
     const jesterType = types.find(t => t.name === 'Jester');
     if (jesterType) {
@@ -7944,7 +7973,6 @@ if (e.type.name === 'Jester') {
 if (!p.hasAcrobaticsBuff) {
     // Jester invisible in fog of war
 fogMap = Array(H).fill().map(() => Array(W).fill(0));
-    playJesterManiacalLaughter();
     playJesterManiacalLaughter();
     p.hasAcrobaticsBuff = true;
     logBattleEvent(`Jester's Acrobatics buff granted! 20% dodge chance.`);
@@ -8875,72 +8903,90 @@ function applyEnsnare() {
 }
 
 function applyWispAttack(wisp, primaryTarget) {
-    const now = Date.now();
-    let hitEnemies = new Set(); // Track all affected enemies for flash
-    let novaTriggered = false; // Track if AOE freeze actually hit anyone
+    const now = performance.now();
+    let hitEnemies = new Set();
+    let novaTriggered = false;
 
-    // ——— MAIN TARGET (always hits first) ———
+    // ——— MAIN TARGET ———
     if (wisp.type.damage > 0) {
-        // Fire / Earth / Chain respect bit shield — Cold (now only AOE) ignores it
-        if (primaryTarget.bitAmmo > 0 && wisp.type.effect !== 'freeze') {
+        // Fire / Earth / Chain respect bit shield
+        if (primaryTarget.bitAmmo > 0) {
             primaryTarget.bitAmmo--;
             primaryTarget.bits = primaryTarget.bitAmmo;
             primaryTarget.shieldFlash = { active: true, startTime: now };
             logBattleEvent(`Wisp ${wisp.type.name.toUpperCase()} blocked by shield!`);
         } else {
             const dmg = wisp.type.damage;
-            const actualDmg = Math.min(dmg, primaryTarget.hp - 1); // ← MERCY: never below 1
+            const actualDmg = Math.min(dmg, primaryTarget.hp - 1);
             if (actualDmg > 0) {
                 primaryTarget.hp -= actualDmg;
                 let verb = '';
                 let effect = '';
+                let attackSound = sounds.attack;
                 switch (wisp.type.name) {
-                    case 'fire': verb = 'scorches'; effect = '[FIRE BOLT]'; break;
-                    case 'chain': verb = 'zaps'; effect = '[CHAIN LIGHTNING]'; break;
-                    case 'earth': verb = 'smashes'; effect = '[EARTHQUAKE]'; break;
+                    case 'fire':
+                        verb = 'scorches';
+                        effect = '[FIRE BOLT]';
+                        attackSound = sounds.lava; // lava sizzle for fire
+                        break;
+                    case 'chain':
+                        verb = 'zaps';
+                        effect = '[CHAIN LIGHTNING]';
+                        attackSound = sounds.rune_drop;
+                        break;
+                    case 'earth':
+                        verb = 'smashes';
+                        effect = '[EARTHQUAKE]';
+                        break;
                 }
                 logBattleEvent(`Wisp ${verb} ${primaryTarget.type.name} for ${actualDmg} damage! ${effect}`);
-                playWebAudioSound(sounds.attack);
+                playWebAudioSound(attackSound);
+
+                // Spawn fire bolt projectile (single target)
+                if (wisp.type.name === 'fire') {
+                    wispFireBoltProjectiles.push({
+                        x: wisp.x,
+                        y: wisp.y,
+                        currentX: wisp.x * S,
+                        currentY: wisp.y * S,
+                        targetX: primaryTarget.x * S,
+                        targetY: primaryTarget.y * S,
+                        frameIndex: 0,
+                        startTime: now
+                    });
+                }
             }
         }
         hitEnemies.add(primaryTarget);
     }
-    else if (wisp.type.effect === 'freeze') {
-        // Cold wisp: NO single-target freeze anymore (nerf)
-        // Primary target gets nothing (silent — no log, no sound here)
-        // AOE Frost Nova handled below
-        hitEnemies.add(primaryTarget); // still count for flash if AOE hits
-    }
 
-    // ——— AOE EFFECTS (only apply to nearby enemies) ———
+    // ——— AOE EFFECTS ———
     const range = wisp.type.range;
     enemies.forEach(enemy => {
         if (enemy === primaryTarget) return;
         const dist = Math.abs(enemy.x - wisp.x) + Math.abs(enemy.y - wisp.y);
         if (dist > range) return;
+
         let affected = false;
 
         if (wisp.type.name === 'cold' && wisp.type.aoe === 'medium') {
-            // Medium AOE freeze (unchanged)
             const dx = Math.abs(enemy.x - primaryTarget.x);
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if (dx <= 1 && dy <= 1) {
-                // Skip Cursed Trader (immune to wisp freeze)
-                if (enemy.type.name === 'Cursed Trader' && enemy.type.name === 'Jester') {
-                    affected = true; // still counts for visuals/sound
+                // Cursed Trader & Jester immune to freeze
+                if (enemy.type.name === 'Cursed Trader' || enemy.type.name === 'Jester') {
+                    affected = true;
                 } else {
-                    // Skip if already ensnared — Ensnare has lower priority
-                    if (enemy.frozenByEnsnare) {
-                        affected = true; // still counts as affected for visuals/sound
-                    } else {
+                    if (!enemy.frozenByEnsnare) {
                         enemy.frozen = true;
                         enemy.frozenTurns = 2;
-                        delete enemy.frozenByEnsnare; // wisp freeze priority — show frozen overlay
-                        affected = true;
+                        delete enemy.frozenByEnsnare;
                         novaTriggered = true;
                     }
+                    affected = true;
                 }
-                // Spawn drifting Frost Nova projectile toward this enemy
+
+                // Frost Nova projectile (staggered for visibility)
                 frostNovaProjectiles.push({
                     x: wisp.x,
                     y: wisp.y,
@@ -8949,12 +8995,11 @@ function applyWispAttack(wisp, primaryTarget) {
                     targetX: enemy.x * S,
                     targetY: enemy.y * S,
                     frameIndex: 0,
-                    startTime: performance.now()
+                    startTime: now + Math.random() * 150
                 });
             }
         }
         else if (wisp.type.name === 'chain' && wisp.type.aoe === 'large') {
-            // Large chain: 1 damage to all in range
             if (enemy.bitAmmo > 0) {
                 enemy.bitAmmo--;
                 enemy.bits = enemy.bitAmmo;
@@ -8970,20 +9015,44 @@ function applyWispAttack(wisp, primaryTarget) {
                 }
             }
             affected = true;
+
+            // Chain lightning projectile (staggered)
+            wispLightningProjectiles.push({
+                x: wisp.x,
+                y: wisp.y,
+                currentX: wisp.x * S,
+                currentY: wisp.y * S,
+                targetX: enemy.x * S,
+                targetY: enemy.y * S,
+                frameIndex: 0,
+                startTime: now + Math.random() * 100
+            });
         }
         else if (wisp.type.name === 'earth' && wisp.type.aoe === 'small') {
-            // Small cross quake around primary target
             const dx = Math.abs(enemy.x - primaryTarget.x);
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
                 const quakeDmg = Math.min(2, enemy.hp - 1);
-                if (quakeDmg > 0) {
+if (quakeDmg > 0) {
                     enemy.hp -= quakeDmg;
                     logBattleEvent(`Earthquake hits ${enemy.type.name} for ${quakeDmg} dmg!`);
+                    playWebAudioSound(sounds.buzz); // sound per hit
                 } else {
                     logBattleEvent(`Earthquake shakes ${enemy.type.name} — spared!`);
                 }
                 affected = true;
+
+                // Earthquake projectile per hit (staggered for visibility)
+                wispEarthquakeProjectiles.push({
+                    x: wisp.x,
+                    y: wisp.y,
+                    currentX: wisp.x * S,
+                    currentY: wisp.y * S,
+                    targetX: enemy.x * S,
+                    targetY: enemy.y * S,
+                    frameIndex: 0,
+                    startTime: now + Math.random() * 200 // more stagger
+                });
             }
         }
 
@@ -8993,26 +9062,17 @@ function applyWispAttack(wisp, primaryTarget) {
         }
     });
 
-    // Log Frost Nova only if it actually froze someone
-    if (novaTriggered) {
-        // Throttled message — once every 1 second
-        if (now - lastMessageTime >= 1000) {
-            logBattleEvent(`Wisp unleashes Frost Nova! [FROST NOVA]`);
-            lastMessageTime = now;
-        }
-    }
-
-    // Play Frost Nova sound exactly once if any enemy was frozen this turn
+    // Frost Nova sound — once per burst
     if (novaTriggered) {
         playFrostNovaSound();
     }
 
-    // ——— FINAL FLASH ON ALL HIT ENEMIES ———
+    // Final flash on all hit enemies
     hitEnemies.forEach(e => {
         e.wispHitFlash = { time: now, type: wisp.type.name };
     });
 
-    // ——— WISP DEATH CHECK (player can still lose wisp) ———
+    // Wisp death check
     if (wisp.hp <= 0) {
         wisps = [];
         logBattleEvent(`Floor ${floor} - Wisp slain!`);
@@ -11647,7 +11707,7 @@ F.........#.H#
 #............#
 #............#
 #LHLLHLLHLLHL#
-#.B..B..B..B.#
+#.B..B..B....#
 S...@........#
 F............#
 ##############`,
@@ -14037,13 +14097,28 @@ c.restore();
             if (Date.now() - e.wispHitFlash.time > 200) delete e.wispHitFlash;
         }
     }
-    
-    // Draw drifting Frost Nova
-    frostNovaProjectiles.forEach(nova => {
-        if (assets.frostNova[nova.frameIndex].complete) {
-            c.drawImage(assets.frostNova[nova.frameIndex], nova.currentX, nova.currentY, S, S);
+
+// Draw drifting Frost Nova
+frostNovaProjectiles.forEach(nova => {
+    const frame = assets.frostNova[nova.frameIndex];
+    if (frame && frame.complete) {
+        c.drawImage(frame, nova.currentX, nova.currentY, S, S);
+    }
+});
+
+    // Draw wisp attack projectiles (on top of enemies)
+const drawAttackProjectiles = (projectiles, framesArray) => {
+    projectiles.forEach(proj => {
+        const frame = framesArray[proj.frameIndex];
+        if (frame && frame.complete) {
+            c.drawImage(frame, proj.currentX, proj.currentY, S, S);
         }
     });
+};
+
+    drawAttackProjectiles(wispFireBoltProjectiles, assets.wispFireBolt);
+    drawAttackProjectiles(wispLightningProjectiles, assets.wispLightning);
+    drawAttackProjectiles(wispEarthquakeProjectiles, assets.wispEarthquake);
    
 // Draw entangle overlay ON TOP of enemies
 entangleAnimations.forEach(ent => {
@@ -14558,6 +14633,28 @@ frostNovaProjectiles = frostNovaProjectiles.filter(nova => {
     nova.frameIndex = Math.floor(elapsed / 200) % 3; // 200ms per frame
     return true;
 });
+
+// Update wisp attack projectiles (fire, lightning, earthquake)
+const updateAttackProjectiles = (projectiles) => {
+    return projectiles.filter(proj => {
+        const elapsed = performance.now() - proj.startTime;
+        const duration = 600;
+        if (elapsed >= duration) return false;
+
+        const progress = elapsed / duration;
+        proj.currentX = proj.x * S + progress * (proj.targetX - proj.x * S);
+        proj.currentY = proj.y * S + progress * (proj.targetY - proj.y * S);
+
+        // Cycle through 3 frames (150ms per frame)
+        proj.frameIndex = Math.floor(elapsed / 150) % 3;
+
+        return true;
+    });
+};
+
+wispFireBoltProjectiles = updateAttackProjectiles(wispFireBoltProjectiles);
+wispLightningProjectiles = updateAttackProjectiles(wispLightningProjectiles);
+wispEarthquakeProjectiles = updateAttackProjectiles(wispEarthquakeProjectiles);
 
 // Update entangle animations
 entangleAnimations = entangleAnimations.filter(ent => {
