@@ -6132,8 +6132,8 @@ if (inPuzzleRoom) {
                     patchStaticCanvas(pushX, pushY);
 
                     // Flash effect
-                    highlightTiles.push({x: oldX, y: oldY, highlightStart: Date.now(), color: 'rgba(120,120,120,0.7)'});
-                    highlightTiles.push({x: pushX, y: pushY, highlightStart: Date.now(), color: 'rgba(255,100,0,0.9)'});
+                    highlightTiles.push({x: oldX, y: oldY, highlightStart: performance.now(), color: 'rgba(120,120,120,0.7)'});
+                    highlightTiles.push({x: pushX, y: pushY, highlightStart: performance.now(), color: 'rgba(255,100,0,0.9)'});
 
                     logBattleEvent("Boulder sinks and cools into permanent stone!");
                     playWebAudioSound(sounds.lava);
@@ -8903,7 +8903,8 @@ function applyEnsnare() {
 }
 
 function applyWispAttack(wisp, primaryTarget) {
-    const now = performance.now();
+    const now = Date.now();
+    const now2 = performance.now();
     let hitEnemies = new Set();
     let novaTriggered = false;
 
@@ -8952,7 +8953,7 @@ function applyWispAttack(wisp, primaryTarget) {
                         targetX: primaryTarget.x * S,
                         targetY: primaryTarget.y * S,
                         frameIndex: 0,
-                        startTime: now
+                        startTime: now2
                     });
                 }
             }
@@ -8995,7 +8996,7 @@ function applyWispAttack(wisp, primaryTarget) {
                     targetX: enemy.x * S,
                     targetY: enemy.y * S,
                     frameIndex: 0,
-                    startTime: now + Math.random() * 150
+                    startTime: now2 + Math.random() * 150
                 });
             }
         }
@@ -9003,7 +9004,7 @@ function applyWispAttack(wisp, primaryTarget) {
             if (enemy.bitAmmo > 0) {
                 enemy.bitAmmo--;
                 enemy.bits = enemy.bitAmmo;
-                enemy.shieldFlash = { active: true, startTime: now };
+                enemy.shieldFlash = { active: true, startTime: now2 };
                 logBattleEvent(`[CHAIN LIGHTNING] jumps to ${enemy.type.name} — blocked!`);
             } else {
                 const chainDmg = Math.min(1, enemy.hp - 1);
@@ -9025,7 +9026,7 @@ function applyWispAttack(wisp, primaryTarget) {
                 targetX: enemy.x * S,
                 targetY: enemy.y * S,
                 frameIndex: 0,
-                startTime: now + Math.random() * 100
+                startTime: now2 + Math.random() * 100
             });
         }
         else if (wisp.type.name === 'earth' && wisp.type.aoe === 'small') {
@@ -9051,7 +9052,7 @@ if (quakeDmg > 0) {
                     targetX: enemy.x * S,
                     targetY: enemy.y * S,
                     frameIndex: 0,
-                    startTime: now + Math.random() * 200 // more stagger
+                    startTime: now2 + Math.random() * 200 // more stagger
                 });
             }
         }
@@ -9082,7 +9083,7 @@ if (quakeDmg > 0) {
             x: wisp.x, y: wisp.y,
             type: wisp.type.name,
             frameIndex: wisp.anim.frameIndex,
-            fadeStart: now
+            fadeStart: now2
         };
     }
 
@@ -14086,11 +14087,11 @@ c.restore();
             c.save();
             let flashColor = 'rgba(0, 0, 0, 0)'; // Default no color (freeze)
             switch (e.wispHitFlash.type) {
-                case 'earth': flashColor = 'rgba(139, 69, 19, 0.6)'; // Brown quake
+                case 'earth': flashColor = 'rgba(180, 92, 13, 0.6)'; // Brown quake
                     break;
-                case 'chain': flashColor = 'rgba(255, 255, 0, 0.5)'; // Yellow lightning
+                case 'chain': flashColor = 'rgba(252, 194, 12, 0.5)'; // Yellow lightning
                     break;
-                case 'fire': flashColor = 'rgba(103, 0, 0, 0.55)'; // Red fire bolt
+                case 'fire': flashColor = 'rgba(239, 28, 36, 0.55)'; // Red fire bolt
                     break;
                 // cold/freeze stays colorless
             }
