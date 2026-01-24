@@ -3681,20 +3681,34 @@ let currentSplashImage = 'splash.png';
 const splashImg = new Image();
 splashImg.src = currentSplashImage;
 
-// When splash image loads → draw it + reveal START button
 splashImg.onload = () => {
     splashCanvas.clearRect(0, 0, 320, 320);
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
-    
-    // Hide loading text and show START button
-    document.getElementById('loading-text').style.display = 'none';
-    document.getElementById('start-button').style.display = 'block';
+
+    // ONLY reveal START button/loading-text handling when loading the initial splash
+    if (currentSplashImage === 'splash.png') {
+        const loadingText = document.getElementById('loading-text');
+        const startButton = document.getElementById('start-button');
+        if (loadingText) loadingText.style.display = 'none';
+        if (startButton) startButton.style.display = 'block';
+    }
 };
 
 // Fallback if image is already cached (onload won't fire)
 if (splashImg.complete && splashImg.naturalWidth > 0) {
     splashImg.onload();
 }
+
+splashImg.onerror = () => {
+    console.warn('Splash image failed to load');
+    // Safety: still try to show button for initial splash only
+    if (currentSplashImage === 'splash.png') {
+        const loadingText = document.getElementById('loading-text');
+        const startButton = document.getElementById('start-button');
+        if (loadingText) loadingText.style.display = 'none';
+        if (startButton) startButton.style.display = 'block';
+    }
+};
 
 function fadeSplash() {
     setTimeout(() => {
