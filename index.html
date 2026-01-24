@@ -816,7 +816,13 @@ button:hover {
             <canvas id="game" width="320" height="320"></canvas>
             <div id="splash-screen">
     		<canvas id="splash-canvas" width="320" height="320"></canvas>
-    	    <button id="start-button">START</button>
+<!-- NEW: Loading message (shown until splash is ready) -->
+    <div id="loading-text" style="position: absolute; top: 70%; left: 50%; transform: translate(-50%, -50%); color: #ff8c00; font-family: 'VT323', monospace; font-size: 24px; text-align: center; pointer-events: none; z-index: 50;">
+        Loading...
+    </div>
+    
+    <!-- START button now hidden by default -->
+    <button id="start-button" style="display: none;">START</button>
     	    <div id="info-icon" onclick="showInfo()" style="position: absolute; top: 50px; right: 20px; width: 30px; height: 30px; background: #00e8d8; color: #fff; border: 3px solid #ff8c00; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-family: 'VT323', monospace; font-size: 24px; cursor: pointer; z-index: 50;">i</div>
     	    <!-- Add info message display -->
 <div id="info-message" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111; color: #ff8c00; border: 2px solid #ff8c00; padding: 20px; font-family: 'VT323', monospace; font-size: 18px; text-align: center; display: none; z-index: 60; max-width: 80vw; border-radius: 5px;">
@@ -1136,9 +1142,17 @@ function findClosestName(input, nameList) {
  *   finalScore = 14000 + 6300 = 20300
  */
 function getScoreWithMultiplier(rawScore, currentFloor) {
-    const multiplier = currentFloor / 100;          // 0.45 for floor 45
+    const multiplier = currentFloor / 100;
     const added = Math.floor(rawScore * multiplier);
-    return rawScore + added;                       // 20300 in the example
+    let finalScore = rawScore + added;
+
+    // Cap at 21 million BTC (2.1 quadrillion sats)
+    const MAX_SATS = 2100000000000000;
+    if (finalScore > MAX_SATS) {
+        finalScore = MAX_SATS;
+    }
+
+    return finalScore;
 }
 
 // Modified submitScore function with nearest name matching and random fallback
@@ -1336,7 +1350,7 @@ async function fetchLeaderboard(submittedUsername = null, submittedScore = null,
         const scoreWidth = 14;
         const numberWidth = 10;
         const floorWidth = 6;
-        const header = `Rank  Username               Score         Floor`;
+        const header = `Rank  Username             Score           Floor`;
         let rows = data.map((entry, index) => {
           const rank = (index + 1).toString().padStart(2, '0');
           const username = entry.username.length > maxUsernameLength
@@ -1900,7 +1914,7 @@ const WISP_TYPES = [
     { name: 'cold', damage: 0, range: 3, aoe: 'medium', effect: 'freeze' }, // Freeze AOE, no dmg
     { name: 'fire', damage: 3, range: 2, aoe: 'single', effect: 'damage' }, // Strong single
     { name: 'chain', damage: 1, range: 3, aoe: 'large', effect: 'chain' }, // Weak large AOE
-    { name: 'earth', damage: 2, range: 3, aoe: 'small', effect: 'quake' } // Strong small AOE
+    { name: 'earth', damage: 2, range: 4, aoe: 'huge', effect: 'quake' } // Strong huge AOE (restrictive)
 ];
     // Add Cursed Trader as special enemy (not in types for tx spawning)
     const cursedTraderType = new EnemyType('Cursed Trader', 0, 0, 12, 2, 1); // Custom: 12 HP, 2 DMG, 1 move
@@ -3666,9 +3680,21 @@ const splashCanvas = document.getElementById('splash-canvas').getContext('2d');
 let currentSplashImage = 'splash.png';
 const splashImg = new Image();
 splashImg.src = currentSplashImage;
+
+// When splash image loads → draw it + reveal START button
 splashImg.onload = () => {
+    splashCanvas.clearRect(0, 0, 320, 320);
     splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    
+    // Hide loading text and show START button
+    document.getElementById('loading-text').style.display = 'none';
+    document.getElementById('start-button').style.display = 'block';
 };
+
+// Fallback if image is already cached (onload won't fire)
+if (splashImg.complete && splashImg.naturalWidth > 0) {
+    splashImg.onload();
+}
 
 function fadeSplash() {
     setTimeout(() => {
@@ -7315,6 +7341,12 @@ if (map[ny][nx] === 35) { // Jester shrine
     logBattleEvent(`Jester's Shrine activated! 5 Jesters appear!`);
     playJesterManiacalLaughter();
 
+const floorIndicator = document.getElementById('floor-indicator');
+floorIndicator.textContent = `Maniacal laughter echoes...`;
+setTimeout(() => {
+    floorIndicator.textContent = `Floor ${floor}`;
+}, 5000);
+
     const jesterType = types.find(t => t.name === 'Jester');
     if (jesterType) {
         for (let i = 0; i < 5; i++) {
@@ -7962,28 +7994,55 @@ while (steps < moves) {
 }
 
 if (e.type.name === 'Jester') {
+    // Track previous HP for "on hit" vanish detection (self-contained)
+    if (e.lastHp === undefined) e.lastHp = e.hp;
 
     // Jester logic (runs even if not visible — flee/buff can happen off-screen)
     const livingJesters = enemies.filter(en => en.type.name === 'Jester' && en.hp > 0).length;
-
     if (livingJesters === 1 && !e.fleeing) {
         e.fleeing = true;
         e.fleeStartTime = performance.now();
         logBattleEvent(`Last Jester flees in terror!`);
-if (!p.hasAcrobaticsBuff) {
-    // Jester invisible in fog of war
-fogMap = Array(H).fill().map(() => Array(W).fill(0));
-    playJesterManiacalLaughter();
-    p.hasAcrobaticsBuff = true;
-    logBattleEvent(`Jester's Acrobatics buff granted! 20% dodge chance.`);
-    logBattleEvent(`Jester lurks in the shadows, ready to ambush.`);
-} else {
-    logBattleEvent(`Jester's Acrobatics already active, no additional buff.`);
-}
+        if (!p.hasAcrobaticsBuff) {
+            // Jester invisible in fog of war
+            fogMap = Array(H).fill().map(() => Array(W).fill(0));
+            playJesterManiacalLaughter();
+            p.hasAcrobaticsBuff = true;
+            logBattleEvent(`Jester's Acrobatics buff granted! 20% dodge chance.`);
+            logBattleEvent(`Jester lurks in the shadows, ready to ambush.`);
+        } else {
+            logBattleEvent(`Jester's Acrobatics already active, no additional buff.`);
+        }
     }
 
     if (e.fleeing) {
-        // Flee fast (2 steps per turn)
+        // 50% chance to vanish when damaged this turn — ONLY while fleeing (panicked trickster)
+        if (e.hp < e.lastHp && Math.random() < 0.50) {
+            let attempts = 30;
+            let found = false;
+            while (attempts-- > 0) {
+                const rx = Math.floor(Math.random() * W);
+                const ry = Math.floor(Math.random() * H);
+                if (map[ry][rx] === 0 &&
+                    !enemies.some(en => en.x === rx && en.y === ry) &&
+                    !(rx === p.x && ry === p.y) &&               // never on player
+                    Math.abs(rx - p.x) + Math.abs(ry - p.y) >= 4) { // keep some distance
+                    e.x = rx;
+                    e.y = ry;
+                    e.currentX = rx * S;
+                    e.currentY = ry * S;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found) {
+                logBattleEvent(`The Jester cackles and vanishes in a puff of smoke!`);
+                playJesterManiacalLaughter();
+            }
+        }
+
+        // Flee fast (2 steps per turn) – original behavior preserved
         for (let step = 0; step < 2; step++) {
             const dirs = [{dx:-1,dy:0},{dx:1,dy:0},{dx:0,dy:-1},{dx:0,dy:1}];
             const playerDirX = p.x - e.x;
@@ -7994,8 +8053,12 @@ fogMap = Array(H).fill().map(() => Array(W).fill(0));
             const nx = e.x + chosen.dx;
             const ny = e.y + chosen.dy;
 
-            // Collision check
-            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(en => en.x === nx && en.y === ny && en !== e)) {
+            // Collision check + NEVER step on player
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(en => en.x === nx && en.y === ny && en !== e) &&
+                !(nx === p.x && ny === p.y)) {  // ← prevents stepping on player
+
                 e.x = nx;
                 e.y = ny;
                 e.currentX = nx * S;
@@ -8011,8 +8074,12 @@ fogMap = Array(H).fill().map(() => Array(W).fill(0));
             const nx = e.x + (dx > 0 ? 1 : (dx < 0 ? -1 : 0));
             const ny = e.y + (dy > 0 ? 1 : (dy < 0 ? -1 : 0));
 
-            // Collision check
-            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(en => en.x === nx && en.y === ny && en !== e)) {
+            // Collision check + NEVER step on player
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                map[ny][nx] === 0 &&
+                !enemies.some(en => en.x === nx && en.y === ny && en !== e) &&
+                !(nx === p.x && ny === p.y)) {  // ← prevents stepping on player
+
                 e.x = nx;
                 e.y = ny;
                 e.currentX = nx * S;
@@ -8020,6 +8087,9 @@ fogMap = Array(H).fill().map(() => Array(W).fill(0));
             }
         }
     }
+
+    // Update lastHp for next turn comparison
+    e.lastHp = e.hp;
 }
 
 if (numTileSteps > 0) {
@@ -8545,7 +8615,7 @@ if (sounds.secret) {
         updatePlayerState();
 
 // Flash cross-shaped red damage on player (center + N/E/S/W)
-const pinkFlash = { highlightStart: Date.now(), color: 'rgba(255, 0, 0, 0.6)' };
+const pinkFlash = { highlightStart: performance.now(), color: 'rgba(255, 0, 0, 0.6)' };
 highlightTiles.push({ ...pinkFlash, x: p.x, y: p.y }); // center
 
 // 4 directions (clamped to bounds)
@@ -9029,7 +9099,7 @@ function applyWispAttack(wisp, primaryTarget) {
                 startTime: now2 + Math.random() * 100
             });
         }
-        else if (wisp.type.name === 'earth' && wisp.type.aoe === 'small') {
+        else if (wisp.type.name === 'earth' && wisp.type.aoe === 'huge') {
             const dx = Math.abs(enemy.x - primaryTarget.x);
             const dy = Math.abs(enemy.y - primaryTarget.y);
             if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
@@ -9037,7 +9107,7 @@ function applyWispAttack(wisp, primaryTarget) {
 if (quakeDmg > 0) {
                     enemy.hp -= quakeDmg;
                     logBattleEvent(`Earthquake hits ${enemy.type.name} for ${quakeDmg} dmg!`);
-                    playWebAudioSound(sounds.buzz); // sound per hit
+                    playWebAudioSound(sounds.hole); // sound per hit
                 } else {
                     logBattleEvent(`Earthquake shakes ${enemy.type.name} — spared!`);
                 }
@@ -14202,7 +14272,7 @@ if (visibleTrader) {
 
 // Harbinger message for uniques in fog
 if (!nameToShow) {
-    const fogUniques = enemies.filter(e => e.uniqueName && fogMap[e.y][e.x] === 0);
+    const fogUniques = enemies.filter(e => e.uniqueName && e.type.name !== 'Jester' && fogMap[e.y][e.x] === 0);
     if (fogUniques.length > 0) {
         nameToShow = "A harbinger of doom is near.";
         isHarbinger = true;
