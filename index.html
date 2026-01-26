@@ -182,6 +182,94 @@
     background: #ff8c00;
     color: #000;
 }
+
+/* Passive Terminal Overlay */
+#passive-terminal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'VT323', monospace;
+    color: #00ff00;
+}
+
+#passive-terminal {
+    width: 90%;
+    max-width: 800px;
+    height: 80%;
+    background: rgba(17, 17, 17, 0.95);
+    border: 4px solid #00ff00;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#passive-terminal-header {
+    color: #00ff00;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    font-size: 24px;
+    margin-bottom: 15px;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #00ff00;
+}
+
+#passive-terminal-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+    background: #111;
+    border: 2px solid #00ff00;
+    margin-bottom: 15px;
+    font-size: 16px;
+    line-height: 1.4;
+}
+
+#passive-terminal-input-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#passive-terminal-prompt {
+    color: #00ff00;
+    text-shadow: -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000, 1px 1px 0 #000000;
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+#passive-terminal-input {
+    flex-grow: 1;
+    background: #00ff00;
+    color: #000;
+    border: none;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    font-weight: 900;
+    outline: none;
+    padding: 5px;
+}
+
+#passive-terminal-input:focus {
+    outline: 1px solid #00ff00;
+    background: #00ff00;
+    color: #000;
+}
+/ Add this for the blur behavior /
+#passive-terminal-input:not(:focus) {
+    background: #00ff00;
+    color: #000;
+}
+
 #battle-log textarea {
     background: transparent;
     color: var(--text-color, #ff8c00) !important;
@@ -816,6 +904,23 @@ button:hover {
             <canvas id="game" width="320" height="320"></canvas>
             <div id="splash-screen">
     		<canvas id="splash-canvas" width="320" height="320"></canvas>
+
+<!-- Passive Terminal Overlay -->
+<div id="passive-terminal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.80); z-index:1000; font-family:'VT323', monospace; color:#00ff00;">
+    <div id="passive-terminal" style="width:90%; max-width:800px; height:80%; background:rgba(17,17,17,0.1); border:4px solid #00ff00; padding:20px; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden;">
+        <div id="passive-terminal-header" style="color:#00ff00; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000; font-size:24px; margin-bottom:15px; text-align:center; padding-bottom:10px; border-bottom:2px solid #00ff00;">
+            Passive Tree
+        </div>
+        <div id="passive-terminal-content" style="flex-grow:1; overflow-y:auto; padding:10px; background:rgba(17,17,17,0.1); border:2px solid #00ff00; margin-bottom:15px; font-size:16px; line-height:1.4;"></div>
+        <div id="passive-terminal-input-container" style="display:flex; align-items:center; gap:10px;">
+            <span id="passive-terminal-prompt" style="color:#00ff00; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000; font-size:16px; white-space:nowrap;">
+                tree@terminal:~$
+            </span>
+            <input type="text" id="passive-input" autocomplete="off" spellcheck="false" style="flex-grow:1; background:#00ff00; color:#000; border:none; font-family:'VT323', monospace; font-size:16px; font-weight:900; outline:none; padding:5px;">
+        </div>
+    </div>
+</div>
+
 <!-- NEW: Loading message (shown until splash is ready) -->
     <div id="loading-text" style="position: absolute; top: 70%; left: 50%; transform: translate(-50%, -50%); color: #ff8c00; font-family: 'VT323', monospace; font-size: 24px; text-align: center; pointer-events: none; z-index: 50;">
         Loading...
@@ -1589,6 +1694,16 @@ let infoSignActive = false;
 let bountyBoardActive = false;
 let infoGracePeriod = false;
 
+let passiveTreeActive = false;
+let passiveGracePeriod = false; // like infoGracePeriod
+
+const GEM_TILES = {
+    ruby:     37,
+    sapphire: 38,
+    emerald:  39,
+    citrine:  40
+};
+
 let map = [],
 p = {
 x: 2,
@@ -1614,6 +1729,13 @@ runewords: [], // Array to store activated runewords (e.g., ['btc', 'hodl'])
 immortal: false, // Flag for HODL runeword immortality
 ripBlast: false, // Flag for RIP runeword blast
 isFalling: false, // Flag to track if the player is currently animating
+gems: { ruby: 0, sapphire: 0, emerald: 0, citrine: 0 },
+gemAtk: { fire: 0, cold: 0, earth: 0, lightning: 0 },
+gemDef: { shrimpCrab: 0, dolphin: 0, shark: 0, squid: 0 },
+inPassiveTerminal: false, // Track if player is in passive terminal
+passiveTerminalActive: false, // Whether passive terminal is currently open
+passiveTerminalCommand: '', // Current command input
+passiveTerminalCursorPos: 0, // Cursor position in command
 anim: {
     frames: {
         front: [new Image(), new Image()],
@@ -1639,7 +1761,6 @@ shrineUsedThisFloor: false, // Track if shrine was used on this floor
 
 // Add soul system properties
 soulStones: 0,
-soulShards: 0,
 soulOrbs: 0,
 soulStormCharges: 256, // Track how many charges we have (max 256)
 soulStormCharges: 256,
@@ -1906,7 +2027,7 @@ const types = [
     new EnemyType('Dolphin', 1, 10, 4, 3, 2),
     new EnemyType('Shark', 10, 100, 5, 5, 2),
     new EnemyType('Whale', 100, Infinity, 6, 4, 2),
-    new EnemyType('Jester', 0, 0, 10, 2, 1) // 10 HP, 2 ATK, 1 move, no sats
+    new EnemyType('Jester', 0, 0, 10, 2, 1) // no sats, 10 HP, 2 ATK, 1 move
 ];
 
 // Wisp types (companion spells)
@@ -2279,6 +2400,20 @@ assets.entangleFrames = [new Image(), new Image(), new Image()];
 assets.entangleFrames[0].src = 'entangle_1.png';
 assets.entangleFrames[1].src = 'entangle_2.png';
 assets.entangleFrames[2].src = 'entangle_3.png';
+
+// Add to assets (at top with other assets)
+assets.passive_sign = new Image();
+assets.passive_sign.src = 'passive_sign.png';
+assets.passive_tree_background = new Image();
+assets.passive_tree_background.src = 'passive_tree_background.png';
+assets.ruby = new Image();
+assets.ruby.src = 'ruby.png';
+assets.sapphire = new Image();
+assets.sapphire.src = 'sapphire.png';
+assets.emerald = new Image();
+assets.emerald.src = 'emerald.png';
+assets.citrine = new Image();
+assets.citrine.src = 'citrine.png';
 
 // Enemy background circles (16x16px animated)
 assets.enemyBg = [new Image(), new Image(), new Image()];
@@ -4103,6 +4238,12 @@ function updateSnowState() {
 }
 
 function initMap() {
+// Cleanup any lingering splash screen handlers from previous terminals/overlays
+    const splashScreen = document.getElementById('splash-screen');
+    if (splashScreen) {
+        splashScreen.onclick = null;
+        splashScreen.ontouchend = null;
+    }
     try {
         if (inHideout) {
             currentTheme = 'hideout';
@@ -4283,6 +4424,15 @@ diamondWallTiles.forEach(pos => {
                 console.warn('Failed to place hooded heirloom: tile occupied at', heirloomX, heirloomY);
             }
 
+            // Place passive sign 2 tiles right of hooded heirloom
+            const passiveX = heirloomX + 2;
+            const passiveY = heirloomY;
+            if (passiveX < W && map[passiveY][passiveX] === 0) {
+                map[passiveY][passiveX] = 36; // Passive Sign tile ID
+            } else {
+                console.warn('Failed to place passive sign: out of bounds or occupied at', passiveX, passiveY);
+            }
+
 p.x = mainRoomX + 3;
 p.y = mainRoomY + 6;
 p.currentX = p.x * S;
@@ -4408,11 +4558,10 @@ if (rainNoiseSource) {
         currentTheme = newTheme;
     }
 
-        // Reset sandworm streak when leaving desert
-        if (currentTheme !== 'desert') {
-            desertStreakHasSandworm = false;
-            sandworm = null;
-        }    
+if (!inPuzzleRoom && !inHideout && currentTheme !== 'desert') {
+    desertStreakHasSandworm = false;
+    sandworm = null;
+}
 
 } else {
     // Not a theme-change floor → preserve current variants if active
@@ -4780,8 +4929,8 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
     } while (attempts < maxAttempts);
 }
 
-        // Jester Shrine spawn (15% chance, not in hideout/puzzle)
-        if (!inHideout && !inPuzzleRoom && Math.random() < 0.15) {
+        // Jester Shrine spawn (20% chance, not in hideout/puzzle)
+        if (!inHideout && !inPuzzleRoom && Math.random() < 0.20) {
             let attempts = 50;
             while (attempts--) {
                 const x = Math.floor(Math.random() * W);
@@ -4860,10 +5009,6 @@ if (currentTheme === 'desert' && !desertStreakHasSandworm && Math.random() < 0.2
         desertStreakHasSandworm = true;
         logBattleEvent(`Floor ${floor} - A Sandworm emerges from the dunes!`);
     }
-} else {
-    // Explicit clear in non-desert or special areas
-    sandworm = null;
-    desertStreakHasSandworm = false; // Reset streak if leaving desert
 }
 
 // Initialize dangerous areas array for spells
@@ -5424,6 +5569,22 @@ if (p.hp <= 0 && !gameOver) {
     }, 1000);
 }
 
+// Gem inventory display (safe here – called often during gameplay)
+    if (document.getElementById('rubies')) document.getElementById('rubies').textContent = p.gems.ruby;
+    if (document.getElementById('sapphires')) document.getElementById('sapphires').textContent = p.gems.sapphire;
+    if (document.getElementById('emeralds')) document.getElementById('emeralds').textContent = p.gems.emerald;
+    if (document.getElementById('citrines')) document.getElementById('citrines').textContent = p.gems.citrine;
+
+    if (document.getElementById('fire-atk')) document.getElementById('fire-atk').textContent = p.gemAtk.fire.toFixed(1);
+    if (document.getElementById('cold-atk')) document.getElementById('cold-atk').textContent = p.gemAtk.cold.toFixed(1);
+    if (document.getElementById('earth-atk')) document.getElementById('earth-atk').textContent = p.gemAtk.earth.toFixed(1);
+    if (document.getElementById('lightning-atk')) document.getElementById('lightning-atk').textContent = p.gemAtk.lightning.toFixed(1);
+
+    if (document.getElementById('shrimpcrab-def')) document.getElementById('shrimpcrab-def').textContent = p.gemDef.shrimpCrab.toFixed(1);
+    if (document.getElementById('dolphin-def')) document.getElementById('dolphin-def').textContent = p.gemDef.dolphin.toFixed(1);
+    if (document.getElementById('shark-def')) document.getElementById('shark-def').textContent = p.gemDef.shark.toFixed(1);
+    if (document.getElementById('squid-def')) document.getElementById('squid-def').textContent = p.gemDef.squid.toFixed(1);
+
     needsRedraw = true;
 }  // ← Add this closing brace here (end of function)
 
@@ -5604,6 +5765,30 @@ if (redMazeActive) {
                   );
                   attempts--;
               } while (attempts > 0 && !validPosition);
+
+// DEBUFF genius! START
+// Inside fetchTxs() — when creating newEnemy (replace the hp line)
+let baseHp = type.hp;
+
+// Hell Shrimp bonus HP (keep your existing logic)
+if (type.name === 'Shrimp' && currentTheme === 'hell') {
+    baseHp = 3;
+}
+
+// Apply player gem defense as HP debuff to newly spawned enemies
+let hpReduction = 0;
+if (type.name === 'Shrimp' || type.name === 'Crab') {
+    hpReduction = Math.floor(p.gemDef.shrimpCrab);
+}
+else if (type.name === 'Dolphin') {
+    hpReduction = Math.floor(p.gemDef.dolphin);
+}
+else if (type.name === 'Shark') {
+    hpReduction = Math.floor(p.gemDef.shark);
+}
+else if (type.name === 'Squid') {
+    hpReduction = Math.floor(p.gemDef.squid);
+}
               
               const newEnemy = {
                  x,
@@ -5617,7 +5802,11 @@ if (redMazeActive) {
                   targetTileX: 0,
                   targetTileY: 0,
                  type,
-                 hp: type.name === 'Shrimp' && currentTheme === 'hell' ? 3 : type.hp,
+                 // Final HP (never below 1)
+                 hp: Math.max(1, baseHp - hpReduction),
+
+// DEBUFF genius! END
+
                  address,
                  sats: Math.round(btc * 1e8),
                  anim: {
@@ -5854,6 +6043,42 @@ if (p.ripBlast && enemies.length > 0) {
         checkLevelUp();
         updateXPBar();
 
+if (enemy.type.name === 'Jester' && Math.random() < 0.25) {
+    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+    
+    // Try to place on death spot
+    let placed = false;
+    if (map[enemy.y][enemy.x] === 0) {
+        map[enemy.y][enemy.x] = GEM_TILES[gem];
+        placed = true;
+    } else {
+        // Try adjacent tiles
+        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+        for (const d of dirs) {
+            const nx = enemy.x + d.dx;
+            const ny = enemy.y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                map[ny][nx] = GEM_TILES[gem];
+                placed = true;
+                break;
+            }
+        }
+    }
+    
+    if (placed) {
+        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+        playWebAudioSound(sounds.pickup);
+    } else {
+        // Fallback: add directly to inventory if no space
+        p.gems[gem]++;
+        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+        playWebAudioSound(sounds.pickup);
+    }
+    
+    updatePlayerState();
+}
+
         if (enemy.type.name === 'Cursed Trader') {
             dropSoulStone(enemy.x, enemy.y);
         }
@@ -6043,7 +6268,7 @@ function isSolid(x, y) {
 }
 
 function move(dir) {
-    if (gameOver || splashActive || inputBlocked || skillTreeActive) return;
+    if (gameOver || splashActive || inputBlocked || skillTreeActive || passiveTreeActive) return;
 
 if (infoGracePeriod) {
     return; // Block ALL movement during 0.5s grace period
@@ -6109,6 +6334,36 @@ if (map[ny][nx] === 31 && inHideout) { // Smelter tile
     } else {
         logBattleEvent(`Smelter: Bring a Diamond Hand to smelt!`);
     }
+}
+
+// Inside your move() function, after other item pickups
+if (map[ny][nx] === GEM_TILES.ruby) {
+    p.gems.ruby++;
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Ruby collected!`);
+    updatePlayerState();
+}
+if (map[ny][nx] === GEM_TILES.sapphire) {
+    p.gems.sapphire++;
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Sapphire collected!`);
+    updatePlayerState();
+}
+if (map[ny][nx] === GEM_TILES.emerald) {
+    p.gems.emerald++;
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Emerald collected!`);
+    updatePlayerState();
+}
+if (map[ny][nx] === GEM_TILES.citrine) {
+    p.gems.citrine++;
+    map[ny][nx] = 0;
+    playWebAudioSound(sounds.pickup);
+    logBattleEvent(`Citrine collected!`);
+    updatePlayerState();
 }
 
     // === VALIDATE MOVE + BOULDER PUSHING (L2 style) ===
@@ -7030,7 +7285,6 @@ if (map[ny][nx] === 12 && !inHideout) {
 catPos = null;
 catVisible = false;
 sandworm = null;
-desertStreakHasSandworm = false;
     
     initMap();  // this actually switches to hideout map/theme
     sandwormBurrowPaused = true; // pause burrow in hideout
@@ -7475,6 +7729,377 @@ if (onInfoSign && !infoSignActive) {
     infoSignActive = false;
     needsRedraw = true;
 }
+
+
+// 3.)
+// PASSIVE TREE -- CONTINUE FROM MIDDLE
+//
+
+// Passive tree open/close logic (in move())
+const passiveSignTile = 36;
+const onPassiveSign = map[p.y][p.x] === passiveSignTile;
+
+if (onPassiveSign && !passiveTreeActive) {
+    // Show splash-screen for background
+    const splashScreen = document.getElementById('splash-screen');
+    splashScreen.style.display = 'block';
+    splashScreen.style.zIndex = '60';
+
+    // Hide UI elements
+    document.getElementById('start-button').style.display = 'none';
+    document.getElementById('info-icon').style.display = 'none';
+
+    // Load and draw passive background
+    currentSplashImage = 'passive_tree_background.png';
+    splashImg.src = currentSplashImage;
+    splashCanvas.clearRect(0, 0, 320, 320);
+    splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+
+    // Open terminal (sets flags, shows overlay, focuses input)
+    openPassiveTerminal();
+
+    // Get input reference once (now available after openPassiveTerminal)
+    const input = document.getElementById('passive-input');
+
+    // Block movement + grace period
+    inputBlocked = true;
+    passiveGracePeriod = true;
+    splashScreen.style.pointerEvents = 'none';
+
+    setTimeout(() => {
+        passiveGracePeriod = false;
+        splashScreen.style.pointerEvents = 'auto';
+
+        // Ensure focus (redundant but safe)
+        input.focus();
+
+        // Close handler
+        const closePassiveBoard = () => {
+            splashScreen.style.display = 'none';
+            document.getElementById('passive-terminal-overlay').style.display = 'none';
+            if (!splashActive) {
+                document.getElementById('start-button').style.display = 'block';
+                document.getElementById('info-icon').style.display = 'flex';
+            }
+            passiveTreeActive = false;
+            needsRedraw = true;
+
+            splashScreen.onclick = null;
+            splashScreen.ontouchend = null;
+            document.removeEventListener('keydown', keyClose);
+
+            // Clean close
+            closePassiveTerminal();
+        };
+
+        splashScreen.onclick = closePassiveBoard;
+        splashScreen.ontouchend = closePassiveBoard;
+
+        const keyClose = e => {
+            if (['Enter', ' '].includes(e.key)) {
+                e.preventDefault();
+                closePassiveBoard();
+            }
+        };
+        document.addEventListener('keydown', keyClose, { once: true });
+
+        // Command handler (now input is defined)
+const processCommand = (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = input.value.trim();
+        input.value = ''; // Clear input immediately
+        
+        // Echo command
+        //addPassiveLineToContent(`> ${cmd}`);
+        
+        if (cmd === '') return; // Skip empty
+        
+        if (cmd.toLowerCase() === 'exit') {
+            closePassiveBoard();
+            return;
+        }
+        
+        processPassiveCommand(cmd);
+    }
+};
+        input.addEventListener('keydown', processCommand);
+        console.log('Enter pressed, command:', input.value);
+
+    }, 500);
+
+    passiveTreeActive = true;
+    needsRedraw = true;
+    logBattleEvent('Passive Tree accessed');
+} else if (!onPassiveSign && passiveTreeActive) {
+    const splashScreen = document.getElementById('splash-screen');
+    splashScreen.style.display = 'none';
+    document.getElementById('passive-terminal-overlay').style.display = 'none';
+    if (!splashActive) {
+        document.getElementById('start-button').style.display = 'block';
+        document.getElementById('info-icon').style.display = 'flex';
+    }
+    passiveTreeActive = false;
+    needsRedraw = true;
+}
+
+// Process commands
+function processPassiveCommand(command) {
+    const trimmed = command.trim();
+    
+    if (trimmed === '') {
+        addPassiveLineToContent('> '); // Echo empty line
+        return;
+    }
+    
+    addPassiveLineToContent(`> ${trimmed}`); // Echo command
+    
+    const parts = trimmed.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1);
+    
+    // Short to full gem mapping
+    const gemMap = {
+        r: 'ruby',
+        s: 'sapphire',
+        e: 'emerald',
+        c: 'citrine'
+    };
+    
+    // Resolve gem name (short or full)
+    let gem = cmd;
+    if (gemMap[cmd]) {
+        gem = gemMap[cmd];
+    }
+    if (!['ruby', 'sapphire', 'emerald', 'citrine'].includes(gem)) {
+        // Not a gem command — handle other commands
+        
+    // Declare content ONCE here (shared across cases)
+    const content = document.getElementById('passive-terminal-content');
+        
+        switch (cmd) {
+            case 'skills':
+            content.innerHTML = '';
+            addPassiveLineToContent('Tree Terminal ver 0.9');
+            // Display gems/bonuses (mimic soul inventory structure)
+            addPassiveLineToContent('--- Gemstones Inventory ---');
+            addPassiveLineToContent(`Ruby: ${p.gems.ruby}`);
+            addPassiveLineToContent(`Citrine: ${p.gems.citrine}`);
+            addPassiveLineToContent(`Sapphire: ${p.gems.sapphire}`);
+            addPassiveLineToContent(`Emerald: ${p.gems.emerald}`);
+            addPassiveLineToContent('Enchant Diamond Hand, (attack+):');
+            addPassiveLineToContent('  r atk - Trade rubys,         fire atk');
+            addPassiveLineToContent('  c atk - Trade citrines, lightning atk');
+            addPassiveLineToContent('  s atk - Trade sapphires,     cold atk');
+            addPassiveLineToContent('  e atk - Trade emeralds,     earth atk');
+            addPassiveLineToContent('Debuff enemies, (enemy defense-):');
+            addPassiveLineToContent('  r def - Trade rubys, shrimp/crab def');
+            addPassiveLineToContent('  c def - Trade citrines,    squid def');
+            addPassiveLineToContent('  s def - Trade sapphires, dolphin def');
+            addPassiveLineToContent('  e def - Trade emeralds,    shark def');
+                addPassiveLineToContent('_____________________');
+                addPassiveLineToContent('Type "help" for help.');
+                break;
+        
+            case 'help':
+            content.innerHTML = '';
+            addPassiveLineToContent('Tree Terminal ver 0.9');
+            addPassiveLineToContent('Available commands:');
+            addPassiveLineToContent('  skills - Enchants and debuffs');
+            addPassiveLineToContent('  ls ----- View current gems & bonuses');
+            addPassiveLineToContent('  clear -- Clear screen');
+            addPassiveLineToContent('  exit --- Exit terminal');
+                addPassiveLineToContent('_____________________');
+                addPassiveLineToContent('Type "help" for help.');
+                break;
+                
+            case 'ls':
+                updatePassiveInventory(); // Show current state
+                break;
+                
+            case 'clear':
+                content.innerHTML = '';
+                if (args.length > 0) {
+                    const asciiText = args.join(' ');
+                    addPassiveLineToContent(asciiText.padEnd(54));
+                }
+                break;
+                
+            case 'exit':
+                // Handled by input handler
+                break;
+                
+            default:
+                content.innerHTML = '';
+                addPassiveLineToContent(`Unknown command: ${cmd}`);
+                addPassiveLineToContent('_____________________');
+                addPassiveLineToContent('Type "help" for help.');
+        }
+        addPassiveLineToContent(''); // Spacer
+        return;
+    }
+    
+    // Gem command (r/s/e/c or full name + atk/def)
+    if (args.length < 1) {
+        addPassiveLineToContent(`Usage: ${cmd} atk [count] or ${cmd} def [count]`);
+        addPassiveLineToContent('');
+        return;
+    }
+    
+    const type = args[0].toLowerCase();
+    let count = 1;
+    if (args.length > 1 && !isNaN(args[1])) {
+        count = Math.max(1, parseInt(args[1]));
+    }
+    
+    if (type !== 'atk' && type !== 'def') {
+        addPassiveLineToContent(`Invalid type: use "atk" or "def"`);
+        addPassiveLineToContent('');
+        return;
+    }
+    
+    if (p.gems[gem] < count) {
+        addPassiveLineToContent(`Not enough ${gem}s (have ${p.gems[gem]}, need ${count})`);
+        addPassiveLineToContent('');
+        return;
+    }
+    
+    // Spend gems
+    p.gems[gem] -= count;
+    
+    if (type === 'atk') {
+        // Elemental attack — NO CAP (only useful with Diamond Hand)
+        switch (gem) {
+            case 'ruby':     p.gemAtk.fire      += 0.1 * count; break;
+            case 'sapphire': p.gemAtk.cold      += 0.1 * count; break;
+            case 'emerald':  p.gemAtk.earth     += 0.1 * count; break;
+            case 'citrine':  p.gemAtk.lightning += 0.1 * count; break;
+        }
+        addPassiveLineToContent(`Traded ${count} ${gem}(s) for +${(0.1 * count).toFixed(1)} elemental attack!`);
+    } else {
+        // Defense — WITH CAPS per enemy type
+        let added = 0.1 * count;
+        switch (gem) {
+            case 'ruby':     // Shrimp/Crab def (cap -1.0 total reduction)
+                const newDef = p.gemDef.shrimpCrab + added;
+                p.gemDef.shrimpCrab = Math.min(newDef, 1.0);
+                added = p.gemDef.shrimpCrab - (newDef - added); // actual added after cap
+                addPassiveLineToContent(`Traded ${count} ruby(s) for -${(0.1 * count).toFixed(1)} shrimp/crab defense!`);
+                addPassiveLineToContent(`Note: Maximum shrimp/crab defense debuff is -1 HP`);
+                break;
+            case 'sapphire': // Dolphin def (cap -1.0)
+                const newD = p.gemDef.dolphin + added;
+                p.gemDef.dolphin = Math.min(newD, 1.0);
+                addPassiveLineToContent(`Traded ${count} sapphire(s) for -${(0.1 * count).toFixed(1)} dolphin defense!`);
+                addPassiveLineToContent(`Note: Maximum dolphin defense debuff is -1 HP`);
+                break;
+            case 'emerald':  // Shark def (cap -2.0)
+                const newSh = p.gemDef.shark + added;
+                p.gemDef.shark = Math.min(newSh, 2.0);
+                addPassiveLineToContent(`Traded ${count} emerald(s) for -${(0.1 * count).toFixed(1)} shark defense!`);
+                addPassiveLineToContent(`Note: Maximum shark defense debuff is -2 HP`);
+                break;
+            case 'citrine':  // Squid def (cap -1.0)
+                const newSq = p.gemDef.squid + added;
+                p.gemDef.squid = Math.min(newSq, 1.0);
+                addPassiveLineToContent(`Traded ${count} citrine(s) for -${(0.1 * count).toFixed(1)} squid defense!`);
+                addPassiveLineToContent(`Note: Maximum squid defense debuff is -1 HP`);
+                break;
+        }
+        if (added < 0.1 * count) {
+            addPassiveLineToContent(`Gemstone broke! Debuff is maxed out for this enemy`);
+        }
+    }
+    
+    updatePlayerState(); // Refresh display
+    addPassiveLineToContent(''); // Spacer
+}
+
+// Handle passive input (mimic handleTerminalInput)
+function handlePassiveInput(e) {
+    const key = e.key;
+   
+    // If terminal is not focused, focus it and add the key
+    if (!document.activeElement.matches('#passive-input')) {
+        const input = document.getElementById('passive-input');
+        input.focus();
+        input.value = p.passiveTerminalCommand; // Update value to reflect current command
+       
+        // Handle key press immediately
+        if (key.length === 1 && key !== 'Enter') {
+            const before = p.passiveTerminalCommand.slice(0, p.passiveTerminalCursorPos);
+            const after = p.passiveTerminalCommand.slice(p.passiveTerminalCursorPos);
+            p.passiveTerminalCommand = before + key + after;
+            p.passiveTerminalCursorPos++;
+            input.value = p.passiveTerminalCommand.substring(1); // One-liner hack to remove first character if needed (mimic soul if you have prompt hack)
+        }
+       
+        return;
+    }
+   
+    if (key === 'Enter') {
+        e.preventDefault();
+        processPassiveCommand(p.passiveTerminalCommand);
+        p.passiveTerminalCommand = '';
+        p.passiveTerminalCursorPos = 0;
+        // Blur the input field when Enter is pressed
+        const input = document.getElementById('passive-input');
+        if (input) {
+            input.blur();
+        }
+        return;
+    }
+   
+    if (key === 'Backspace') {
+        if (p.passiveTerminalCursorPos > 0) {
+            p.passiveTerminalCommand =
+                p.passiveTerminalCommand.slice(0, p.passiveTerminalCursorPos - 1) +
+                p.passiveTerminalCommand.slice(p.passiveTerminalCursorPos);
+            p.passiveTerminalCursorPos--;
+        }
+        return;
+    }
+   
+    if (key === 'ArrowLeft' && p.passiveTerminalCursorPos > 0) {
+        p.passiveTerminalCursorPos--;
+        return;
+    }
+   
+    if (key === 'ArrowRight' && p.passiveTerminalCursorPos < p.passiveTerminalCommand.length) {
+        p.passiveTerminalCursorPos++;
+        return;
+    }
+   
+    // Add regular character
+    if (key.length === 1 && key !== 'Enter') {
+        const before = p.passiveTerminalCommand.slice(0, p.passiveTerminalCursorPos);
+        const after = p.passiveTerminalCommand.slice(p.passiveTerminalCursorPos);
+        p.passiveTerminalCommand = before + key + after;
+        p.passiveTerminalCursorPos++;
+    }
+}
+
+// Handle blurred passive input (mimic handleBlurredTerminalInput)
+function handleBlurredPassiveInput(key) {
+    const input = document.getElementById('passive-input');
+    if (input && !input.matches(':focus')) {
+        // Focus the input field
+        input.focus();
+       
+        // Update command with new key
+        const before = p.passiveTerminalCommand.slice(0, p.passiveTerminalCursorPos);
+        const after = p.passiveTerminalCommand.slice(p.passiveTerminalCursorPos);
+        p.passiveTerminalCommand = before + key + after;
+        p.passiveTerminalCursorPos++;
+       
+        // Update display
+        input.value = p.passiveTerminalCommand.substring(1); // Mimic soul's hack if you have it
+    }
+}
+
+// 4.)
+// PASSIVE TREE -- END
+//
 
 // Add soul orb statue interaction
 if (map[ny][nx] === 21 && !inHideout) { // Soul orb statue tile
@@ -8226,6 +8851,7 @@ if (playerClass === 'druid' && playerLevel >= 10) {
             if (e.hp <= 0 && oldHp > 0) {
                 // Immediate kill handling for thorns (same as normal attack)
                 kills[e.type.name]++;
+                
 // === SIDE QUEST PROGRESS (new) ===
         handleSideQuestKill(e.type.name, e.x, e.y);
 
@@ -8309,11 +8935,12 @@ if (playerClass === 'druid' && playerLevel >= 10) {
                     updateXPBar();
                 }
                 enemies = enemies.filter(en => en !== e);
-                
+
+                // Thorns highlightTiles                
                 highlightTiles.push({
                     x: e.x,
                     y: e.y,
-                    highlightStart: Date.now(),
+                    highlightStart: performance.now(),
                     color: 'rgba(139, 69, 19, 0.6)'
                 });
             }
@@ -8744,6 +9371,43 @@ function doScourgeSpinAttack() {
                 //if (xp > 0) logBattleEvent(`+${xp} XP`);
                 checkLevelUp();
                 updateXPBar(); // Only called on kills - super efficient
+                
+if (enemy.type.name === 'Jester' && Math.random() < 0.25) {
+    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+    
+    // Try to place on death spot
+    let placed = false;
+    if (map[enemy.y][enemy.x] === 0) {
+        map[enemy.y][enemy.x] = GEM_TILES[gem];
+        placed = true;
+    } else {
+        // Try adjacent tiles
+        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+        for (const d of dirs) {
+            const nx = enemy.x + d.dx;
+            const ny = enemy.y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                map[ny][nx] = GEM_TILES[gem];
+                placed = true;
+                break;
+            }
+        }
+    }
+    
+    if (placed) {
+        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+        playWebAudioSound(sounds.pickup);
+    } else {
+        // Fallback: add directly to inventory if no space
+        p.gems[gem]++;
+        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+        playWebAudioSound(sounds.pickup);
+    }
+    
+    updatePlayerState();
+}
+                
         // === SIDE QUEST PROGRESS (new) ===
         handleSideQuestKill(enemy.type.name, enemy.x, enemy.y);
 
@@ -8954,6 +9618,9 @@ function applyEnsnare() {
         // Skip already frozen enemies — wisp freeze has priority
         if (e.frozen) return;
 
+        // NEW: Jesters are immune to Ensnare (trickster flavor)
+        if (e.type.name === 'Jester') return;
+
         const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
         if (dist < minDist) {
             minDist = dist;
@@ -8962,10 +9629,10 @@ function applyEnsnare() {
     });
 
     if (nearest) {
-	nearest.frozen = true;
+        nearest.frozen = true;
         nearest.frozenTurns = 2;
         nearest.frozenByEnsnare = true; // mark as frozen by Ensnare
-        
+       
         // Spawn 3-frame entangle animation overlay
         entangleAnimations.push({
             x: nearest.x,
@@ -8974,14 +9641,15 @@ function applyEnsnare() {
             startTime: performance.now(),
             enemyRef: nearest
         });
-        // Throttled message — once every 1 seconds
+
+        // Throttled message — once every 1 second
         const now = performance.now();
         if (now - lastMessageTime >= 1000) {
             logBattleEvent(`Ensnare entangles ${nearest.type.name}!`);
             lastMessageTime = now;
         }
-        playWebAudioSound(sounds.attack);
 
+        playWebAudioSound(sounds.attack);
         needsRedraw = true;
     }
 }
@@ -9327,6 +9995,42 @@ playerXP += xp;
 checkLevelUp();
 updateXPBar(); // Only called on kills - super efficient
                         tryDropScroll(hit.x, hit.y);
+
+if (hit.type.name === 'Jester' && Math.random() < 0.25) {
+    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+    
+    // Try to place on death spot
+    let placed = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = GEM_TILES[gem];
+        placed = true;
+    } else {
+        // Try adjacent tiles
+        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+        for (const d of dirs) {
+            const nx = hit.x + d.dx;
+            const ny = hit.y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                map[ny][nx] = GEM_TILES[gem];
+                placed = true;
+                break;
+            }
+        }
+    }
+    
+    if (placed) {
+        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+        playWebAudioSound(sounds.pickup);
+    } else {
+        // Fallback: add directly to inventory if no space
+        p.gems[gem]++;
+        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+        playWebAudioSound(sounds.pickup);
+    }
+    
+    updatePlayerState();
+}
 
         // === SIDE QUEST PROGRESS (new) ===
         handleSideQuestKill(hit.type.name, hit.x, hit.y);
@@ -9985,12 +10689,16 @@ function attack() {
     
     const isEnemyNearby = enemies.some(e => e.x === sx && e.y === sy);
     const isWallNearby = sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1;
+
+    // Applies to Diamond Hand as of now ..
+    const elementalBonus = p.gemAtk.fire + p.gemAtk.cold + p.gemAtk.earth + p.gemAtk.lightning;
     
     if (initialPickaxes > 0 || isEnemyNearby || isWallNearby) {
         usePickaxeSword = initialPickaxes > 0;
         let hit = enemies.find(e => e.x === sx && e.y === sy);
         
 if (hit) {
+
     // Check if the enemy is a unique monster that can cast spells
     if (hit.uniqueName && hit.spell) {
         // Unique monster uses its spell
@@ -10096,29 +10804,35 @@ if (hit) {
                 damageArea.push({x: far_x, y: p.y + dy});
             }
         }
-        
+
         // Apply damage to all valid tiles in the area
         const damage = 3; // Diamond hand AOE damage
         let enemiesHit = 0;
-        let totalDamage = 0;
+        let totalDamage = damage + elementalBonus; // Unlimited elemental bonus
+
+highlightTiles = []; // Clear previous highlights
+for (const tile of damageArea) {
+    const {x, y} = tile;
+    
+    // Check if tile is within bounds and not a wall
+    if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
+        highlightTiles.push({x, y, highlightStart: Date.now()});
         
-        highlightTiles = []; // Clear previous highlights
-        for (const tile of damageArea) {
-            const {x, y} = tile;
+        // Check if there's an enemy at this tile
+        const enemy = enemies.find(e => e.x === x && e.y === y);
+        
+        if (enemy) {
+            enemy.hp -= totalDamage;
+            enemiesHit++;
             
-            // Check if tile is within bounds and not a wall
-            if (x >= 0 && x < W && y >= 0 && y < H && map[y][x] !== 1) {
-                highlightTiles.push({x, y, highlightStart: Date.now()}); // Add tile to highlight
-                // And add this ONCE per frame (best in draw() or gameLoop):
-                highlightTiles = highlightTiles.filter(t => Date.now() - t.highlightStart < 500);
-                // Check if there's an enemy at this tile
-                const enemy = enemies.find(e => e.x === x && e.y === y);
-                
-                if (enemy) {
-                    // Apply damage to enemy
-                    enemy.hp -= damage;
-                    logBattleEvent(`Floor ${floor} - Diamond Hand hits ${enemy.type.name} for ${damage} DMG (HP: ${enemy.hp})`);
-                    playWebAudioSound(sounds.hit);
+            // Log with breakdown if enchanted
+            if (elementalBonus > 0) {
+                logBattleEvent(`Diamond Hand wave hits ${enemy.type.name} for ${damage} base + ${elementalBonus.toFixed(1)} elemental (${totalDamage.toFixed(1)} total)!`);
+            } else {
+                logBattleEvent(`Diamond Hand wave hits ${enemy.type.name} for ${damage} DMG!`);
+            }
+            
+            playWebAudioSound(sounds.hit);
                     
                     if (enemy.hp <= 0) {
                         kills[enemy.type.name]++;
@@ -10139,6 +10853,42 @@ if (hit) {
                         checkLevelUp();
                         updateXPBar(); // Only called on kills - super efficient
                         let dropPlaced = false;
+
+if (enemy.type.name === 'Jester' && Math.random() < 0.25) {
+    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+    
+    // Try to place on death spot
+    let placed = false;
+    if (map[enemy.y][enemy.x] === 0) {
+        map[enemy.y][enemy.x] = GEM_TILES[gem];
+        placed = true;
+    } else {
+        // Try adjacent tiles
+        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+        for (const d of dirs) {
+            const nx = enemy.x + d.dx;
+            const ny = enemy.y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                map[ny][nx] = GEM_TILES[gem];
+                placed = true;
+                break;
+            }
+        }
+    }
+    
+    if (placed) {
+        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+        playWebAudioSound(sounds.pickup);
+    } else {
+        // Fallback: add directly to inventory if no space
+        p.gems[gem]++;
+        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+        playWebAudioSound(sounds.pickup);
+    }
+    
+    updatePlayerState();
+}
 
         // === SIDE QUEST PROGRESS (new) ===
         handleSideQuestKill(enemy.type.name, enemy.x, enemy.y);
@@ -10355,6 +11105,42 @@ playerXP += xp;
 checkLevelUp();
 updateXPBar(); // Only called on kills - super efficient
                         tryDropScroll(hit.x, hit.y);
+
+if (hit.type.name === 'Jester' && Math.random() < 0.25) {
+    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+    
+    // Try to place on death spot
+    let placed = false;
+    if (map[hit.y][hit.x] === 0) {
+        map[hit.y][hit.x] = GEM_TILES[gem];
+        placed = true;
+    } else {
+        // Try adjacent tiles
+        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+        for (const d of dirs) {
+            const nx = hit.x + d.dx;
+            const ny = hit.y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                map[ny][nx] = GEM_TILES[gem];
+                placed = true;
+                break;
+            }
+        }
+    }
+    
+    if (placed) {
+        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+        playWebAudioSound(sounds.pickup);
+    } else {
+        // Fallback: add directly to inventory if no space
+        p.gems[gem]++;
+        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+        playWebAudioSound(sounds.pickup);
+    }
+    
+    updatePlayerState();
+}
 
         // === SIDE QUEST PROGRESS (new) ===
         handleSideQuestKill(hit.type.name, hit.x, hit.y);
@@ -10739,6 +11525,124 @@ applyEnsnare();    // Druid Ensnare (lvl 20+)
     needsRedraw = true;
 }
 
+// 1.)
+// PASSIVE TREE -- START
+//
+
+// Add these functions (mimic soul terminal exactly)
+function openPassiveTerminal() {
+    if (p.inPassiveTerminal) return; // Already in terminal
+   
+    p.inPassiveTerminal = true;
+    p.passiveTerminalActive = true;
+    p.passiveTerminalCommand = '';
+    p.passiveTerminalCursorPos = 0;
+   
+    // Show passive terminal overlay
+    const overlay = document.getElementById('passive-terminal-overlay');
+    const content = document.getElementById('passive-terminal-content');
+    const input = document.getElementById('passive-input');
+   
+    // Clear content and add welcome message
+    content.innerHTML = '';
+    addPassiveLineToContent('Welcome to Passive Terminal!');
+    addPassiveLineToContent('Type "help" for available commands.');
+    updatePassiveInventory();  // Mimic updateSoulTerminalInventory
+   
+    // Show overlay and focus input
+    overlay.style.display = 'flex';
+    console.log('Passive terminal opened, input element:', document.getElementById('passive-input'));
+    setTimeout(() => {
+        input.focus();
+    }, 100);
+}
+
+function closePassiveTerminal() {
+    if (!p.inPassiveTerminal) return;
+
+    // Reset all passive flags
+    p.inPassiveTerminal = false;
+    p.passiveTerminalActive = false;
+    passiveTreeActive = false;              // ← CRITICAL: reset this one too!
+    passiveGracePeriod = false;             // if you use this
+
+    p.passiveTerminalCommand = '';
+    p.passiveTerminalCursorPos = 0;
+
+    // Hide overlays
+    document.getElementById('splash-screen').style.display = 'none';
+    document.getElementById('passive-terminal-overlay').style.display = 'none';
+
+    // FULL unblock — cover all bases
+    inputBlocked = false;
+
+    // Restore splash UI only if actually on splash
+    if (splashActive) {
+        document.getElementById('start-button').style.display = 'block';
+        document.getElementById('info-icon').style.display = 'flex';
+    }
+
+    // Cleanup handlers (prevents stuck events)
+    const splashScreen = document.getElementById('splash-screen');
+    splashScreen.onclick = null;
+    splashScreen.ontouchend = null;
+
+    const input = document.getElementById('passive-input');
+    if (window.currentPassiveHandler) {
+        input.removeEventListener('keydown', window.currentPassiveHandler);
+        window.currentPassiveHandler = null;
+    }
+
+    // Refresh game state
+    updateFogMap(p.x, p.y);
+    needsRedraw = true;
+}
+
+function addPassiveLine(line) {
+    const battleEvents = document.getElementById('battle-events');
+    battleEvents.value += line + '\n';
+    battleEvents.scrollTop = battleEvents.scrollHeight;
+}
+
+function addPassiveLineToContent(line) {
+    const content = document.getElementById('passive-terminal-content');
+    const lineElement = document.createElement('div');
+    lineElement.textContent = line;
+    content.appendChild(lineElement);
+    content.scrollTop = content.scrollHeight;
+}
+
+// Mimic updateSoulTerminalInventory for passive
+function updatePassiveInventory() {  // Or keep as updatePassiveLog if preferred
+    const content = document.getElementById('passive-terminal-content');
+    content.innerHTML = '';
+    addPassiveLineToContent('Tree Terminal ver 0.9');
+    // Display gems/bonuses (mimic soul inventory structure)
+    addPassiveLineToContent('--- Gemstones Inventory ---');
+    addPassiveLineToContent(`Ruby: ${p.gems.ruby}`);
+    addPassiveLineToContent(`Citrine: ${p.gems.citrine}`);
+    addPassiveLineToContent(`Sapphire: ${p.gems.sapphire}`);
+    addPassiveLineToContent(`Emerald: ${p.gems.emerald}`);
+    addPassiveLineToContent('--- Diamond Hand Enchants ---');
+    addPassiveLineToContent(`Fire attack: +${p.gemAtk.fire.toFixed(1)}`);
+    addPassiveLineToContent(`Cold attack: +${p.gemAtk.cold.toFixed(1)}`);
+    addPassiveLineToContent(`Earth attack: +${p.gemAtk.earth.toFixed(1)}`);
+    addPassiveLineToContent(`Lightning attack: +${p.gemAtk.lightning.toFixed(1)}`);
+    addPassiveLineToContent('--- Enemy Debuffs ---');
+    addPassiveLineToContent(`Shrimp / Crab defence: -${p.gemDef.shrimpCrab.toFixed(1)}`);
+    addPassiveLineToContent(`Squid defence: -${p.gemDef.squid.toFixed(1)}`);
+    addPassiveLineToContent(`Dolphin defence: -${p.gemDef.dolphin.toFixed(1)}`);
+    addPassiveLineToContent(`Shark defence: -${p.gemDef.shark.toFixed(1)}`);
+    addPassiveLineToContent('_____________________');
+    addPassiveLineToContent('Type "help" for help.'); 
+}
+
+// 2.)
+// PASSIVE TREE -- MIDDLE
+//
+
+
+
 // Add these functions near the other utility functions
 function openSoulTerminal() {
     if (p.inSoulTerminal) return; // Already in terminal
@@ -10811,7 +11715,6 @@ checkRunewords();
     addTerminalLineToContent('---- Soul Inventory ----');
     addTerminalLineToContent(`Soul Resonance: ${soulResonance}%`);
     addTerminalLineToContent(`Soul Stones: ${p.soulStones}`);
-    addTerminalLineToContent(`Soul Shards: ${p.soulShards}`);
     addTerminalLineToContent(`Soul Orbs: ${p.soulOrbs}`);
     addTerminalLineToContent(`Soul Storm Charges: ${p.soulStormCharges}/256`);
     addTerminalLineToContent('');
@@ -10905,7 +11808,7 @@ case 'clear':
 case 'help':
     addTerminalLineToContent('Available commands:');
     addTerminalLineToContent('  ls ---------- View inventory');
-    addTerminalLineToContent('  convert ----- Convert stones, shards');
+    addTerminalLineToContent('  convert ----- Convert stones');
     addTerminalLineToContent('  ------------> Or resurrect your wisp');
     addTerminalLineToContent('  reset ------- Restart puzzle trial');
     addTerminalLineToContent('  set --------- Settings');
@@ -10916,117 +11819,95 @@ case 'help':
     addTerminalLineToContent('Type "help" for help.');
     break;
 case 'convert':
-            if (args.length === 0) {
-                addTerminalLineToContent('Usage: convert stones [count]');
-                addTerminalLineToContent('Usage: convert shards [count]');
-                addTerminalLineToContent('Usage: convert wisp');
+    if (args.length === 0) {
+        addTerminalLineToContent('Usage: convert stones [count]');
+        addTerminalLineToContent('Usage: convert wisp');
+        addTerminalLineToContent('_____________________');
+        addTerminalLineToContent('Type "help" for help.');
+    } else {
+        const type = args[0].toLowerCase();
+        let count = 1; // Default to 1 if no count specified
+
+        // Optional count (second argument)
+        if (args.length > 1 && !isNaN(args[1])) {
+            count = parseInt(args[1]);
+            if (count < 1) count = 1;
+        }
+
+        switch (type) {
+            case 'stones':
+                // Convert in multiples of 6
+                const maxStonesToConvert = Math.floor(p.soulStones / 6) * 6;
+                count = Math.min(count, maxStonesToConvert);
+
+                if (count >= 6) {
+                    const orbsToGain = Math.floor(count / 6);
+                    p.soulStones -= count;
+                    p.soulOrbs += orbsToGain;
+                    addTerminalLineToContent(
+                        `Converted ${count} Soul Stones into ${orbsToGain} Soul Orb${orbsToGain === 1 ? '' : 's'}.`
+                    );
+                } else if (p.soulStones >= 6) {
+                    // If no (or invalid) count given → convert minimum batch
+                    p.soulStones -= 6;
+                    p.soulOrbs += 1;
+                    addTerminalLineToContent('Converted 6 Soul Stones into 1 Soul Orb.');
+                } else {
+                    addTerminalLineToContent(
+                        `Need at least 6 Soul Stones (you have ${p.soulStones}).`
+                    );
+                }
                 addTerminalLineToContent('_____________________');
                 addTerminalLineToContent('Type "help" for help.');
-            } else {
-                const type = args[0].toLowerCase();
-                let count = 1; // Default to 1 if no count specified
-                
-                // Check if a count was provided (second argument)
-                if (args.length > 1 && !isNaN(args[1])) {
-                    count = parseInt(args[1]);
+                break;
+
+            case 'wisp':
+                if (floor < 3) {
+                    addTerminalLineToContent('You must reach Floor 3 to resurrect a wisp.');
+                } else if (wisps.length > 0) {
+                    addTerminalLineToContent('You already have a loyal wisp companion.');
+                } else if (p.soulOrbs >= 10) {
+                    p.soulOrbs -= 10;
+                    const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
+                    wisps.push({
+                        x: p.x,
+                        y: p.y,
+                        currentX: p.x * S,
+                        currentY: p.y * S,
+                        hp: Math.floor(p.hp / 2),
+                        maxHP: Math.floor(p.maxHP / 2),
+                        type: wispType,
+                        attackCounter: 0,
+                        targetTileX: p.x,
+                        targetTileY: p.y,
+                        deltaX: 0,
+                        deltaY: 0,
+                        stepsLeft: 0,
+                        moving: false,
+                        anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 },
+                        lastPos: null
+                    });
+                    addTerminalLineToContent('10 Soul Orbs consumed – a loyal wisp came back to life!');
+                    logBattleEvent(`Floor ${floor} - Wisp resurrected from the Soul Terminal!`);
+                    playWebAudioSound(sounds.pickup);
+                    setTimeout(() => playWebAudioSound(sounds.pickup), 100);
+                    setTimeout(() => playWebAudioSound(sounds.pickup), 200);
+                } else {
+                    addTerminalLineToContent(`Need 10 Soul Orbs (you have ${p.soulOrbs}).`);
                 }
-                
-                switch (type) {
-                    case 'stones':
-                        const maxStonesToConvert = Math.floor(p.soulStones / 3) * 3; // Ensure we convert in multiples of 3
-                        if (args.length > 1 && !isNaN(args[1])) {
-                            count = Math.min(count, maxStonesToConvert);
-                        } else {
-                            count = maxStonesToConvert;
-                        }
-                        
-                        if (count >= 3) {
-                            const shardsToGain = Math.floor(count / 3);
-                            p.soulStones -= count;
-                            p.soulShards += shardsToGain;
-                            addTerminalLineToContent(`Converted ${count} Soul Stones into ${shardsToGain} Soul Shards.`);
-                            addTerminalLineToContent('_____________________');
-    	                    addTerminalLineToContent('Type "help" for help.');
-                        } else if (p.soulStones >= 3) {
-                            // If no count specified or count < 3, convert minimum
-                            p.soulStones -= 3;
-                            p.soulShards++;
-                            addTerminalLineToContent('Converted 3 Soul Stones into 1 Soul Shard.');
-                            addTerminalLineToContent('_____________________');
-    	                    addTerminalLineToContent('Type "help" for help.');
-                        } else {
-                            addTerminalLineToContent(`Need at least 3 Soul Stones, you have ${p.soulStones}.`);
-                            addTerminalLineToContent('_____________________');
-    	                    addTerminalLineToContent('Type "help" for help.');
-                        }
-                        break;
-                    case 'shards':
-                        const maxShardsToConvert = Math.floor(p.soulShards / 2) * 2; // Ensure we convert in multiples of 2
-                        if (args.length > 1 && !isNaN(args[1])) {
-                            count = Math.min(count, maxShardsToConvert);
-                        } else {
-                            count = maxShardsToConvert;
-                        }
-                        
-                        if (count >= 2) {
-                            const orbsToGain = Math.floor(count / 2);
-                            p.soulShards -= count;
-                            p.soulOrbs += orbsToGain;
-                            addTerminalLineToContent(`Converted ${count} Soul Shards into ${orbsToGain} Soul Orbs.`);
-                            addTerminalLineToContent('_____________________');
-    	                    addTerminalLineToContent('Type "help" for help.');
-                        } else if (p.soulShards >= 2) {
-                            // If no count specified or count < 2, convert minimum
-                            p.soulShards -= 2;
-                            p.soulOrbs++;
-                            addTerminalLineToContent('Converted 2 Soul Shards into 1 Soul Orb.');
-                            addTerminalLineToContent('_____________________');
-    	                    addTerminalLineToContent('Type "help" for help.');
-                        } else {
-                            addTerminalLineToContent(`Need at least 2 Soul Shards, you have ${p.soulShards}.`);
-                            addTerminalLineToContent('_____________________');
-    	                    addTerminalLineToContent('Type "help" for help.');
-                        }
-                        break;
-                    case 'wisp':
-                        if (floor < 3) {
-                            addTerminalLineToContent('You must reach Floor 3 to resurrect a wisp.');
-                        } else if (wisps.length > 0) {
-                            addTerminalLineToContent('You already have a loyal wisp companion.');
-                        } else if (p.soulOrbs >= 10) {
-                            p.soulOrbs -= 10;
-                            const wispType = WISP_TYPES[Math.floor(Math.random() * WISP_TYPES.length)];
-                            wisps.push({
-                                x: p.x, y: p.y,
-                                currentX: p.x * S, currentY: p.y * S,
-                                hp: Math.floor(p.hp / 2), maxHP: Math.floor(p.maxHP / 2),
-                                type: wispType,
-                                attackCounter: 0,
-                                targetTileX: p.x, targetTileY: p.y,
-                                deltaX: 0, deltaY: 0, stepsLeft: 0, moving: false,
-                                anim: { frameIndex: 0, lastFrameTime: performance.now(), frameDuration: 200 },
-                                lastPos: null
-                            });
-                            addTerminalLineToContent('10 Soul Orbs consumed – a loyal wisp came back to life!');
-                            logBattleEvent(`Floor ${floor} - Wisp resurrected from the Soul Terminal!`);
-                            playWebAudioSound(sounds.pickup);
-                            setTimeout(() => playWebAudioSound(sounds.pickup), 100);
-                            setTimeout(() => playWebAudioSound(sounds.pickup), 200);
-                        } else {
-                            addTerminalLineToContent(`Need 10 Soul Orbs (you have ${p.soulOrbs}).`);
-                        }
-                        addTerminalLineToContent('_____________________');
-                        addTerminalLineToContent('Type "help" for help.');
-                        break;
-                    default:
-                        addTerminalLineToContent('ERROR!');
-                        addTerminalLineToContent('Usage: convert stones');
-                        addTerminalLineToContent('Usage: convert shards');
-                        addTerminalLineToContent('_____________________');
-    	                addTerminalLineToContent('Type "help" for help.');
-                }
-            }
-            break;
+                addTerminalLineToContent('_____________________');
+                addTerminalLineToContent('Type "help" for help.');
+                break;
+
+            default:
+                addTerminalLineToContent(`Unknown command: ${cmd} ${type}`);
+                addTerminalLineToContent('Available: stones, wisp');
+                addTerminalLineToContent('_____________________');
+                addTerminalLineToContent('Type "help" for help.');
+                break;
+        }
+    }
+    break;
 case 'reset':
     if (!inPuzzleRoom) {
         addTerminalLineToContent('ERROR: Can only reset from inside a trial!');
@@ -11215,13 +12096,13 @@ case 'set':
                     addTerminalLineToContent('Back to classic 1:1 view');
                 }
                 else {
-                    addTerminalLineToContent('Invalid argument – use "on" or "off"');
+                    addTerminalLineToContent('Invalid argument – set "on" or "off"');
                 }
                 needsRedraw = true;
             }
         }
         else {
-            addTerminalLineToContent('Unknown setting – use sound, music, voice, or zoom');
+            addTerminalLineToContent('Unknown setting – set sound, music or zoom');
         }
     }
     break;
@@ -11364,12 +12245,23 @@ if (enemy) {
     let actualDamage = 0;
     let message = "";
 
-    if (isDiamondHand) {
-        // Diamond Hand = 3 damage, ignores shield completely
-        actualDamage = 3;
-        enemy.hp -= 3;
-        message = `Diamond Hand wave hits ${enemy.type.name} for 3 DMG!`;
-    }
+// Elemental Damage patch
+if (isDiamondHand) {
+    const baseDmg = 3;
+    const elemDmg = elementalBonus; // Unlimited — no cap
+    const totalDmg = baseDmg + elemDmg;
+    
+    enemy.hp -= totalDmg;
+    
+    if (elemDmg > 0) {
+        // Enchanted: show breakdown
+        message = `Diamond Hand hits ${enemy.type.name} for ${baseDmg} base + ${elemDmg.toFixed(1)} elemental (${totalDmg.toFixed(1)} total)!`;
+    } else {
+        // Not enchanted: simple message
+        message = `Diamond Hand hits ${enemy.type.name} for ${baseDmg} DMG!`;
+    }   
+    playWebAudioSound(sounds.hit);
+}
     else if (isSoulSword) {
         // Soul Sword AOE wave = only 1 damage, ignores shield
         actualDamage = 1;
@@ -11415,6 +12307,43 @@ if (enemy) {
         //if (xp > 0) logBattleEvent(`+${xp} XP`);
         checkLevelUp();
         updateXPBar(); // Only called on kills - super efficient
+        
+if (enemy.type.name === 'Jester' && Math.random() < 0.25) {
+    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+    
+    // Try to place on death spot
+    let placed = false;
+    if (map[enemy.y][enemy.x] === 0) {
+        map[enemy.y][enemy.x] = GEM_TILES[gem];
+        placed = true;
+    } else {
+        // Try adjacent tiles
+        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+        for (const d of dirs) {
+            const nx = enemy.x + d.dx;
+            const ny = enemy.y + d.dy;
+            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                map[ny][nx] = GEM_TILES[gem];
+                placed = true;
+                break;
+            }
+        }
+    }
+    
+    if (placed) {
+        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+        playWebAudioSound(sounds.pickup);
+    } else {
+        // Fallback: add directly to inventory if no space
+        p.gems[gem]++;
+        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+        playWebAudioSound(sounds.pickup);
+    }
+    
+    updatePlayerState();
+}
+        
         // === SIDE QUEST PROGRESS (new) ===
         handleSideQuestKill(enemy.type.name, enemy.x, enemy.y);
 
@@ -11998,7 +12927,6 @@ function startPuzzleRoom() {
 catPos = null;
 catVisible = false;
 sandworm = null;
-desertStreakHasSandworm = false;
     puzzleReturnPos = { x: p.x, y: p.y };
     puzzlePreviousTheme = currentTheme;
     enemies = [];
@@ -12555,6 +13483,9 @@ window.lastSideQuestType = null;
     infoGracePeriod = false;
     tileVariantMap = [];
 
+passiveTreeActive = false;
+passiveGracePeriod = false;
+
 puzzleTotalHearts = 0;
 puzzleCollectedHearts = 0;
 
@@ -12592,6 +13523,16 @@ puzzleCollectedHearts = 0;
     p.echoWardenBlessingGiven = false;
 p.curseActive = false;  // Lift lingering curse
 
+    p.gems = { ruby: 0, sapphire: 0, emerald: 0, citrine: 0 };
+    p.gemAtk = { fire: 0, cold: 0, earth: 0, lightning: 0 };
+    p.gemDef = { shrimpCrab: 0, dolphin: 0, shark: 0, squid: 0 };
+    hpReduction = 0;
+
+p.inPassiveTerminal = false;
+p.passiveTerminalActive = false;
+p.passiveTerminalCommand = '';
+p.passiveTerminalCursorPos = 0;
+
     // === RUINS RAIN SYSTEM RESET ===
     ruinsRainActive = false;
     ruinsRainAngle = 0;
@@ -12615,7 +13556,6 @@ p.auraMoveCounter = 0; // Reset aura move counter
     p.perfectlyCutDiamonds = 0;
     // Reset soul items
     p.soulStones = 0;
-    p.soulShards = 0;
     p.soulOrbs = 0;
     p.soulStormCharges = 256;
   
@@ -13326,6 +14266,21 @@ if (map[y][x] === 25) { // Puzzle portal tile
         if (map[y][x] === 35) {
             c.drawImage(assets.jester_shrine, x * S, y * S, S, S);
         }
+        // New tile ID for passive sign
+        if (map[y][x] === 36) c.drawImage(assets.passive_sign, x * S, y * S, S, S);
+
+if (map[y][x] === GEM_TILES.ruby) {
+    c.drawImage(assets.ruby, x * S, y * S, S, S);
+}
+if (map[y][x] === GEM_TILES.sapphire) {
+    c.drawImage(assets.sapphire, x * S, y * S, S, S);
+}
+if (map[y][x] === GEM_TILES.emerald) {
+    c.drawImage(assets.emerald, x * S, y * S, S, S);
+}
+if (map[y][x] === GEM_TILES.citrine) {
+    c.drawImage(assets.citrine, x * S, y * S, S, S);
+}
 
 // ───── PUZZLE ROOM – FINAL FIXES: FLOOR REVEAL + BOULDER TRAILS + ZOOM-CENTERED REVEAL ─────
 if (inPuzzleRoom && puzzleStaticCanvas) {
@@ -13729,34 +14684,32 @@ if ((p.hasCursedRing || redMazeAuraGiven) && auraHitStartTime > 0) {
     }
 }
     }
-// Draw sword or pickaxe-sword or diamond hand
+// Draw sword or pickaxe-sword or diamond hand (PURE RENDERING — no state changes!)
 if (swordActive && Date.now() - swordStart < 200) {
     let sx = p.x, sy = p.y;
     if (swordDir === 'up') sy--;
     if (swordDir === 'down') sy++;
     if (swordDir === 'left') sx--;
     if (swordDir === 'right') sx++;
-    if (sx >= 0 && sx < W && sy >= 0 && sy < H && Math.sqrt((sx - p.x) ** 2 + (sy - p.y) ** 2) <= radius) {
+
+    if (sx >= 0 && sx < W && sy >= 0 && sy < H && Math.sqrt((sx - p.x)**2 + (sy - p.y)**2) <= radius) {
         c.save();
         c.translate(sx * S + S / 2, sy * S + S / 2);
         if (swordDir === 'up') c.rotate(-Math.PI / 2);
         if (swordDir === 'down') c.rotate(Math.PI / 2);
         if (swordDir === 'left') c.rotate(Math.PI);
-        // Prioritize pickaxe sword if player has pickaxes and is using it, then diamond hand, then regular sword
+
+        // Only draw — decide sprite based on current state (no p.atk mutation here)
         if (p.pickaxes > 0 && usePickaxeSword) {
             c.drawImage(assets.pickaxe_sword, -S / 2, -S / 2, S, S);
-            p.atk = 2; // Reset attack power
         } else if (p.hasDiamondHand) {
             c.drawImage(assets.diamond_hand, -S / 2, -S / 2, S, S);
-            p.atk = 3; // diamond hand attack power
+        } else if (p.soulStormCharges >= 8) {
+            c.drawImage(assets.soul_sword, -S / 2, -S / 2, S, S);
         } else {
-   if (p.soulStormCharges >= 8) {
-       c.drawImage(assets.soul_sword, -S / 2, -S / 2, S, S);
-   } else {
-       c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
-   }
-            p.atk = 2; // Reset attack power
+            c.drawImage(assets.sword, -S / 2, -S / 2, S, S);
         }
+
         c.restore();
     }
 }
@@ -14856,48 +15809,55 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
     rafId = requestAnimationFrame(gameLoop);
 }
 
+// Main global keydown listener (handles movement, attack, potion, etc.)
 document.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-        // Check if Enter is coming from username input field
-        if (document.activeElement && document.activeElement.id === 'username-input') {
-            return; // Let the username input handler handle this
-        }
-        
-        if (splashActive && !hasPlayedOnce) {
-            return; // Block Enter on initial splash screen
-        }
-        if (splashActive && hasPlayedOnce) {
-            const startButton = document.getElementById('start-button');
-            startButton.style.background = '#00b7ef'; // Mimic :hover color
-            setTimeout(() => {
-                startButton.style.background = '#00e8d8'; // Revert to original color
-            }, 200); // Short duration to simulate tap
 
-currentTheme = 'dungeon'; // Force default theme on game start
-    // Switch back to splash.png when starting
-    if (currentSplashImage !== 'splash.png') {
-        currentSplashImage = 'splash.png';
-        splashCanvas.clearRect(0, 0, 320, 320);
-        splashImg.src = currentSplashImage;
-        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+// 1.) this code block makes the a and d key to work as aspected inside the passive tree terminal (combined)
+// Allow 'a' and 'd' (and all keys) when typing in soul or passive terminal input
+    if ((p.inPassiveTerminal && p.passiveTerminalActive && e.target.matches('#passive-input'))) {
+        // Let the input field handle the key normally (typing 'a', 'd', etc.)
+        return;
     }
-    
-            fadeSplash();
-            setTimeout(() => {
-                if (!gameOver && !splashActive) {
-                    fetchTxs();
-                    lastUpdate = Date.now();
-                    console.log('Initial fetchTxs triggered after splash via Enter, wave=', wave);
-                }
-            }, 2000); // Match delay in start-button and startGame
-            return;
+
+// 2.) this code block makes the a and d key to work as aspected inside the passive tree terminal (combined)
+// BLOCK attack/potion ONLY when a terminal is open but input is NOT focused
+    if ((p.inPassiveTerminal && p.passiveTerminalActive)) {
+        if (e.key === 'a' || e.key === 'd') {
+            e.preventDefault();
+            e.stopPropagation();
+            return; // No attack/potion sound/action
         }
-        
-if (gameOver && hasPlayedOnce) {
-    restart();
-    return;
-}
     }
+
+    // Soul terminal input handling (when focused)
+    if (p.inSoulTerminal && p.soulTerminalActive) {
+        handleTerminalInput(e);
+        return;
+    }
+
+    // Passive terminal input handling (when focused)
+    if (p.inPassiveTerminal && p.passiveTerminalActive) {
+        handlePassiveInput(e);
+        return;
+    }
+
+    // Soul terminal blurred input fallback
+    if (p.inSoulTerminal && p.soulTerminalActive && !e.target.matches('#soul-terminal-input')) {
+        if (e.key.length === 1 && e.key !== 'Enter') {
+            handleBlurredTerminalInput(e.key);
+        }
+        return;
+    }
+
+    // Passive terminal blurred input fallback (add this too)
+    if (p.inPassiveTerminal && p.passiveTerminalActive && !e.target.matches('#passive-input')) {
+        if (e.key.length === 1 && e.key !== 'Enter') {
+            handleBlurredPassiveInput(e.key);
+        }
+        return;
+    }
+
+    // Normal game controls (only reach here if no terminal is open)
     if (gameOver || splashActive) return;
 
     if (skillTreeActive) {
@@ -14915,45 +15875,65 @@ if (gameOver && hasPlayedOnce) {
         return;
     }
 
-    // Handle terminal input when active
-    if (p.inSoulTerminal && p.soulTerminalActive) {
-        handleTerminalInput(e);
-        return;
+    // Enter key special cases
+    if (e.key === 'Enter') {
+        // Username input on game over
+        if (document.activeElement && document.activeElement.id === 'username-input') {
+            return; // Let input handler deal with it
+        }
+        // Splash screen start
+        if (splashActive) {
+            if (!hasPlayedOnce) return; // Block initial splash
+            const startButton = document.getElementById('start-button');
+            startButton.style.background = '#00b7ef';
+            setTimeout(() => startButton.style.background = '#00e8d8', 200);
+            currentTheme = 'dungeon';
+            if (currentSplashImage !== 'splash.png') {
+                currentSplashImage = 'splash.png';
+                splashCanvas.clearRect(0, 0, 320, 320);
+                splashImg.src = currentSplashImage;
+                splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+            }
+            fadeSplash();
+            setTimeout(() => {
+                if (!gameOver && !splashActive) {
+                    fetchTxs();
+                    lastUpdate = Date.now();
+                    console.log('Initial fetchTxs via Enter');
+                }
+            }, 2000);
+            return;
+        }
+        // Game over restart
+        if (gameOver && hasPlayedOnce) {
+            restart();
+            return;
+        }
     }
 
-    /*
-    // DEBUG: Runeword testing with keys 1-9 - comment out when not needed
-    if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
-        debugRuneword(e.key);
-        needsRedraw = true;
-        return;
-    }
-    */
-
-    // Update key states and handle actions
+    // Movement keys
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         keyStates[e.key] = true;
-    } else if (e.key === 'a') {
+    }
+
+    // Attack / Potion (only if not blocked by terminal)
+    else if (e.key === 'a') {
         attack();
-    } else if (e.key === 'd') {
+    }
+    else if (e.key === 'd') {
         usePotion();
     }
 
-    // Start keyboard movement polling if not already started
+    // Start keyboard polling if needed
     if (!keyboardMovementTimer) {
         keyboardMovementTimer = setInterval(() => {
             if (!splashActive && !gameOver) {
                 let newMoveDir = null;
-                if (keyStates.ArrowUp) {
-                    newMoveDir = 'up';
-                } else if (keyStates.ArrowDown) {
-                    newMoveDir = 'down';
-                } else if (keyStates.ArrowLeft) {
-                    newMoveDir = 'left';
-                } else if (keyStates.ArrowRight) {
-                    newMoveDir = 'right';
-                }
+                if (keyStates.ArrowUp) newMoveDir = 'up';
+                else if (keyStates.ArrowDown) newMoveDir = 'down';
+                else if (keyStates.ArrowLeft) newMoveDir = 'left';
+                else if (keyStates.ArrowRight) newMoveDir = 'right';
 
                 if (newMoveDir) {
                     const now = Date.now();
@@ -14967,20 +15947,22 @@ if (gameOver && hasPlayedOnce) {
                     lastMoveTime = 0;
                 }
             }
-        }, 50); // Poll frequently, moves capped at 200ms
-    } 
+        }, 50);
+    }
 });
 
-// Add this after the main document.addEventListener('keydown', ... line
-document.getElementById('soul-terminal-input').addEventListener('keydown', function(e) {
+// Keyup: reset states
+document.addEventListener('keyup', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        keyStates[e.key] = false;
+    }
+});
+
+// Soul terminal input (focused)
+document.getElementById('soul-terminal-input')?.addEventListener('keydown', function(e) {
     if (p.inSoulTerminal && p.soulTerminalActive) {
-        // Prevent default for Enter to avoid duplicate handling
-        if (e.key === 'Enter') {
-            e.preventDefault();
-        }
+        if (e.key === 'Enter') e.preventDefault();
         handleTerminalInput(e);
-        
-        // Handle Enter key for terminal input
         if (e.key === 'Enter') {
             const command = this.value;
             processSoulCommand(command);
@@ -14990,59 +15972,12 @@ document.getElementById('soul-terminal-input').addEventListener('keydown', funct
     }
 });
 
-// Add this after the existing soul-terminal-input keydown listener
-document.addEventListener('keydown', function(e) {
+// Soul terminal blurred input
+document.addEventListener('keydown', e => {
     if (p.inSoulTerminal && p.soulTerminalActive && !e.target.matches('#soul-terminal-input')) {
-        // Handle keyboard input when terminal is active but not focused
-        const key = e.key;
-        if (key.length === 1 && key !== 'Enter') {
-            handleBlurredTerminalInput(key);
+        if (e.key.length === 1 && e.key !== 'Enter') {
+            handleBlurredTerminalInput(e.key);
         }
-    }
-});
-
-// Add global event listeners with proper cleanup handling
-document._keydownHandler = function(e) {
-    // Existing keydown handler logic here
-};
-document.addEventListener('keydown', document._keydownHandler);
-
-document._keyupHandler = function(e) {
-    // Existing keyup handler logic here
-};
-document.addEventListener('keyup', document._keyupHandler);
-
-// Add touch event listeners with proper cleanup
-document._touchstartHandler = function(e) {
-    // Existing touchstart handler logic here
-};
-document.addEventListener('touchstart', document._touchstartHandler);
-
-document._touchmoveHandler = function(e) {
-    // Existing touchmove handler logic here
-};
-document.addEventListener('touchmove', document._touchmoveHandler);
-
-document._touchendHandler = function(e) {
-    // Existing touchend handler logic here
-};
-document.addEventListener('touchend', document._touchendHandler);
-
-// Add gamepad event listeners with proper cleanup
-document._gamepadConnectedHandler = function(e) {
-    // Existing gamepadconnected handler logic here
-};
-window.addEventListener('gamepadconnected', document._gamepadConnectedHandler);
-
-document._gamepadDisconnectedHandler = function(e) {
-    // Existing gamepaddisconnected handler logic here
-};
-window.addEventListener('gamepaddisconnected', document._gamepadDisconnectedHandler);
-
-// Update key states on release
-document.addEventListener('keyup', e => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        keyStates[e.key] = false;
     }
 });
 
@@ -15384,19 +16319,20 @@ function updateGamepad(timestamp) {
     // Check for actual gamepad input (buttons or axes)
     const buttons = gamepad.buttons;
     const hasInput = buttons.some(b => b.pressed) || currentAxes.isDpadActive();
-    
+
+// Close the soul terminal or the passive tree terminal with the start button (generic gamepad)    
 if (!splashActive && !gameOver && inputBlocked) {
-    // Allow Start button (index 3) to exit terminal even when blocked
     const buttons = gamepad.buttons;
     const nowTime = Date.now();
     if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
         if (p.inSoulTerminal && p.soulTerminalActive) {
-            //console.log('Gamepad Start: Exiting soul terminal'); // Debug log
             closeSoulTerminal();
+        }
+        else if (p.inPassiveTerminal && p.passiveTerminalActive) {
+            closePassiveTerminal();  // ← only this name
         }
         lastStartPressTime = nowTime;
     }
-    // Update button states for Start
     lastButtonsState[3] = buttons[3].pressed;
     requestAnimationFrame(updateGamepad);
     return;
