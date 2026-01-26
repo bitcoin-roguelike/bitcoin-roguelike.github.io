@@ -7984,30 +7984,31 @@ function processPassiveCommand(command) {
                 const newDef = p.gemDef.shrimpCrab + added;
                 p.gemDef.shrimpCrab = Math.min(newDef, 1.0);
                 added = p.gemDef.shrimpCrab - (newDef - added); // actual added after cap
-                addPassiveLineToContent(`Traded ${count} ruby(s) for -${(0.1 * count).toFixed(1)} shrimp/crab defense!`);
-                addPassiveLineToContent(`Note: Maximum shrimp/crab defense debuff is -1 HP`);
+                addPassiveLineToContent(`Traded r -${(0.1 * count).toFixed(1)} shrimp/crab defense!`);
                 break;
             case 'sapphire': // Dolphin def (cap -1.0)
                 const newD = p.gemDef.dolphin + added;
                 p.gemDef.dolphin = Math.min(newD, 1.0);
-                addPassiveLineToContent(`Traded ${count} sapphire(s) for -${(0.1 * count).toFixed(1)} dolphin defense!`);
-                addPassiveLineToContent(`Note: Maximum dolphin defense debuff is -1 HP`);
+                addPassiveLineToContent(`Traded s for -${(0.1 * count).toFixed(1)} dolphin defense!`);
                 break;
             case 'emerald':  // Shark def (cap -2.0)
                 const newSh = p.gemDef.shark + added;
                 p.gemDef.shark = Math.min(newSh, 2.0);
-                addPassiveLineToContent(`Traded ${count} emerald(s) for -${(0.1 * count).toFixed(1)} shark defense!`);
-                addPassiveLineToContent(`Note: Maximum shark defense debuff is -2 HP`);
+                addPassiveLineToContent(`Traded e for -${(0.1 * count).toFixed(1)} shark defense!`);
                 break;
             case 'citrine':  // Squid def (cap -1.0)
                 const newSq = p.gemDef.squid + added;
                 p.gemDef.squid = Math.min(newSq, 1.0);
-                addPassiveLineToContent(`Traded ${count} citrine(s) for -${(0.1 * count).toFixed(1)} squid defense!`);
-                addPassiveLineToContent(`Note: Maximum squid defense debuff is -1 HP`);
+                addPassiveLineToContent(`Traded c for -${(0.1 * count).toFixed(1)} squid defense!`);
                 break;
         }
         if (added < 0.1 * count) {
-            addPassiveLineToContent(`Gemstone broke! Debuff is maxed out for this enemy`);
+            addPassiveLineToContent(`Gemstone broke, debuff is maxed out!`);
+            addPassiveLineToContent(`Notes:`);
+            addPassiveLineToContent(`Max shrimp/crab defense debuff is -1.0 HP`);
+            addPassiveLineToContent(`Max squid defense debuff is -1.0 HP`);
+            addPassiveLineToContent(`Max dolphin defense debuff is -1.0 HP`);
+            addPassiveLineToContent(`Max shark defense debuff is -2.0 HP`);            
         }
     }
     
