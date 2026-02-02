@@ -2943,7 +2943,7 @@ const talkLines = [
   "Oh no.", // 9
   "hello you , go go go", // 10
   "yesh, Bitcoin from bounty", // 11
-  "yesh, Deiamond. Soul-Orb . RIP.", // 12
+  "yesh,, Soul-Orbp . RIP.", // 12
   "yesh, PickAaXe , RIP.", // 13
   "yes,. PickAaXe", // 14
   "too strong, run away", // 15
@@ -5403,7 +5403,7 @@ if (p.hp <= 48 && p.hasDiamondArmor) {  // Tie to <= 48 HP
         } else if (!p.hasDiamondHand) {
             p.hasDiamondHand = true;
             p.perfectlyCutDiamonds--;
-            p.atk = 3; // Increase attack power for diamond hand
+            p.atk = 2; // Nerfed attack power for diamond hand
             logBattleEvent(`Floor ${floor} - Diamond Hand acquired from Blacksmith!`);
         }
     }
@@ -6039,6 +6039,17 @@ if (p.ripBlast && enemies.length > 0) {
         else if (enemy.type.name === 'Cursed Trader') xp = 10;
         else if (enemy.type.name === 'Jester') xp = 2;
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+        
+// Jester death → trigger Bitcoin-orange vaporisation splat
+    if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
+        shrimpBloodDrips.push({
+            x: enemy.x,
+            y: enemy.y,
+            startTime: performance.now()
+        });
+        playWebAudioSound(sounds.quicksand);
+    }
+        
         playerXP += xp;
         checkLevelUp();
         updateXPBar();
@@ -7201,8 +7212,7 @@ catVisible = false;
     document.getElementById('floor-indicator').textContent = `Floor ${floor}`;
     document.getElementById('wave').textContent = wave;
    
-    // Reset attack to base value before new floor (accounts for diamond hand)
-    p.atk = p.hasDiamondHand ? 3 : 2;
+    p.atk = 2; // Ensure base sword attack (2) on new floor – prevents any lingering modifiers
 
     initMap();
 
@@ -9342,141 +9352,221 @@ checkLevelUp();
 function doScourgeSpinAttack() {
     const dirs = [
         {dx:-1,dy:-1},{dx:0,dy:-1},{dx:1,dy:-1},
-        {dx:-1,dy:0}, {dx:1,dy:0},
+        {dx:-1,dy:0},             {dx:1,dy:0},
         {dx:-1,dy:1}, {dx:0,dy:1},{dx:1,dy:1}
     ];
+
+    let hits = 0;
+
     dirs.forEach(d => {
         const x = p.x + d.dx;
         const y = p.y + d.dy;
+
         if (x < 0 || x >= W || y < 0 || y >= H || map[y][x] === 1) return;
-        const enemy = enemies.find(e => e.x === x && e.y === y);
-        if (enemy) {
-            enemy.hp -= 2;
-            enemy.scourgeHit = Date.now();
-            if (enemy.hp <= 0) {
-                kills[enemy.type.name]++;
 
-                let xp = 0;
-                if (enemy.type.name === 'Shrimp') xp = 1;
-                else if (enemy.type.name === 'Crab') xp = 2;
-                else if (enemy.type.name === 'Squid') xp = 3;
-                else if (enemy.type.name === 'Dolphin') xp = 4;
-                else if (enemy.type.name === 'Shark') xp = 5;
-                else if (enemy.type.name === 'Whale') xp = 15;
-                else if (enemy.type.name === 'Cursed Trader') xp = 10;
-                else if (enemy.type.name === 'Jester') xp = 2;
-                if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+        let target = null;
 
-                playerXP += xp;
-                //if (xp > 0) logBattleEvent(`+${xp} XP`);
-                checkLevelUp();
-                updateXPBar(); // Only called on kills - super efficient
-                
-if (enemy.type.name === 'Jester' && Math.random() < 0.25) {
-    const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
-    const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
-    
-    // Try to place on death spot
-    let placed = false;
-    if (map[enemy.y][enemy.x] === 0) {
-        map[enemy.y][enemy.x] = GEM_TILES[gem];
-        placed = true;
-    } else {
-        // Try adjacent tiles
-        const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
-        for (const d of dirs) {
-            const nx = enemy.x + d.dx;
-            const ny = enemy.y + d.dy;
-            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
-                map[ny][nx] = GEM_TILES[gem];
+        // Regular enemy
+        target = enemies.find(e => e.x === x && e.y === y);
+
+        // Sandworm
+        if (!target && sandworm && sandworm.x === x && sandworm.y === y) {
+            target = sandworm;
+            target.isSpecial = 'sandworm';
+        }
+
+        // Red Maze eye
+        if (!target && redMazeActive && redMaze && redMaze.x === x && redMaze.y === y) {
+            target = redMaze;
+            target.isSpecial = 'redmaze';
+        }
+
+if (target) {
+    target.hp -= 2;
+    target.scourgeHit = Date.now(); // flash works on all
+    hits++;
+
+    // Extra feedback only for sandworm (on every hit, lethal or not)
+    if (target.isSpecial === 'sandworm') {
+        playShrimpRageGrowl();
+        logBattleEvent(`Floor ${floor} - Sandworm takes 2 damage! (${target.hp} HP left)`);
+    }
+
+    if (target.hp <= 0) {
+        if (target.isSpecial === 'sandworm') {
+            // Sandworm death rewards – consistent message regardless of attack type
+            const maxHP = 36 + (p.hasArmor ? 12 : 0) + (p.hasDiamondArmor ? 952 : 0);
+            p.hp = maxHP;
+            p.soulStormCharges = 256;
+
+            // Try to drop diamond
+            let placed = false;
+            if (map[target.y][target.x] === 0) {
+                map[target.y][target.x] = 10;
                 placed = true;
-                break;
-            }
-        }
-    }
-    
-    if (placed) {
-        logBattleEvent(`Jester dropped a ${gem} on the floor!`);
-        playWebAudioSound(sounds.pickup);
-    } else {
-        // Fallback: add directly to inventory if no space
-        p.gems[gem]++;
-        logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
-        playWebAudioSound(sounds.pickup);
-    }
-    
-    updatePlayerState();
-}
-                
-        // === SIDE QUEST PROGRESS (new) ===
-        handleSideQuestKill(enemy.type.name, enemy.x, enemy.y);
-
-        // === EXISTING REWARDS (unchanged – bounty works via this call) ===
-        handleUniqueMonsterReward(enemy);
-                tryDropScroll(enemy.x, enemy.y);
-
-                // Normal sats drop for non-unique enemies (skip Cursed Trader to avoid bitcoin glitch)
-                if (!enemy.uniqueName && enemy.type.name !== 'Cursed Trader' && enemy.type.name !== 'Jester' && !enemy.isHuge && map[y][x] === 0) {
-                    map[y][x] = 3;
-                    satoshiDrops.push({x, y, sats: enemy.sats, type: enemy.type.name});
-                }
-
-                // Guaranteed Soul Stone drop for Cursed Trader
-                if (enemy.type.name === 'Cursed Trader') {
-                    let placed = false;
-                    if (map[y][x] === 0) {
-                        map[y][x] = 20; // Soul stone tile
+            } else {
+                const adj = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+                for (const a of adj) {
+                    const nx = target.x + a.dx;
+                    const ny = target.y + a.dy;
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                        map[ny][nx] = 10;
                         placed = true;
-                    } else {
-                        const adjDirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
-                        for (let ad of adjDirs) {
-                            let nx = enemy.x + ad.dx, ny = enemy.y + ad.dy;
-                            if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
-                                map[ny][nx] = 20;
-                                placed = true;
-                                break;
-                            }
-                        }
+                        break;
                     }
-                    if (placed) {
-                        logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Soul Stone!`);
-                        playWebAudioSound(sounds.pickup);
-                    }
-                }
-
-
-                if (enemy.isHuge) {
-                    if (!enemy.deathTime) enemy.deathTime = performance.now();
-                    dropSoulStone(enemy.x, enemy.y);
-                    
-// 50% potion drop
-    if (Math.random() < 0.5) {
-        if (map[enemy.y][enemy.x] === 0) {
-            map[enemy.y][enemy.x] = 2;
-        } else {
-            const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
-            for (let d of dirs) {
-                const nx = enemy.x + d.dx, ny = enemy.y + d.dy;
-                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
-                    map[ny][nx] = 2;
-                    break;
                 }
             }
+
+            logBattleEvent(`Floor ${floor} - Sandworm defeated! Full HP restored + 256 soul charges${placed ? ' + Diamond!' : ''}`);
+            playWebAudioSound(sounds.secret);
+            sandworm = null;
         }
-        logBattleEvent(`Huge Shrimp dropped a Potion!`);
-        playWebAudioSound(sounds.pickup);
-    }                    
-                    
-                    playerXP += 15;
-                    logBattleEvent(`+15 XP`);
+        else if (target.isSpecial === 'redmaze') {
+            updateRedMaze(); // normal defeat logic
+        }
+        else {
+                    // === FULL NORMAL ENEMY DEATH HANDLING (your original detailed block) ===
+                    kills[target.type.name]++;
+
+                    let xp = 0;
+                    if (target.type.name === 'Shrimp') xp = 1;
+                    else if (target.type.name === 'Crab') xp = 2;
+                    else if (target.type.name === 'Squid') xp = 3;
+                    else if (target.type.name === 'Dolphin') xp = 4;
+                    else if (target.type.name === 'Shark') xp = 5;
+                    else if (target.type.name === 'Whale') xp = 15;
+                    else if (target.type.name === 'Cursed Trader') xp = 10;
+                    else if (target.type.name === 'Jester') xp = 2;
+
+                    if (target.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+                    // Jester death → trigger Bitcoin-orange vaporisation splat
+                    if (target.type.name === 'Jester' || target.uniqueName === 'Jester') {
+                        shrimpBloodDrips.push({
+                            x: target.x,
+                            y: target.y,
+                            startTime: performance.now()
+                        });
+                        playWebAudioSound(sounds.quicksand);
+                    }
+
+                    playerXP += xp;
                     checkLevelUp();
                     updateXPBar();
+
+                    // Jester gem drop (25% chance)
+                    if (target.type.name === 'Jester' && Math.random() < 0.25) {
+                        const gemTypes = ['ruby', 'sapphire', 'emerald', 'citrine'];
+                        const gem = gemTypes[Math.floor(Math.random() * gemTypes.length)];
+
+                        let placed = false;
+                        if (map[target.y][target.x] === 0) {
+                            map[target.y][target.x] = GEM_TILES[gem];
+                            placed = true;
+                        } else {
+                            const dirs = [{dx:0,dy:-1}, {dx:0,dy:1}, {dx:-1,dy:0}, {dx:1,dy:0}];
+                            for (const d of dirs) {
+                                const nx = target.x + d.dx;
+                                const ny = target.y + d.dy;
+                                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                                    map[ny][nx] = GEM_TILES[gem];
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (placed) {
+                            logBattleEvent(`Jester dropped a ${gem} on the floor!`);
+                        } else {
+                            p.gems[gem]++;
+                            logBattleEvent(`Jester dropped a ${gem} directly to you (no floor space)!`);
+                        }
+                        playWebAudioSound(sounds.pickup);
+                        updatePlayerState();
+                    }
+
+                    // Side quest progress
+                    handleSideQuestKill(target.type.name, target.x, target.y);
+
+                    // Unique rewards / bounty
+                    handleUniqueMonsterReward(target);
+
+                    // Scroll drop chance
+                    tryDropScroll(target.x, target.y);
+
+                    // Normal sats drop (skip uniques, Cursed Trader, Jester, huge)
+                    if (!target.uniqueName && target.type.name !== 'Cursed Trader' && target.type.name !== 'Jester' && !target.isHuge) {
+                        if (map[target.y][target.x] === 0) {
+                            map[target.y][target.x] = 3;
+                            satoshiDrops.push({x: target.x, y: target.y, sats: target.sats, type: target.type.name});
+                        }
+                    }
+
+                    // Cursed Trader soul stone
+                    if (target.type.name === 'Cursed Trader') {
+                        let placed = false;
+                        if (map[target.y][target.x] === 0) {
+                            map[target.y][target.x] = 20;
+                            placed = true;
+                        } else {
+                            const adjDirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+                            for (const ad of adjDirs) {
+                                const nx = target.x + ad.dx;
+                                const ny = target.y + ad.dy;
+                                if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0 && !enemies.some(e => e.x === nx && e.y === ny)) {
+                                    map[ny][nx] = 20;
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (placed) {
+                            logBattleEvent(`Floor ${floor} - Cursed Trader dropped a Soul Stone!`);
+                            playWebAudioSound(sounds.pickup);
+                        }
+                    }
+
+                    // Huge shrimp rewards
+                    if (target.isHuge) {
+                        if (!target.deathTime) target.deathTime = performance.now();
+                        dropSoulStone(target.x, target.y);
+
+                        if (Math.random() < 0.5) {
+                            if (map[target.y][target.x] === 0) {
+                                map[target.y][target.x] = 2;
+                            } else {
+                                const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
+                                for (let d of dirs) {
+                                    const nx = target.x + d.dx;
+                                    const ny = target.y + d.dy;
+                                    if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
+                                        map[ny][nx] = 2;
+                                        break;
+                                    }
+                                }
+                            }
+                            logBattleEvent(`Huge Shrimp dropped a Potion!`);
+                            playWebAudioSound(sounds.pickup);
+                        }
+
+                        playerXP += 15;
+                        logBattleEvent(`+15 XP`);
+                        checkLevelUp();
+                        updateXPBar();
+                    }
+
+                    // Remove the dead enemy
+                    enemies = enemies.filter(e => e !== target);
                 }
-                enemies = enemies.filter(e => e !== enemy);
-                
             }
         }
     });
+
+    if (hits > 0) {
+        logBattleEvent(`Floor ${floor} - Scourge spin hit ${hits} target${hits > 1 ? 's' : ''}!`);
+        playWebAudioSound(sounds.hit);
+    }
 }
 
 function handleSideQuestKill(enemyType, enemyX, enemyY) {
@@ -9685,7 +9775,7 @@ function applyWispAttack(wisp, primaryTarget) {
                     case 'chain':
                         verb = 'zaps';
                         effect = '[CHAIN LIGHTNING]';
-                        attackSound = sounds.rune_drop;
+                        attackSound = sounds.town_portal;                        
                         break;
                     case 'earth':
                         verb = 'smashes';
@@ -10179,7 +10269,7 @@ if (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) {
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
     return false; // stop projectile
@@ -10194,7 +10284,7 @@ if (sandworm && sandworm.x === nx && sandworm.y === ny) {
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
 
@@ -10806,7 +10896,7 @@ if (hit) {
         }
 
         // Apply damage to all valid tiles in the area
-        const damage = 3; // Diamond hand AOE damage
+        const damage = 2; // Nerfed to match base sword – no more +1 advantage
         let enemiesHit = 0;
         let totalDamage = damage + elementalBonus; // Unlimited elemental bonus
 
@@ -10847,6 +10937,16 @@ for (const tile of damageArea) {
                         else if (enemy.type.name === 'Cursed Trader') xp = 10;
                         else if (enemy.type.name === 'Jester') xp = 2;
                         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+// Jester death → trigger Bitcoin-orange vaporisation splat
+    if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
+        shrimpBloodDrips.push({
+            x: enemy.x,
+            y: enemy.y,
+            startTime: performance.now()
+        });
+        playWebAudioSound(sounds.quicksand);
+    }
 
                         playerXP += xp;
                         //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -11077,7 +11177,7 @@ if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y -
     highlightTiles.push({
         x: redMaze.x,
         y: redMaze.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
     });
 }
@@ -11320,17 +11420,30 @@ if (hit.type.name === 'Jester' && Math.random() < 0.25) {
 function canShootProjectile() {
     for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue; // Skip player tile
+            if (dx === 0 && dy === 0) continue; // skip player tile
+
             const nx = p.x + dx;
             const ny = p.y + dy;
+
             if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                // Regular enemy?
                 if (enemies.some(e => e.x === nx && e.y === ny)) {
-                    return false; // Enemy touching → NO projectile
+                    return false;
+                }
+
+                // Sandworm?
+                if (sandworm && sandworm.x === nx && sandworm.y === ny) {
+                    return false;
+                }
+
+                // Red Maze boss eye?
+                if (redMazeActive && redMaze && redMaze.x === nx && redMaze.y === ny) {
+                    return false;
                 }
             }
         }
     }
-    return true; // All clear → can shoot
+    return true; // nothing adjacent → ranged sword allowed
 }
 
 // ——— SATOSHI'S SCOURGE: Full 360° spin attack ———
@@ -11436,7 +11549,7 @@ if (redMazeActive && redMaze) {
         highlightTiles.push({
             x: redMaze.x,
             y: redMaze.y,
-            highlightStart: Date.now(),
+            highlightStart: performance.now(),
             color: 'rgba(247, 147, 26, 0.8)'
         });
     }
@@ -11452,7 +11565,7 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
-        highlightStart: Date.now(),
+        highlightStart: performance.now(),
         color: 'rgba(247, 147, 26, 0.7)'
     });
 
@@ -12246,7 +12359,7 @@ if (enemy) {
 
 // Elemental Damage patch
 if (isDiamondHand) {
-    const baseDmg = 3;
+    const baseDmg = 2;
     const elemDmg = elementalBonus; // Unlimited — no cap
     const totalDmg = baseDmg + elemDmg;
     
@@ -12302,6 +12415,17 @@ if (isDiamondHand) {
         else if (enemy.type.name === 'Jester') xp = 2;
         else if (enemy.type.name === 'Red Maze') xp = 30; // just in case
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
+        
+// Jester death → trigger Bitcoin-orange vaporisation splat
+    if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
+        shrimpBloodDrips.push({
+            x: enemy.x,
+            y: enemy.y,
+            startTime: performance.now()
+        });
+        playWebAudioSound(sounds.quicksand);
+    }
+        
         playerXP += xp;
         //if (xp > 0) logBattleEvent(`+${xp} XP`);
         checkLevelUp();
@@ -12780,7 +12904,7 @@ F.......H....#
 #...LLLL#....#
 #......B.....#
 #......LLL#..#
-#..@...CHB<..#
+#..@...LHB<..#
 S......LLLL..#
 F............#
 ##############`,
@@ -13073,12 +13197,11 @@ catAnimStart = 0;
 // REWARDS BASED ON FLOOR — fair, consistent, feels earned
 if (floor >= 30) {
     // Legendary tier floors — always give diamond + soul orb + RIP runes
-    diamonds += 1;
     p.soulOrbs += 1;
     p.runes.push('r','i','p');
-    logBattleEvent("LEGENDARY REWARD: +1 Diamond +1 Soul Orb + RIP runes!");
+    logBattleEvent("LEGENDARY REWARD: +1 Soul Orb + RIP runes!");
     if (wisps.length > 0) {
-    talkSpeak(12); // "yes, Deiamond. Soul-Orb . RIP"
+    talkSpeak(12); // "yesh,, Soul-Orbp . RIP."
     }
 } else if (floor >= 15) {
     // Rare tier floors — always give pickaxe + RIP runes
@@ -13086,14 +13209,14 @@ if (floor >= 30) {
     p.runes.push('r','i','p');
     logBattleEvent("RARE REWARD: +1 Pickaxe + RIP runes!");
     if (wisps.length > 0) {
-    talkSpeak(13); // "yes,. PiickAaXe , RIP"
+    talkSpeak(13); // "yesh, PickAaXe , RIP."
     }
 } else {
     // Common tier floors — just pickaxe
     p.pickaxes += 1;
     logBattleEvent("Trial complete! +1 Pickaxe");
     if (wisps.length > 0) {
-    talkSpeak(14); // "yes,. PiickAaXe"
+    talkSpeak(14); // "yes,. PickAaXe"
     }
 }
 
