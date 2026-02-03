@@ -4244,6 +4244,7 @@ function initMap() {
         splashScreen.onclick = null;
         splashScreen.ontouchend = null;
     }
+p.ensnared = false;
     try {
         if (inHideout) {
             currentTheme = 'hideout';
@@ -8561,7 +8562,27 @@ function moveEnemies() {
 enemies.forEach(e => {
     e.playerPushedThisTurn = false; // reset push flag each turn
 
+    // ── Only skip MOVEMENT if frozen or ensnared ──
+    let canMove = true;
+    if ((e.frozen && e.frozenTurns > 0) || (e.ensnared && e.ensnareTurns > 0)) {
+        canMove = false;
 
+        // Still decrement counters even if we don't move
+        if (e.frozen && e.frozenTurns > 0) {
+            e.frozenTurns--;
+            if (e.frozenTurns <= 0) e.frozen = false;
+        }
+        if (e.ensnared && e.ensnareTurns > 0) {
+            e.ensnareTurns--;
+            if (e.ensnareTurns <= 0) e.ensnared = false;
+        }
+
+        // Tick down ensnare cooldown
+        if (e.ensnareCooldown > 0) {
+            e.ensnareCooldown--;
+        }
+    }
+    
     // Dolphin push (one-time, smooth interpolated)
 if (e.type.name === 'Dolphin' && !e.pushUsed && 
     Math.abs(e.x - p.x) + Math.abs(e.y - p.y) === 1 &&
@@ -8600,11 +8621,24 @@ if (e.type.name === 'Dolphin' && !e.pushUsed &&
     }
 }
     
+if ((e.frozen && e.frozenTurns > 0) || (e.ensnared && e.ensnareTurns > 0)) {
+    // Decrement whichever counter is active
     if (e.frozen && e.frozenTurns > 0) {
         e.frozenTurns--;
         if (e.frozenTurns <= 0) e.frozen = false;
-        return; // Skip move
     }
+    if (e.ensnared && e.ensnareTurns > 0) {
+        e.ensnareTurns--;
+        if (e.ensnareTurns <= 0) e.ensnared = false;
+    }
+
+    // Also tick down the ensnare cooldown (prevents spamming)
+    if (e.ensnareCooldown > 0) {
+        e.ensnareCooldown--;
+    }
+
+    return; // Skip move – locked by either effect
+}
     let dx = p.x - e.x, dy = p.y - e.y, dist = Math.abs(dx) + Math.abs(dy);
         if (dist <= 5) {
 // Mark first time they see the player this turn
@@ -9693,7 +9727,6 @@ function updateWisps() {
 function applyEnsnare() {
     if (!(playerClass === 'druid' && playerLevel >= 20)) return;
 
-    // Find enemies in range (max 3 tiles, same as wisp)
     const inRangeEnemies = enemies.filter(e => {
         const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
         return dist <= 3 && e.hp > 0;
@@ -9701,15 +9734,17 @@ function applyEnsnare() {
 
     if (inRangeEnemies.length === 0) return;
 
-    // Entangle only the nearest single enemy
     let nearest = null;
     let minDist = Infinity;
     inRangeEnemies.forEach(e => {
-        // Skip already frozen enemies — wisp freeze has priority
-        if (e.frozen) return;
+        // Skip if already frozen (wisp) **or** currently ensnared
+        if (e.frozen || e.ensnared) return;
 
-        // NEW: Jesters are immune to Ensnare (trickster flavor)
+        // Jesters immune
         if (e.type.name === 'Jester') return;
+
+        // NEW: Prevent spamming – only apply if not on recent ensnare cooldown
+        if (e.ensnareCooldown > 0) return;
 
         const dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
         if (dist < minDist) {
@@ -9719,11 +9754,11 @@ function applyEnsnare() {
     });
 
     if (nearest) {
-        nearest.frozen = true;
-        nearest.frozenTurns = 2;
-        nearest.frozenByEnsnare = true; // mark as frozen by Ensnare
-       
-        // Spawn 3-frame entangle animation overlay
+        nearest.ensnared = true;
+        nearest.ensnareTurns = 2;          // how long it lasts
+        nearest.ensnareCooldown = 2;       // prevents re-apply for 2 turns after it ends
+
+        // Entangle animation (vines/roots) – unchanged
         entangleAnimations.push({
             x: nearest.x,
             y: nearest.y,
@@ -9732,10 +9767,9 @@ function applyEnsnare() {
             enemyRef: nearest
         });
 
-        // Throttled message — once every 1 second
         const now = performance.now();
         if (now - lastMessageTime >= 1000) {
-            logBattleEvent(`Ensnare entangles ${nearest.type.name}!`);
+            logBattleEvent(`Ensnare entangles ${nearest.type.name}! (2 turns)`);
             lastMessageTime = now;
         }
 
@@ -9770,7 +9804,7 @@ function applyWispAttack(wisp, primaryTarget) {
                     case 'fire':
                         verb = 'scorches';
                         effect = '[FIRE BOLT]';
-                        attackSound = sounds.lava; // lava sizzle for fire
+                        attackSound = sounds.lava;
                         break;
                     case 'chain':
                         verb = 'zaps';
@@ -9820,10 +9854,10 @@ function applyWispAttack(wisp, primaryTarget) {
                 if (enemy.type.name === 'Cursed Trader' || enemy.type.name === 'Jester') {
                     affected = true;
                 } else {
-                    if (!enemy.frozenByEnsnare) {
+                    // Only freeze if not already frozen (from any source)
+                    if (!enemy.frozen) {
                         enemy.frozen = true;
-                        enemy.frozenTurns = 2;
-                        delete enemy.frozenByEnsnare;
+                        enemy.frozenTurns = 2; // lasts exactly 2 enemy turns
                         novaTriggered = true;
                     }
                     affected = true;
@@ -9899,7 +9933,7 @@ if (quakeDmg > 0) {
             }
         }
 
-        if (affected) {
+if (affected) {
             hitEnemies.add(enemy);
             enemy.wispHitFlash = { time: now, type: wisp.type.name };
         }
@@ -11165,22 +11199,6 @@ if (enemy.type.name === 'Cursed Trader') {
                     logBattleEvent(`Floor ${floor} - ${hit.type.name} hit for ${damage} DMG`);
                 }
                 playWebAudioSound(sounds.hit);
-
-// Damage Red Maze eye if adjacent during melee attack
-if (redMazeActive && redMaze && Math.abs(redMaze.x - p.x) + Math.abs(redMaze.y - p.y) <= 1) {
-    const eyeDmg = p.atk; // Same as normal attack damage
-    redMaze.hp -= eyeDmg;
-    logBattleEvent(`Red Maze eye hit! ${eyeDmg} DMG (HP: ${redMaze.hp}/100)`);
-    playShrimpRageGrowl(); // rage growl on hit
-
-    // Orange flash on eye
-    highlightTiles.push({
-        x: redMaze.x,
-        y: redMaze.y,
-        highlightStart: performance.now(),
-        color: 'rgba(247, 147, 26, 0.7)' // Bitcoin orange
-    });
-}
         
         // Wisp sync attack: Assist player's target
         if (wisps.length > 0) {
@@ -11534,18 +11552,39 @@ else if (p.hp >= 24 && !p.hasDiamondHand && projectiles.length === 0 && !usePick
     }
 }
 
-// Standalone melee damage to Red Maze eye (runs on every attack swing)
+// Red Maze eye melee hit (cardinal + diagonal adjacent)
 if (redMazeActive && redMaze) {
     const dx = Math.abs(redMaze.x - p.x);
     const dy = Math.abs(redMaze.y - p.y);
-    // Adjacent: cardinal or diagonal
+
+    // Adjacent: cardinal OR diagonal
     if (dx + dy === 1 || (dx === 1 && dy === 1)) {
-        const eyeDmg = p.atk; // Full melee damage
-        redMaze.hp -= eyeDmg;
-        logBattleEvent(`Floor ${floor} - Red Maze eye hit! ${eyeDmg} DMG (HP: ${redMaze.hp}/100)`);
+        let damageDealt = 0;
+        let message = '';
+
+        if (p.hasDiamondHand && !(p.pickaxes > 0 && usePickaxeSword)) {
+            // Diamond Hand: base 2 + unlimited elemental bonus
+            const baseDmg = 2;
+            const elemDmg = elementalBonus || 0;
+            damageDealt = baseDmg + elemDmg;
+
+            if (elemDmg > 0) {
+                message = `Red Maze eye takes ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage (${damageDealt.toFixed(1)} total)!`;
+            } else {
+                message = `Red Maze eye takes ${baseDmg} damage!`;
+            }
+        } else {
+            // Regular sword
+            damageDealt = p.atk;
+            message = `Red Maze eye takes ${damageDealt} damage!`;
+        }
+
+        redMaze.hp -= damageDealt;
         playShrimpRageGrowl(); // rage growl on hit
 
-        // Bitcoin orange flash on the eye
+        logBattleEvent(`Floor ${floor} - ${message} (HP: ${redMaze.hp}/100)`);
+
+        // Bitcoin orange flash on eye
         highlightTiles.push({
             x: redMaze.x,
             y: redMaze.y,
@@ -11557,11 +11596,31 @@ if (redMazeActive && redMaze) {
 
 // Sandworm melee hit (sword types only — no wisp)
 if (sx === sandworm?.x && sy === sandworm?.y) {
-    sandworm.hp -= p.atk; // or higher damage if you want
-    playShrimpRageGrowl();
-    logBattleEvent(`Sandworm takes ${p.atk} damage! (${sandworm.hp} HP left)`);
+    let damageDealt = 0;
+    let message = '';
 
-// Red flash on hit
+    if (p.hasDiamondHand && !(p.pickaxes > 0 && usePickaxeSword)) {
+        // Diamond Hand: base 2 + unlimited elemental bonus
+        const baseDmg = 2;
+        const elemDmg = elementalBonus || 0; // fallback to 0 if undefined
+        damageDealt = baseDmg + elemDmg;
+
+        if (elemDmg > 0) {
+            message = `Sandworm takes ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage (${damageDealt.toFixed(1)} total)!`;
+        } else {
+            message = `Sandworm takes ${baseDmg} damage!`;
+        }
+    } else {
+        // Regular sword
+        damageDealt = p.atk;
+        message = `Sandworm takes ${damageDealt} damage!`;
+    }
+
+    sandworm.hp -= damageDealt;
+    playShrimpRageGrowl();
+    logBattleEvent(`Floor ${floor} - ${message} (${sandworm.hp} HP left)`);
+
+    // Orange flash on hit
     highlightTiles.push({
         x: sandworm.x,
         y: sandworm.y,
@@ -11570,35 +11629,34 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
     });
 
     if (sandworm.hp <= 0) {
-        // Rewards
-    const maxHP = 36 + (p.hasArmor ? 12 : 0);
-    if (p.hp < maxHP) {
-        const oldHP = p.hp;
+        // Unified sandworm death rewards (consistent across all attack types)
+        const maxHP = 36 + (p.hasArmor ? 12 : 0) + (p.hasDiamondArmor ? 952 : 0);
         p.hp = maxHP;
-        logBattleEvent(`Sandworm vanish! HP restored to ${p.hp}`);
-        playDisappearSound()
-    }
         p.soulStormCharges = 256;
 
-        // Drop diamond
+        // Diamond drop
+        let placed = false;
         if (map[sandworm.y][sandworm.x] === 0) {
-            map[sandworm.y][sandworm.x] = 10; // diamond tile
+            map[sandworm.y][sandworm.x] = 10;
+            placed = true;
         } else {
-            // Try adjacent if center occupied
             const dirs = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
             for (let d of dirs) {
-                const nx = sandworm.x + d.dx, ny = sandworm.y + d.dy;
+                const nx = sandworm.x + d.dx;
+                const ny = sandworm.y + d.dy;
                 if (nx >= 0 && nx < W && ny >= 0 && ny < H && map[ny][nx] === 0) {
                     map[ny][nx] = 10;
+                    placed = true;
                     break;
                 }
             }
         }
 
-        logBattleEvent(`Sandworm vanish! 256 soul charges + Diamond!`);
-        playDisappearSound()
+        logBattleEvent(`Floor ${floor} - Sandworm defeated! Full HP restored + 256 soul charges${placed ? ' + Diamond!' : ''}`);
+        playWebAudioSound(sounds.secret); // or your disappear sound if separate
         sandworm = null;
     }
+
     needsRedraw = true;
 }
     
@@ -13741,6 +13799,8 @@ desertStreakHasSandworm = false;
     p.y = 2;
     p.atk = 2;
 enemies = [];
+p.ensnared = false;
+
     wisps = []; // Clear wisp on restart
     deadWispCorpse = null; // Clear corpse too
 enemyBgFrameTimes.clear(); // Clear bg animation tracking
