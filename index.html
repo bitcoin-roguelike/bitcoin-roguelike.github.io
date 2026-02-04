@@ -9857,7 +9857,7 @@ function applyWispAttack(wisp, primaryTarget) {
                     // Only freeze if not already frozen (from any source)
                     if (!enemy.frozen) {
                         enemy.frozen = true;
-                        enemy.frozenTurns = 2; // lasts exactly 2 enemy turns
+                        enemy.frozenTurns = 10; // lasts exactly 10 enemy turns
                         novaTriggered = true;
                     }
                     affected = true;
