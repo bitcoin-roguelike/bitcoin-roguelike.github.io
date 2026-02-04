@@ -9429,7 +9429,7 @@ if (target) {
     if (target.hp <= 0) {
         if (target.isSpecial === 'sandworm') {
             // Sandworm death rewards – consistent message regardless of attack type
-            const maxHP = 36 + (p.hasArmor ? 12 : 0) + (p.hasDiamondArmor ? 952 : 0);
+            const maxHP = p.hp + 36;
             p.hp = maxHP;
             p.soulStormCharges = 256;
 
