@@ -4485,15 +4485,15 @@ if (!window.currentSideQuest || (window.currentSideQuest && window.currentSideQu
 
 // ——— THEME BLOCK CONSISTENCY ———
 if (floor % 3 === 0 && floor > 1) {
-const newTheme = selectNewTheme(currentTheme);
+//const newTheme = selectNewTheme(currentTheme);
 
 // DEBUG THEME
-//let newTheme;
-//if (floor === 3) {
-//    newTheme = 'desert'; // DEBUG: Force X theme on floor 3
-//} else {
-//    newTheme = selectNewTheme(currentTheme);
-//}
+let newTheme;
+if (floor === 3) {
+    newTheme = 'hell'; // DEBUG: Force X theme on floor 3
+} else {
+    newTheme = selectNewTheme(currentTheme);
+}
 
     if (newTheme === 'hell') {
         // First time entering a new hell block?
@@ -5404,7 +5404,7 @@ if (p.hp <= 48 && p.hasDiamondArmor) {  // Tie to <= 48 HP
         } else if (!p.hasDiamondHand) {
             p.hasDiamondHand = true;
             p.perfectlyCutDiamonds--;
-            p.atk = 2; // Nerfed attack power for diamond hand
+            p.atk = 1; // Nerfed
             logBattleEvent(`Floor ${floor} - Diamond Hand acquired from Blacksmith!`);
         }
     }
@@ -7773,7 +7773,7 @@ if (onPassiveSign && !passiveTreeActive) {
     const input = document.getElementById('passive-input');
 
     // Block movement + grace period
-    inputBlocked = true;
+    //inputBlocked = true;
     passiveGracePeriod = true;
     splashScreen.style.pointerEvents = 'none';
 
@@ -7977,16 +7977,46 @@ function processPassiveCommand(command) {
     // Spend gems
     p.gems[gem] -= count;
     
-    if (type === 'atk') {
-        // Elemental attack — NO CAP (only useful with Diamond Hand)
-        switch (gem) {
-            case 'ruby':     p.gemAtk.fire      += 0.1 * count; break;
-            case 'sapphire': p.gemAtk.cold      += 0.1 * count; break;
-            case 'emerald':  p.gemAtk.earth     += 0.1 * count; break;
-            case 'citrine':  p.gemAtk.lightning += 0.1 * count; break;
-        }
-        addPassiveLineToContent(`Traded ${count} ${gem}(s) for +${(0.1 * count).toFixed(1)} elemental attack!`);
-    } else {
+if (type === 'atk') {
+    // Elemental attack — CAPPED at +1.0 per element
+    let added = 0.1 * count;
+    switch (gem) {
+        case 'ruby': // Fire atk (cap +1.0 total)
+            const newFire = p.gemAtk.fire + added;
+            p.gemAtk.fire = Math.min(newFire, 1.0);
+            added = p.gemAtk.fire - (newFire - added); // actual added after cap
+            addPassiveLineToContent(`Traded ${count} ruby(s) for +${added.toFixed(1)} fire attack!`);
+            break;
+        case 'sapphire': // Cold atk (cap +1.0)
+            const newCold = p.gemAtk.cold + added;
+            p.gemAtk.cold = Math.min(newCold, 1.0);
+            added = p.gemAtk.cold - (newCold - added);
+            addPassiveLineToContent(`Traded ${count} sapphire(s) for +${added.toFixed(1)} cold attack!`);
+            break;
+        case 'emerald': // Earth atk (cap +1.0)
+            const newEarth = p.gemAtk.earth + added;
+            p.gemAtk.earth = Math.min(newEarth, 1.0);
+            added = p.gemAtk.earth - (newEarth - added);
+            addPassiveLineToContent(`Traded ${count} emerald(s) for +${added.toFixed(1)} earth attack!`);
+            break;
+        case 'citrine': // Lightning atk (cap +1.0)
+            const newLightning = p.gemAtk.lightning + added;
+            p.gemAtk.lightning = Math.min(newLightning, 1.0);
+            added = p.gemAtk.lightning - (newLightning - added);
+            addPassiveLineToContent(`Traded ${count} citrine(s) for +${added.toFixed(1)} lightning attack!`);
+            break;
+    }
+
+    // Show capped message + notes (same style as defense)
+    if (added < 0.1 * count) {
+        addPassiveLineToContent(`${gem} broke, elemental atk is maxed out!`);
+        addPassiveLineToContent(`Notes:`);
+        addPassiveLineToContent(`Max fire attack bonus is +1.0`);
+        addPassiveLineToContent(`Max cold attack bonus is +1.0`);
+        addPassiveLineToContent(`Max earth attack bonus is +1.0`);
+        addPassiveLineToContent(`Max lightning attack bonus is +1.0`);
+    }
+} else {
         // Defense — WITH CAPS per enemy type
         let added = 0.1 * count;
         switch (gem) {
@@ -10114,6 +10144,17 @@ else if (hit.type.name === 'Whale') xp = 15;
 else if (hit.type.name === 'Cursed Trader') xp = 10;
 else if (hit.type.name === 'Jester') xp = 2;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+                    // Jester death → trigger Bitcoin-orange vaporisation splat
+                    if (hit.type.name === 'Jester' || hit.uniqueName === 'Jester') {
+                        shrimpBloodDrips.push({
+                            x: hit.x,
+                            y: hit.y,
+                            startTime: performance.now()
+                        });
+                        playWebAudioSound(sounds.quicksand);
+                    }
+
 playerXP += xp;
 //if (xp > 0) logBattleEvent(`+${xp} XP`);
 checkLevelUp();
@@ -10930,7 +10971,7 @@ if (hit) {
         }
 
         // Apply damage to all valid tiles in the area
-        const damage = 2; // Nerfed to match base sword – no more +1 advantage
+        const damage = 1; // Nerfed
         let enemiesHit = 0;
         let totalDamage = damage + elementalBonus; // Unlimited elemental bonus
 
@@ -11218,6 +11259,17 @@ else if (hit.type.name === 'Whale') xp = 15;
 else if (hit.type.name === 'Cursed Trader') xp = 10;
 else if (hit.type.name === 'Jester') xp = 2;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
+
+                    // Jester death → trigger Bitcoin-orange vaporisation splat
+                    if (hit.type.name === 'Jester' || hit.uniqueName === 'Jester') {
+                        shrimpBloodDrips.push({
+                            x: hit.x,
+                            y: hit.y,
+                            startTime: performance.now()
+                        });
+                        playWebAudioSound(sounds.quicksand);
+                    }
+
 playerXP += xp;
 //if (xp > 0) logBattleEvent(`+${xp} XP`);
 checkLevelUp();
@@ -13626,6 +13678,14 @@ function restart() {
         document.removeEventListener('keydown', splashScreen._keyClose);
         if (splashScreen._keyClose) delete splashScreen._keyClose;
     }
+
+    // Switch back to splash.png when starting
+    if (currentSplashImage !== 'splash.png') {
+        currentSplashImage = 'splash.png';
+        splashCanvas.clearRect(0, 0, 320, 320);
+        splashImg.src = currentSplashImage;
+        splashCanvas.drawImage(splashImg, 0, 0, 320, 320);
+    }
     
     // Force reflow + paint cycle to ensure hide happens now
     document.body.offsetHeight;
@@ -13668,9 +13728,7 @@ passiveGracePeriod = false;
 
 puzzleTotalHearts = 0;
 puzzleCollectedHearts = 0;
-
-    fireplaceNoiseSource = null;
-    fireplaceAmbienceTimer = null;
+    
     lfo = null;               // ember‑flicker LFO
     popTimeout = null;        // handle for the next pop burst
     // Hide and clear skill tree overlay
@@ -13726,6 +13784,23 @@ if (rainNoiseSource) {
     rainNoiseSource.stop();
     rainNoiseSource = null;
 }
+
+if (fireplaceNoiseSource) {
+        fireplaceNoiseSource.stop();
+        fireplaceNoiseSource.disconnect();
+        fireplaceNoiseSource = null;
+    }
+    if (lfo) {
+        lfo.stop();
+        lfo.disconnect();
+        lfo = null;
+    }
+    if (popTimeout) {
+        clearTimeout(popTimeout);
+        popTimeout = null;
+    }
+    fireplaceAmbienceTimer = null;
+
 // Restore a random immunity on restart
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
 p.elementImmunity = elements[Math.floor(Math.random() * elements.length)];
@@ -16562,11 +16637,14 @@ if (buttons[1].pressed && !lastButtonsState[1]) {
         lastStartPressTime = nowTime; // Reuse lastStartPressTime for debouncing
     }
 
-// Start Button (3) - startGame, restart, or exit soul terminal
+// Start Button (3) - startGame, restart, exit soul terminal, or exit passive tree
 if (buttons[3].pressed && !lastButtonsState[3] && nowTime - lastStartPressTime > DEBOUNCE_MS) {
     if (p.inSoulTerminal && p.soulTerminalActive) {
         // Exit soul terminal
         closeSoulTerminal();
+    } else if (passiveTreeActive) {
+        // Exit passive tree monitor
+        closePassiveTerminal();
     } else if (splashActive) {
         startGame();
     } else if (gameOver) {
