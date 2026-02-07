@@ -13673,6 +13673,15 @@ function restart() {
         splashScreen.style.zIndex = '';
         splashScreen.onclick = null;
         splashScreen.ontouchend = null;
+
+        // 2. Clear any <img> inside splash-screen (prevents old passive tree image lingering)
+        const img = splashScreen.querySelector('img') || document.getElementById('splash-img');
+        if (img) {
+            img.src = '';                    // blank source → cancels any pending load
+            img.removeAttribute('src');      // extra safety
+            img.onload = null;               // kill handlers
+            img.onerror = null;
+        }
         
         // Remove any lingering key listener
         document.removeEventListener('keydown', splashScreen._keyClose);
@@ -13690,6 +13699,9 @@ function restart() {
     // Force reflow + paint cycle to ensure hide happens now
     document.body.offsetHeight;
     void document.body.offsetWidth; // double reflow for stubborn browsers
+
+    splashScreen.style.display = 'block';  // Re-show the splash container
+    splashScreen.style.zIndex = '50';      // Bring it back to front
     
     infoSignActive = false;
     infoGracePeriod = false;
@@ -13698,6 +13710,25 @@ function restart() {
     splashActive = true;
     currentSplashImage = 'splash.png';
 
+    // Reset passive tree / other splash-related flags
+    passiveTreeActive = false;
+    passiveGracePeriod = false;
+    
+    infoSignActive = false;
+    bountyBoardActive = false;
+    infoGracePeriod = false;
+    
+    // Reset skill tree system    
+    playerXP = 0;
+    playerLevel = 1;
+    playerClass = null;
+    pendingSkillTreeLevel = null;
+    skillTreeActive = false;
+    skillTreeSelectedOption = 0;
+
+    window.currentSideQuest = null;
+    window.lastSideQuestType = null;
+    
     /* ------------------------------------------------------------------
        1. Clean up old listeners/timers
        ------------------------------------------------------------------ */
@@ -13707,27 +13738,10 @@ function restart() {
     // Reset fetch flag
     isFetchingTxs = false;
 
-    // Reset skill tree system
-    playerXP = 0;
-    playerLevel = 1;
-    playerClass = null;
-    pendingSkillTreeLevel = null;
-    skillTreeActive = false;
-    skillTreeSelectedOption = 0;
-
-window.currentSideQuest = null;
-window.lastSideQuestType = null;
-
-    infoSignActive = false;
-    bountyBoardActive = false;
-    infoGracePeriod = false;
     tileVariantMap = [];
 
-passiveTreeActive = false;
-passiveGracePeriod = false;
-
-puzzleTotalHearts = 0;
-puzzleCollectedHearts = 0;
+    puzzleTotalHearts = 0;
+    puzzleCollectedHearts = 0;
     
     lfo = null;               // ember‑flicker LFO
     popTimeout = null;        // handle for the next pop burst
