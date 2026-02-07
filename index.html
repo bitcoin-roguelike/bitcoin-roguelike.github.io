@@ -1601,7 +1601,7 @@ document.querySelectorAll('#actions button').forEach(button => {
 const c = canvas.getContext('2d');
 const W = 20, H = 20, S = 16;
 let currentTheme = 'dungeon'; // Default theme
-const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins'];
+const themes = ['dungeon', 'desert', 'paradise', 'hell', 'ruins', 'palace'];
 let initialWaveSpawned = false; // Track if initial wave has spawned
 
 function selectNewTheme(current) {
@@ -1703,6 +1703,8 @@ const GEM_TILES = {
     emerald:  39,
     citrine:  40
 };
+
+let lastVariantTheme = null;
 
 let map = [],
 p = {
@@ -2157,6 +2159,21 @@ Object.values(assets).forEach(asset => {
         assets.themes.ruins.floor.src = 'ring_floor.png';
         assets.themes.ruins.wall.src = 'ring_wall.png';
         assets.themes.ruins.special.src = 'ring_hole.png';
+
+assets.themes.palace = {
+    floor: new Image(),     // palace_floor.png (odd rows)
+    floor2: new Image(),    // palace_floor2.png (even rows)
+    wall: new Image()       // palace_wall.png (all walls)
+};
+
+assets.themes.palace.floor.src = 'palace_floor.png';
+assets.themes.palace.floor2.src = 'palace_floor2.png';
+assets.themes.palace.wall.src = 'palace_wall.png';
+
+// Optional error handling
+Object.values(assets.themes.palace).forEach(img => {
+    img.onerror = () => console.error(`Failed to load palace asset: ${img.src}`);
+});
         
 // Random tile variants for desert, paradise, hell, ruins (normal only)
 assets.themes.desert.floors = [
@@ -2692,6 +2709,7 @@ const sounds = {
     paradise: new Audio('paradise.mp3'),
     ruins: new Audio('ruins.mp3'),
     hideout: new Audio('hideout.mp3'),
+    palace: new Audio('palace.mp3'),
     gameover: new Audio('gameover.wav'),
     stairs: new Audio('stairs.wav'),
     secret: new Audio('secret.wav'),
@@ -2742,7 +2760,8 @@ class MusicManager {
       hell: sounds.hell,
       paradise: sounds.paradise,
       ruins: sounds.ruins,
-      hideout: sounds.hideout
+      hideout: sounds.hideout,
+      palace: sounds.palace
     };
     this.current = null;
     this.muted = false;
@@ -2811,7 +2830,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS: Only create Audio objects (no play – prevents suspension)
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (['dungeon','desert','hell','paradise','ruins','hideout'].includes(key)) return;
+            if (['dungeon','desert','hell','paradise','ruins','hideout', 'palace'].includes(key)) return;
             if (sound instanceof Audio && sound.src) {
                 const temp = new Audio(sound.src);
                 temp.volume = 0;
@@ -2820,7 +2839,7 @@ function preloadSounds() {
     } else {
         // Non-iOS: Safe preload with play/pause at 0 volume
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (['dungeon','desert','hell','paradise','ruins','hideout'].includes(key)) return;
+            if (['dungeon','desert','hell','paradise','ruins','hideout', 'palace'].includes(key)) return;
             if (sound instanceof Audio && sound.src) {
                 sound.volume = 0;
                 sound.play().then(() => {
@@ -2853,7 +2872,7 @@ function preloadSounds() {
     if (isIOSorSafari()) {
         // iOS/Safari: Preload by setting src without playing
         Object.entries(sounds).forEach(([key, sound]) => {
-            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz' || key === 'unique_monster') return; // Skip music and Web Audio sounds
+            if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'palace' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz' || key === 'unique_monster') return; // Skip music and Web Audio sounds
             if (Array.isArray(sound)) {
                 sound.forEach((instance, idx) => {
                     // Create a new Audio object to trigger caching
@@ -2869,7 +2888,7 @@ function preloadSounds() {
 } else {
     // Non-iOS: Existing preload logic
     Object.entries(sounds).forEach(([key, sound]) => {
-        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz' || key === 'unique_monster') return; // Skip music and Web Audio sounds
+        if (key === 'dungeon' || key === 'desert' || key === 'hell' || key === 'paradise' || key === 'ruins' || key === 'hideout' || key === 'palace' || key === 'hit' || key === 'pickup' || key === 'heads' || key === 'tails' || key === 'lava' || key === 'quicksand' || key === 'pond' || key === 'rune' || key === 'rune_drop' || key === 'hole' || key === 'town_portal' || key === 'buzz' || key === 'unique_monster') return; // Skip music and Web Audio sounds
         if (Array.isArray(sound)) {
             sound.forEach((instance, idx) => {
                 if (instance instanceof Audio && instance.src) {
@@ -4490,7 +4509,7 @@ const newTheme = selectNewTheme(currentTheme);
 // DEBUG THEME
 //let newTheme;
 //if (floor === 3) {
-//    newTheme = 'hell'; // DEBUG: Force X theme on floor 3
+//    newTheme = 'palace'; // DEBUG: Force X theme on floor 3
 //} else {
 //    newTheme = selectNewTheme(currentTheme);
 //}
@@ -4679,28 +4698,65 @@ sandwormBurrowPaused = false; // resume burrow on normal floors
             for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) map[y][x2] = 0;
         }
 
-        // Ensure map is valid
-        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
+// Ensure map is valid
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
 
-            // Pre-randomize tile variants once per floor (prevents per-frame dizziness)
-            tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1)); // -1 = no variant (use single tile)
+// Pre-randomize tile variants once per floor (prevents per-frame dizziness)
+tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1)); // -1 = no variant (use single tile)
 
-if (['desert', 'paradise', 'hell', 'ruins'].includes(currentTheme) && !(currentTheme === 'hell' && snowyHellActive)) {
-    for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-            if (map[y][x] === 0) { // floor tile – full random variant
-                tileVariantMap[y][x] = Math.floor(Math.random() * assets.themes[currentTheme].floors.length);
-            } else if (map[y][x] === 1) { // wall tile
-                if (currentTheme === 'hell') {
-                    // Hell normal walls: pre-compute phase offset 0-3 for desynced animation
-                    tileVariantMap[y][x] = Math.floor(Math.random() * 4); // 0-3 only
-                } else {
-                    // Other themes: full random variant
-                    tileVariantMap[y][x] = Math.floor(Math.random() * assets.themes[currentTheme].walls.length);
+if (currentTheme !== lastVariantTheme) {
+    tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1));
+
+    if (['desert', 'paradise', 'hell', 'ruins', 'palace'].includes(currentTheme) && !(currentTheme === 'hell' && snowyHellActive)) {
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                if (map[y][x] === 0) { // floor tile
+                    if (currentTheme === 'palace') {
+                        tileVariantMap[y][x] = y % 2; // deterministic row alternation
+                    } else {
+                        tileVariantMap[y][x] = Math.floor(Math.random() * assets.themes[currentTheme].floors.length);
+                    }
+                } else if (map[y][x] === 1) { // wall tile
+                    if (currentTheme === 'palace') {
+                        tileVariantMap[y][x] = 0; // single static wall
+                    } else if (currentTheme === 'hell') {
+                        tileVariantMap[y][x] = Math.floor(Math.random() * 4);
+                    } else {
+                        tileVariantMap[y][x] = Math.floor(Math.random() * assets.themes[currentTheme].walls.length);
+                    }
                 }
             }
         }
+
+        // === PALACE: Spawn 1 jester shrine per room (only in palace) ===
+        if (currentTheme === 'palace') {
+            let shrinesPlaced = 0;
+            rooms.forEach(room => {
+                let placed = false;
+                let attempts = 100;
+
+                while (!placed && attempts > 0) {
+                    const rx = room.x + Math.floor(Math.random() * room.w);
+                    const ry = room.y + Math.floor(Math.random() * room.h);
+
+                    if (map[ry][rx] === 0 && // empty floor
+                        !(rx === p.x && ry === p.y) && // not on player
+                        !enemies.some(e => e.x === rx && e.y === ry)) { // not on enemy
+                        map[ry][rx] = 35; // jester shrine tile ID
+                        placed = true;
+                        shrinesPlaced++;
+                    }
+                    attempts--;
+                }
+            });
+
+            if (shrinesPlaced > 0) {
+                logBattleEvent(`Floor ${floor} - The palace contains ${shrinesPlaced} sacred jester shrine${shrinesPlaced > 1 ? 's' : ''}...`);
+            }
+        }
     }
+
+    lastVariantTheme = currentTheme; // remember for next floor
 }
 
             // Cozy fireplace ambience for regular hell
@@ -4929,21 +4985,6 @@ if (!inHideout && (floor === 1 || Math.random() < 0.20)) {
         attempts++;
     } while (attempts < maxAttempts);
 }
-
-        // Jester Shrine spawn (20% chance, not in hideout/puzzle)
-        if (!inHideout && !inPuzzleRoom && Math.random() < 0.20) {
-            let attempts = 50;
-            while (attempts--) {
-                const x = Math.floor(Math.random() * W);
-                const y = Math.floor(Math.random() * H);
-                if (map[y][x] === 0 && 
-                    Math.abs(x - p.x) + Math.abs(y - p.y) > 5 && // far from player
-                    !enemies.some(e => e.x === x && e.y === y)) {
-                    map[y][x] = 35; // Jester shrine tile ID
-                    break;
-                }
-            }
-        }
 
 // Cool ROI drop – 2.5% chance on any normal floor (not hideout or puzzle)
 // Also called "Mask of ROI"
@@ -13785,6 +13826,8 @@ p.passiveTerminalActive = false;
 p.passiveTerminalCommand = '';
 p.passiveTerminalCursorPos = 0;
 
+let lastVariantTheme = null;
+
     // === RUINS RAIN SYSTEM RESET ===
     ruinsRainActive = false;
     ruinsRainAngle = 0;
@@ -13814,6 +13857,11 @@ if (fireplaceNoiseSource) {
         popTimeout = null;
     }
     fireplaceAmbienceTimer = null;
+
+if (window.palaceSoundInterval) {
+    clearInterval(window.palaceSoundInterval);
+    window.palaceSoundInterval = null;
+}
 
 // Restore a random immunity on restart
 const elements = ['Fire', 'Lightning', 'Cold', 'Poison'];
@@ -14269,9 +14317,14 @@ if (rainNoiseSource) {
 
     const radius = 4;
 // ───── WALLS ONLY (with Snowy Hell tint) ─────
-for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
         if (map[y][x] === 1) { // walls only
-            if (currentTheme === 'hell' && !snowyHellActive) {
+            if (currentTheme === 'palace') {
+                // Palace theme: single static wall asset
+                c.drawImage(assets.themes.palace.wall, x * S, y * S, S, S);
+            }
+            else if (currentTheme === 'hell' && !snowyHellActive) {
                 // Per-tile random cycle speed 600–2400ms (position-seeded for determinism + variety)
                 const seed = (x * 31 + y * 37) & 0xFFFF; // simple hash for good spread
                 const speed = 600 + (seed % 1801); // 600 to 2400ms range
@@ -14296,7 +14349,7 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
                 }
             }
 
-            // Red Maze tint (unchanged)
+            // Red Maze tint (unchanged – only applies to dungeon theme)
             if (redMazeActive && currentTheme === 'dungeon') {
                 c.save();
                 c.globalCompositeOperation = 'source-atop';
@@ -14305,6 +14358,7 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
                 c.restore();
             }
         }
+    }
 }
 // Save floor state before entering hideout (moved here to run once per draw)
 if (!inHideout) {
@@ -14334,17 +14388,28 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
     const isVisible = fogMap[y][x] === 1 || dist <= radius || map[y][x] === 1;
     if (isVisible && map[y][x] !== 1) {
-
-        // Pre-randomized variant floor (stable per floor – no dizziness)
-        const variant = tileVariantMap[y][x];
-        if (variant >= 0 && assets.themes[currentTheme]?.floors) {
-            const floors = assets.themes[currentTheme].floors;
-            c.drawImage(floors[variant], x * S, y * S, S, S);
-        } else if (currentTheme === 'hell' && snowyHellActive) {
-            c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
-        } else {
-            c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
-        }
+        // Palace theme: alternate floor by row (odd/even)
+        if (currentTheme === 'palace') {
+            if (y % 2 === 0) {
+                // Odd rows (0, 2, 4...) → palace_floor.png
+                c.drawImage(assets.themes.palace.floor, x * S, y * S, S, S);
+            } else {
+                // Even rows (1, 3, 5...) → palace_floor2.png
+                c.drawImage(assets.themes.palace.floor2, x * S, y * S, S, S);
+            }
+        } 
+        // Existing themed floors (including randomized variants)
+        else {
+            const variant = tileVariantMap[y][x];
+            if (variant >= 0 && assets.themes[currentTheme]?.floors) {
+                const floors = assets.themes[currentTheme].floors;
+                c.drawImage(floors[variant], x * S, y * S, S, S);
+            } else if (currentTheme === 'hell' && snowyHellActive) {
+                c.drawImage(assets.themes.hell.snowy_floor, x * S, y * S, S, S);
+            } else {
+                c.drawImage(assets.themes[currentTheme].floor, x * S, y * S, S, S);
+            }
+            }
 
         if (redMazeActive && redMaze && redMaze.x === x && redMaze.y === y) {
 const now = performance.now();
@@ -14442,7 +14507,11 @@ c.drawImage(
         if (map[y][x] === 3) c.drawImage(assets.bitcoin, x * S, y * S, S, S);
         if (map[y][x] === 4) c.drawImage(assets.pickaxe, x * S, y * S, S, S);
         if (map[y][x] === 5) c.drawImage(assets.armor, x * S, y * S, S, S);
-        if (map[y][x] === 6 && currentTheme !== 'dungeon') c.drawImage(assets.themes[currentTheme].special, x * S, y * S, S, S);
+        
+        if (map[y][x] === 6 && currentTheme !== 'dungeon' && currentTheme !== 'palace') {
+            c.drawImage(assets.themes[currentTheme].special, x * S, y * S, S, S);
+        }
+        
         if (map[y][x] === 7) c.drawImage(assets.gnome, x * S, y * S, S, S);
         if (map[y][x] === 8) c.drawImage(assets.runes.on_floor, x * S, y * S, S, S);
         if (map[y][x] === 9) {
@@ -14539,6 +14608,8 @@ if (map[y][x] === 25) { // Puzzle portal tile
         }
         // New tile ID for passive sign
         if (map[y][x] === 36) c.drawImage(assets.passive_sign, x * S, y * S, S, S);
+        
+        
 
 if (map[y][x] === GEM_TILES.ruby) {
     c.drawImage(assets.ruby, x * S, y * S, S, S);
