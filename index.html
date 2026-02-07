@@ -4485,15 +4485,15 @@ if (!window.currentSideQuest || (window.currentSideQuest && window.currentSideQu
 
 // ——— THEME BLOCK CONSISTENCY ———
 if (floor % 3 === 0 && floor > 1) {
-//const newTheme = selectNewTheme(currentTheme);
+const newTheme = selectNewTheme(currentTheme);
 
 // DEBUG THEME
-let newTheme;
-if (floor === 3) {
-    newTheme = 'hell'; // DEBUG: Force X theme on floor 3
-} else {
-    newTheme = selectNewTheme(currentTheme);
-}
+//let newTheme;
+//if (floor === 3) {
+//    newTheme = 'hell'; // DEBUG: Force X theme on floor 3
+//} else {
+//    newTheme = selectNewTheme(currentTheme);
+//}
 
     if (newTheme === 'hell') {
         // First time entering a new hell block?
