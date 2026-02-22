@@ -1705,6 +1705,11 @@ const GEM_TILES = {
 };
 
 let lastVariantTheme = null;
+let jesterBoss = null; // {x, y, hp, spawnTime}
+let jesterBossLastSpawn = 0;
+let jesterKingNoRoomLoggedThisFloor = false;
+let jesterBossSpawnedThisFloor = false; // prevents re-spawn after death
+let jesterKingSpawnIsBlocked = false;
 
 let map = [],
 p = {
@@ -2174,6 +2179,13 @@ assets.themes.palace.wall.src = 'palace_wall.png';
 Object.values(assets.themes.palace).forEach(img => {
     img.onerror = () => console.error(`Failed to load palace asset: ${img.src}`);
 });
+
+// Palace boss
+assets.jesterBoss = new Image();
+assets.jesterBoss.src = 'jester_boss.png';
+
+// Error handling
+assets.jesterBoss.onerror = () => console.error('Failed to load jester_boss.png');
         
 // Random tile variants for desert, paradise, hell, ruins (normal only)
 assets.themes.desert.floors = [
@@ -3259,6 +3271,137 @@ const now = audioContext.currentTime;
   gain.gain.exponentialRampToValueAtTime(0.001, t);
   osc.connect(filter).connect(gain).connect(audioContext.destination);
   osc.start(now); osc.stop(t + 0.3);
+}
+
+function checkJesterBossSpawn() {
+    if (currentTheme !== 'palace' || jesterBoss || jesterBossSpawnedThisFloor) return;
+
+    // If previously blocked due to no large room, only allow spawn if player cleared shrines + jesters this floor
+    if (jesterKingSpawnIsBlocked) {
+        let shrineCount = 0;
+        let jesterCount = 0;
+
+        // Count remaining shrine tiles (35)
+        for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+                if (map[y][x] === 35) shrineCount++;
+            }
+        }
+
+        // Count regular Jesters (exclude boss)
+        enemies.forEach(e => {
+            if (e.type.name === 'Jester' && !e.isBoss) jesterCount++;
+        });
+
+        if (shrineCount === 0 && jesterCount === 0) {
+            // Player satisfied the condition → allow a fresh spawn attempt
+            jesterKingSpawnIsBlocked = false;
+            // continue to normal spawn logic below
+        } else {
+            // Still not cleared → skip spawn attempt this floor
+            return;
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────────
+    // Normal spawn check (only reaches here if not blocked or just unblocked)
+    // ───────────────────────────────────────────────────────────────
+    let shrineCount = 0;
+    let jesterCount = 0;
+
+    // Count remaining shrine tiles (35)
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            if (map[y][x] === 35) shrineCount++;
+        }
+    }
+
+    // Count regular Jesters (exclude boss)
+    enemies.forEach(e => {
+        if (e.type.name === 'Jester' && !e.isBoss) jesterCount++;
+    });
+
+    // Early exit if far from spawn conditions
+    if (shrineCount > 1 || jesterCount > 1) return;
+
+    // Spawn boss if ZERO shrines AND ZERO regular Jesters left
+    if (shrineCount === 0 && jesterCount === 0) {
+        // Find a large enough room
+        let bossRoom = null;
+        for (const room of rooms) {
+            if (room.w >= 5 && room.h >= 5) {
+                bossRoom = room;
+                break;
+            }
+        }
+
+        if (bossRoom) {
+            const bossX = bossRoom.x + Math.floor(bossRoom.w / 2);
+            const bossY = bossRoom.y + Math.floor(bossRoom.h / 2) + 1;
+
+            jesterBoss = {
+                x: bossX,
+                y: bossY,
+                hp: 25,
+                spawnTime: performance.now(),
+                isBoss: true,
+                flashStart: 0
+            };
+
+            // Seal stairs
+            if (exit) {
+                map[exit.y][exit.x] = 0;
+                exit = null;
+                logBattleEvent(`The Jester King seals the stairs! Defeat him to escape.`);
+            }
+
+            logBattleEvent(`Floor ${floor} - The Jester King awakens in the palace!`);
+            sounds.gameover.currentTime = 0;
+            sounds.gameover.play().catch(() => {});
+
+            // Start minion spawn timer
+            jesterBossLastSpawn = performance.now();
+            if (!window.jesterBossMinionInterval) {
+                window.jesterBossMinionInterval = setInterval(() => {
+                    if (jesterBoss && currentTheme === 'palace' && !gameOver) {
+                        const dirs = [
+                            {dx:-2,dy:-2},{dx:-2,dy:2},{dx:2,dy:-2},{dx:2,dy:2},
+                            {dx:0,dy:-3},{dx:0,dy:3},{dx:-3,dy:0},{dx:3,dy:0}
+                        ];
+                        let spawned = false;
+                        for (const d of dirs) {
+                            const nx = p.x + d.dx;
+                            const ny = p.y + d.dy;
+                            if (nx >= 0 && nx < W && ny >= 0 && ny < H &&
+                                map[ny][nx] === 0 &&
+                                !enemies.some(e => e.x === nx && e.y === ny)) {
+                                map[ny][nx] = 35; // temporary boss-summoned shrine
+                                spawned = true;
+                                break;
+                            }
+                        }
+                        if (spawned) {
+                            logBattleEvent(`Floor ${floor} - The Jester King summons a cursed shrine!`);
+                            jesterBossLastSpawn = performance.now();
+                            needsRedraw = true;
+                        }
+                    }
+                }, 8000);
+            }
+
+            jesterBossSpawnedThisFloor = true;
+            needsRedraw = true;
+        } 
+        else {
+            // No suitable room → block future attempts until cleared
+            if (!jesterKingNoRoomLoggedThisFloor) {
+                logBattleEvent(`Floor ${floor} - No room large enough for the Jester King...`);
+                jesterKingNoRoomLoggedThisFloor = true;
+            }
+            jesterKingSpawnIsBlocked = true;
+            jesterBossSpawnedThisFloor = true;  // also prevents same-floor retry
+        }
+    }
 }
 
 function showSkillTree() {
@@ -4699,15 +4842,19 @@ sandwormBurrowPaused = false; // resume burrow on normal floors
         }
 
 // Ensure map is valid
-for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y][x] === undefined) map[y][x] = 1;
+for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+        if (map[y][x] === undefined) map[y][x] = 1;
+    }
+}
 
-// Pre-randomize tile variants once per floor (prevents per-frame dizziness)
-tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1)); // -1 = no variant (use single tile)
-
+// Pre-randomize tile variants once per theme change (prevents per-frame dizziness)
 if (currentTheme !== lastVariantTheme) {
-    tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1));
+    tileVariantMap = Array(H).fill().map(() => Array(W).fill(-1)); // reset + prepare
 
-    if (['desert', 'paradise', 'hell', 'ruins', 'palace'].includes(currentTheme) && !(currentTheme === 'hell' && snowyHellActive)) {
+    if (['desert', 'paradise', 'hell', 'ruins', 'palace'].includes(currentTheme) &&
+        !(currentTheme === 'hell' && snowyHellActive)) 
+    {
         for (let y = 0; y < H; y++) {
             for (let x = 0; x < W; x++) {
                 if (map[y][x] === 0) { // floor tile
@@ -4718,7 +4865,7 @@ if (currentTheme !== lastVariantTheme) {
                     }
                 } else if (map[y][x] === 1) { // wall tile
                     if (currentTheme === 'palace') {
-                        tileVariantMap[y][x] = 0; // single static wall
+                        tileVariantMap[y][x] = 0;
                     } else if (currentTheme === 'hell') {
                         tileVariantMap[y][x] = Math.floor(Math.random() * 4);
                     } else {
@@ -4727,36 +4874,36 @@ if (currentTheme !== lastVariantTheme) {
                 }
             }
         }
-
-        // === PALACE: Spawn 1 jester shrine per room (only in palace) ===
-        if (currentTheme === 'palace') {
-            let shrinesPlaced = 0;
-            rooms.forEach(room => {
-                let placed = false;
-                let attempts = 100;
-
-                while (!placed && attempts > 0) {
-                    const rx = room.x + Math.floor(Math.random() * room.w);
-                    const ry = room.y + Math.floor(Math.random() * room.h);
-
-                    if (map[ry][rx] === 0 && // empty floor
-                        !(rx === p.x && ry === p.y) && // not on player
-                        !enemies.some(e => e.x === rx && e.y === ry)) { // not on enemy
-                        map[ry][rx] = 35; // jester shrine tile ID
-                        placed = true;
-                        shrinesPlaced++;
-                    }
-                    attempts--;
-                }
-            });
-
-            if (shrinesPlaced > 0) {
-                logBattleEvent(`Floor ${floor} - The palace contains ${shrinesPlaced} sacred jester shrine${shrinesPlaced > 1 ? 's' : ''}...`);
-            }
-        }
     }
 
     lastVariantTheme = currentTheme; // remember for next floor
+}
+
+// === PALACE-SPECIFIC LOGIC (run every palace floor) ===
+if (currentTheme === 'palace') {
+    // Spawn 1 jester shrine per room
+    let shrinesPlacedThisFloor = 0;
+    rooms.forEach(room => {
+        let placed = false;
+        let attempts = 100;
+        while (!placed && attempts > 0) {
+            const rx = room.x + Math.floor(Math.random() * room.w);
+            const ry = room.y + Math.floor(Math.random() * room.h);
+            if (map[ry][rx] === 0 &&
+                !(rx === p.x && ry === p.y) &&
+                !enemies.some(e => e.x === rx && e.y === ry)) 
+            {
+                map[ry][rx] = 35; // jester shrine
+                placed = true;
+                shrinesPlacedThisFloor++;
+            }
+            attempts--;
+        }
+    });
+
+    if (shrinesPlacedThisFloor > 0) {
+        logBattleEvent(`Floor ${floor} - The palace contains ${shrinesPlacedThisFloor} sacred jester shrine${shrinesPlacedThisFloor > 1 ? 's' : ''}...`);
+    }
 }
 
             // Cozy fireplace ambience for regular hell
@@ -6082,15 +6229,29 @@ if (p.ripBlast && enemies.length > 0) {
         else if (enemy.type.name === 'Jester') xp = 2;
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
         
-// Jester death → trigger Bitcoin-orange vaporisation splat
-    if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
-        shrimpBloodDrips.push({
-            x: enemy.x,
-            y: enemy.y,
-            startTime: performance.now()
+// Jester death → trigger Bitcoin-orange vaporisation splat + reduce boss HP if active
+if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
+    shrimpBloodDrips.push({
+        x: enemy.x,
+        y: enemy.y,
+        startTime: performance.now()
+    });
+    playWebAudioSound(sounds.quicksand);
+
+    // If Jester Boss is active and this was a boss minion, chip away 1 HP
+    if (jesterBoss && enemy.bossMinion) {
+        jesterBoss.hp -= 1;
+        logBattleEvent(`Jester minion slain! The Jester King loses 1 HP (${jesterBoss.hp} left)`);
+        playWebAudioSound(sounds.hit);
+        // Orange flash on boss for feedback
+        highlightTiles.push({
+            x: jesterBoss.x,
+            y: jesterBoss.y,
+            highlightStart: performance.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
         });
-        playWebAudioSound(sounds.quicksand);
     }
+}
         
         playerXP += xp;
         checkLevelUp();
@@ -6858,7 +7019,7 @@ if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
         if (candidates.length > 0) {
             const portalPos = candidates[0]; // take the closest valid spot
 
-            if (Math.random() < 0.5) {
+            if (Math.random() < 0.50) {
                 // 50% → Puzzle Portal
                 map[portalPos.y][portalPos.x] = 25;
                 portals.push({
@@ -7191,6 +7352,10 @@ if (exit && p.x === exit.x && p.y === exit.y && !inHideout) { // ← Removed !in
     uniqueMonstersSpawnedThisFloor = 0;
     whalesSpawnedThisFloor = 0;
     enemies = [];
+
+jesterKingNoRoomLoggedThisFloor = false; // if you have the no-room log flag
+ jesterBossSpawnedThisFloor = false; // allow boss on new floor
+    
     exit = null;  // Let placeStairs() work normally on new floor
 
     // Build soul resonance +2% per floor (every 50 floors, max 100%)
@@ -7710,6 +7875,78 @@ setTimeout(() => {
     needsRedraw = true;
 }
 
+// Auto-activate any boss-summoned shrines (no player step needed)
+if (jesterBoss && !inHideout) {
+for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+        if (map[y][x] === 35) {
+            logBattleEvent(`A cursed shrine activates! 5 Jesters appear!`);
+            playJesterManiacalLaughter();
+
+            const floorIndicator = document.getElementById('floor-indicator');
+            floorIndicator.textContent = `Maniacal laughter echoes...`;
+            setTimeout(() => {
+                floorIndicator.textContent = `Floor ${floor}`;
+            }, 5000);
+
+            // Reuse your full shrine Jester spawn loop
+            const jesterType = types.find(t => t.name === 'Jester');
+            if (jesterType) {
+                for (let i = 0; i < 5; i++) {
+                    let attempts = 100;
+                    let jx, jy;
+                    while (attempts--) {
+                        jx = Math.floor(Math.random() * W);
+                        jy = Math.floor(Math.random() * H);
+                        const distFromPlayer = Math.abs(jx - p.x) + Math.abs(jy - p.y);
+                        if (map[jy][jx] === 0 &&
+                            !(jx === p.x && jy === p.y) &&
+                            !enemies.some(e => e.x === jx && e.y === jy) &&
+                            distFromPlayer > 3 && distFromPlayer < 12) {
+                            const jester = {
+                                x: jx, y: jy,
+                                currentX: jx * S, currentY: jy * S,
+                                type: jesterType,
+                                hp: 10,
+                                atk: 2,
+                                move: 1,
+                                isJester: true,
+                                fleeing: false,
+                                sats: 0,
+                                uniqueName: 'Jester',
+                                anim: {
+                                    frames: assets.jester_frames,
+                                    frameIndex: Math.floor(Math.random() * 3),
+                                    lastFrameTime: performance.now()
+                                },
+                                bossMinion: true // mark for boss HP reduce
+                            };
+                            enemies.push(jester);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            map[y][x] = 0; // remove shrine
+            needsRedraw = true;
+        }
+    }
+}
+
+if (jesterBoss && jesterBoss.hp <= 0) {
+    logBattleEvent(`Floor ${floor} - The Jester King is defeated!`);
+    playDisappearSound();
+
+placeStairs();
+
+// Critical cleanup
+jesterBoss = null;
+    clearInterval(window.jesterBossMinionInterval);
+    window.jesterBossMinionInterval = null;
+}
+}
+
 // Updated info sign block in move()
 const infoSignTile = 34;
 const onInfoSign = map[p.y][p.x] === infoSignTile;
@@ -7931,25 +8168,7 @@ function processPassiveCommand(command) {
         
         switch (cmd) {
             case 'skills':
-            content.innerHTML = '';
-            // Display gems/bonuses (mimic soul inventory structure)
-            addPassiveLineToContent('--- Gemstones Inventory ---');
-            addPassiveLineToContent(`Ruby: ${p.gems.ruby}`);
-            addPassiveLineToContent(`Citrine: ${p.gems.citrine}`);
-            addPassiveLineToContent(`Sapphire: ${p.gems.sapphire}`);
-            addPassiveLineToContent(`Emerald: ${p.gems.emerald}`);
-            addPassiveLineToContent('Enchant Diamond Hand, (attack+):');
-            addPassiveLineToContent('  r atk - Trade rubys,         fire atk');
-            addPassiveLineToContent('  c atk - Trade citrines, lightning atk');
-            addPassiveLineToContent('  s atk - Trade sapphires,     cold atk');
-            addPassiveLineToContent('  e atk - Trade emeralds,     earth atk');
-            addPassiveLineToContent('Debuff enemies, (enemy defense-):');
-            addPassiveLineToContent('  r def - Trade rubys, shrimp/crab def');
-            addPassiveLineToContent('  c def - Trade citrines,    squid def');
-            addPassiveLineToContent('  s def - Trade sapphires, dolphin def');
-            addPassiveLineToContent('  e def - Trade emeralds,    shark def');
-                addPassiveLineToContent('_____________________');
-                addPassiveLineToContent('Type "help" for help.');
+                updatePassiveInventory(); // Show current state
                 break;
         
             case 'help':
@@ -7965,7 +8184,25 @@ function processPassiveCommand(command) {
                 break;
                 
             case 'ls':
-                updatePassiveInventory(); // Show current state
+                content.innerHTML = '';
+                // Display gems/bonuses (mimic soul inventory structure)
+                addPassiveLineToContent('--- Gemstones Inventory ---');
+                addPassiveLineToContent(`Ruby: ${p.gems.ruby}`);
+                addPassiveLineToContent(`Citrine: ${p.gems.citrine}`);
+                addPassiveLineToContent(`Sapphire: ${p.gems.sapphire}`);
+                addPassiveLineToContent(`Emerald: ${p.gems.emerald}`);
+                addPassiveLineToContent('--- Diamond Hand Enchants ---');
+                addPassiveLineToContent(`Fire attack: +${p.gemAtk.fire.toFixed(1)}`);
+                addPassiveLineToContent(`Cold attack: +${p.gemAtk.cold.toFixed(1)}`);
+                addPassiveLineToContent(`Earth attack: +${p.gemAtk.earth.toFixed(1)}`);
+                addPassiveLineToContent(`Lightning attack: +${p.gemAtk.lightning.toFixed(1)}`);
+                addPassiveLineToContent('--- Enemy Debuffs ---');
+                addPassiveLineToContent(`Shrimp / Crab defence: -${p.gemDef.shrimpCrab.toFixed(1)}`);
+                addPassiveLineToContent(`Squid defence: -${p.gemDef.squid.toFixed(1)}`);
+                addPassiveLineToContent(`Dolphin defence: -${p.gemDef.dolphin.toFixed(1)}`);
+                addPassiveLineToContent(`Shark defence: -${p.gemDef.shark.toFixed(1)}`);
+                addPassiveLineToContent('_____________________');
+                addPassiveLineToContent('Type "help" for help.'); 
                 break;
                 
             case 'clear':
@@ -9449,7 +9686,7 @@ checkLevelUp();
             waveActive = false;
             document.getElementById('wave').textContent = wave;
             logBattleEvent(`Floor ${floor} - RED MAZE defeated! Stairs appeared!`);
-            playDisappearSound()
+            playDisappearSound();
         }
     }
 }
@@ -9545,15 +9782,29 @@ if (target) {
 
                     if (target.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
-                    // Jester death → trigger Bitcoin-orange vaporisation splat
-                    if (target.type.name === 'Jester' || target.uniqueName === 'Jester') {
-                        shrimpBloodDrips.push({
-                            x: target.x,
-                            y: target.y,
-                            startTime: performance.now()
-                        });
-                        playWebAudioSound(sounds.quicksand);
-                    }
+// Jester death → trigger Bitcoin-orange vaporisation splat + reduce boss HP if active
+if (target.type.name === 'Jester' || target.uniqueName === 'Jester') {
+    shrimpBloodDrips.push({
+        x: target.x,
+        y: target.y,
+        startTime: performance.now()
+    });
+    playWebAudioSound(sounds.quicksand);
+
+    // If Jester Boss is active and this was a boss minion, chip away 1 HP
+    if (jesterBoss && target.bossMinion) {
+        jesterBoss.hp -= 1;
+        logBattleEvent(`Jester minion slain! The Jester King loses 1 HP (${jesterBoss.hp} left)`);
+        playWebAudioSound(sounds.hit);
+        // Orange flash on boss for feedback
+        highlightTiles.push({
+            x: jesterBoss.x,
+            y: jesterBoss.y,
+            highlightStart: performance.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
+        });
+    }
+}
 
                     playerXP += xp;
                     checkLevelUp();
@@ -10186,15 +10437,29 @@ else if (hit.type.name === 'Cursed Trader') xp = 10;
 else if (hit.type.name === 'Jester') xp = 2;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
-                    // Jester death → trigger Bitcoin-orange vaporisation splat
-                    if (hit.type.name === 'Jester' || hit.uniqueName === 'Jester') {
-                        shrimpBloodDrips.push({
-                            x: hit.x,
-                            y: hit.y,
-                            startTime: performance.now()
-                        });
-                        playWebAudioSound(sounds.quicksand);
-                    }
+// Jester death → trigger Bitcoin-orange vaporisation splat + reduce boss HP if active
+if (hit.type.name === 'Jester' || hit.uniqueName === 'Jester') {
+    shrimpBloodDrips.push({
+        x: hit.x,
+        y: hit.y,
+        startTime: performance.now()
+    });
+    playWebAudioSound(sounds.quicksand);
+
+    // If Jester Boss is active and this was a boss minion, chip away 1 HP
+    if (jesterBoss && hit.bossMinion) {
+        jesterBoss.hp -= 1;
+        logBattleEvent(`Jester minion slain! The Jester King loses 1 HP (${jesterBoss.hp} left)`);
+        playWebAudioSound(sounds.hit);
+        // Orange flash on boss for feedback
+        highlightTiles.push({
+            x: jesterBoss.x,
+            y: jesterBoss.y,
+            highlightStart: performance.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
+        });
+    }
+}
 
 playerXP += xp;
 //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -10896,7 +11161,7 @@ function attack() {
     const isEnemyNearby = enemies.some(e => e.x === sx && e.y === sy);
     const isWallNearby = sx >= 0 && sx < W && sy >= 0 && sy < H && map[sy][sx] === 1;
 
-    // Applies to Diamond Hand as of now ..
+    // Applies to Diamond Hand
     const elementalBonus = p.gemAtk.fire + p.gemAtk.cold + p.gemAtk.earth + p.gemAtk.lightning;
     
     if (initialPickaxes > 0 || isEnemyNearby || isWallNearby) {
@@ -11033,9 +11298,9 @@ for (const tile of damageArea) {
             
             // Log with breakdown if enchanted
             if (elementalBonus > 0) {
-                logBattleEvent(`Diamond Hand wave hits ${enemy.type.name} for ${damage} base + ${elementalBonus.toFixed(1)} elemental (${totalDamage.toFixed(1)} total)!`);
+                logBattleEvent(`Diamond Hand wave hits ${enemy.type.name} for ${damage} base + ${elementalBonus.toFixed(1)} elemental damage!`);
             } else {
-                logBattleEvent(`Diamond Hand wave hits ${enemy.type.name} for ${damage} DMG!`);
+                logBattleEvent(`Diamond Hand wave hits ${enemy.type.name} for ${damage} damage!`);
             }
             
             playWebAudioSound(sounds.hit);
@@ -11054,15 +11319,29 @@ for (const tile of damageArea) {
                         else if (enemy.type.name === 'Jester') xp = 2;
                         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
-// Jester death → trigger Bitcoin-orange vaporisation splat
-    if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
-        shrimpBloodDrips.push({
-            x: enemy.x,
-            y: enemy.y,
-            startTime: performance.now()
+// Jester death → trigger Bitcoin-orange vaporisation splat + reduce boss HP if active
+if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
+    shrimpBloodDrips.push({
+        x: enemy.x,
+        y: enemy.y,
+        startTime: performance.now()
+    });
+    playWebAudioSound(sounds.quicksand);
+
+    // If Jester Boss is active and this was a boss minion, chip away 1 HP
+    if (jesterBoss && enemy.bossMinion) {
+        jesterBoss.hp -= 1;
+        logBattleEvent(`Jester minion slain! The Jester King loses 1 HP (${jesterBoss.hp} left)`);
+        playWebAudioSound(sounds.hit);
+        // Orange flash on boss for feedback
+        highlightTiles.push({
+            x: jesterBoss.x,
+            y: jesterBoss.y,
+            highlightStart: performance.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
         });
-        playWebAudioSound(sounds.quicksand);
     }
+}
 
                         playerXP += xp;
                         //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -11301,15 +11580,29 @@ else if (hit.type.name === 'Cursed Trader') xp = 10;
 else if (hit.type.name === 'Jester') xp = 2;
 if (hit.uniqueName) xp *= 2; // Unique monsters give 2x XP
 
-                    // Jester death → trigger Bitcoin-orange vaporisation splat
-                    if (hit.type.name === 'Jester' || hit.uniqueName === 'Jester') {
-                        shrimpBloodDrips.push({
-                            x: hit.x,
-                            y: hit.y,
-                            startTime: performance.now()
-                        });
-                        playWebAudioSound(sounds.quicksand);
-                    }
+// Jester death → trigger Bitcoin-orange vaporisation splat + reduce boss HP if active
+if (hit.type.name === 'Jester' || hit.uniqueName === 'Jester') {
+    shrimpBloodDrips.push({
+        x: hit.x,
+        y: hit.y,
+        startTime: performance.now()
+    });
+    playWebAudioSound(sounds.quicksand);
+
+    // If Jester Boss is active and this was a boss minion, chip away 1 HP
+    if (jesterBoss && hit.bossMinion) {
+        jesterBoss.hp -= 1;
+        logBattleEvent(`Jester minion slain! The Jester King loses 1 HP (${jesterBoss.hp} left)`);
+        playWebAudioSound(sounds.hit);
+        // Orange flash on boss for feedback
+        highlightTiles.push({
+            x: jesterBoss.x,
+            y: jesterBoss.y,
+            highlightStart: performance.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
+        });
+    }
+}
 
 playerXP += xp;
 //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -11643,6 +11936,7 @@ else if (p.hp >= 24 && !p.hasDiamondHand && projectiles.length === 0 && !usePick
         sounds.shoot_sword.currentTime = 0;
         sounds.shoot_sword.play().catch(() => {});
     }
+    
 }
 
 // Red Maze eye melee hit (cardinal + diagonal adjacent)
@@ -11662,7 +11956,7 @@ if (redMazeActive && redMaze) {
             damageDealt = baseDmg + elemDmg;
 
             if (elemDmg > 0) {
-                message = `Red Maze eye takes ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage (${damageDealt.toFixed(1)} total)!`;
+                message = `Red Maze eye takes ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage!`;
             } else {
                 message = `Red Maze eye takes ${baseDmg} damage!`;
             }
@@ -11699,7 +11993,7 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
         damageDealt = baseDmg + elemDmg;
 
         if (elemDmg > 0) {
-            message = `Sandworm takes ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage (${damageDealt.toFixed(1)} total)!`;
+            message = `Sandworm takes ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage!`;
         } else {
             message = `Sandworm takes ${baseDmg} damage!`;
         }
@@ -11746,7 +12040,7 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
         }
 
         logBattleEvent(`Floor ${floor} - Sandworm defeated! Full HP restored + 256 soul charges${placed ? ' + Diamond!' : ''}`);
-        playWebAudioSound(sounds.secret); // or your disappear sound if separate
+        playDisappearSound();
         sandworm = null;
     }
 
@@ -11886,18 +12180,18 @@ function updatePassiveInventory() {  // Or keep as updatePassiveLog if preferred
     addPassiveLineToContent(`Citrine: ${p.gems.citrine}`);
     addPassiveLineToContent(`Sapphire: ${p.gems.sapphire}`);
     addPassiveLineToContent(`Emerald: ${p.gems.emerald}`);
-    addPassiveLineToContent('--- Diamond Hand Enchants ---');
-    addPassiveLineToContent(`Fire attack: +${p.gemAtk.fire.toFixed(1)}`);
-    addPassiveLineToContent(`Cold attack: +${p.gemAtk.cold.toFixed(1)}`);
-    addPassiveLineToContent(`Earth attack: +${p.gemAtk.earth.toFixed(1)}`);
-    addPassiveLineToContent(`Lightning attack: +${p.gemAtk.lightning.toFixed(1)}`);
-    addPassiveLineToContent('--- Enemy Debuffs ---');
-    addPassiveLineToContent(`Shrimp / Crab defence: -${p.gemDef.shrimpCrab.toFixed(1)}`);
-    addPassiveLineToContent(`Squid defence: -${p.gemDef.squid.toFixed(1)}`);
-    addPassiveLineToContent(`Dolphin defence: -${p.gemDef.dolphin.toFixed(1)}`);
-    addPassiveLineToContent(`Shark defence: -${p.gemDef.shark.toFixed(1)}`);
-    addPassiveLineToContent('_____________________');
-    addPassiveLineToContent('Type "help" for help.'); 
+    addPassiveLineToContent('Enchant Diamond Hand, (attack+):');
+    addPassiveLineToContent('  r atk - Trade rubys,         fire atk');
+    addPassiveLineToContent('  c atk - Trade citrines, lightning atk');
+    addPassiveLineToContent('  s atk - Trade sapphires,     cold atk');
+    addPassiveLineToContent('  e atk - Trade emeralds,     earth atk');
+    addPassiveLineToContent('Debuff enemies, (enemy defense-):');
+    addPassiveLineToContent('  r def - Trade rubys, shrimp/crab def');
+    addPassiveLineToContent('  c def - Trade citrines,    squid def');
+    addPassiveLineToContent('  s def - Trade sapphires, dolphin def');
+    addPassiveLineToContent('  e def - Trade emeralds,    shark def');
+        addPassiveLineToContent('_____________________');
+        addPassiveLineToContent('Type "help" for help.');
 }
 
 // 2.)
@@ -12518,10 +12812,10 @@ if (isDiamondHand) {
     
     if (elemDmg > 0) {
         // Enchanted: show breakdown
-        message = `Diamond Hand hits ${enemy.type.name} for ${baseDmg} base + ${elemDmg.toFixed(1)} elemental (${totalDmg.toFixed(1)} total)!`;
+        message = `Diamond Hand hits ${enemy.type.name} for ${baseDmg} base + ${elemDmg.toFixed(1)} elemental damage!`;
     } else {
         // Not enchanted: simple message
-        message = `Diamond Hand hits ${enemy.type.name} for ${baseDmg} DMG!`;
+        message = `Diamond Hand hits ${enemy.type.name} for ${baseDmg} damage!`;
     }   
     playWebAudioSound(sounds.hit);
 }
@@ -12567,15 +12861,29 @@ if (isDiamondHand) {
         else if (enemy.type.name === 'Red Maze') xp = 30; // just in case
         if (enemy.uniqueName) xp *= 2; // Unique monsters give 2x XP
         
-// Jester death → trigger Bitcoin-orange vaporisation splat
-    if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
-        shrimpBloodDrips.push({
-            x: enemy.x,
-            y: enemy.y,
-            startTime: performance.now()
+// Jester death → trigger Bitcoin-orange vaporisation splat + reduce boss HP if active
+if (enemy.type.name === 'Jester' || enemy.uniqueName === 'Jester') {
+    shrimpBloodDrips.push({
+        x: enemy.x,
+        y: enemy.y,
+        startTime: performance.now()
+    });
+    playWebAudioSound(sounds.quicksand);
+
+    // If Jester Boss is active and this was a boss minion, chip away 1 HP
+    if (jesterBoss && enemy.bossMinion) {
+        jesterBoss.hp -= 1;
+        logBattleEvent(`Jester minion slain! The Jester King loses 1 HP (${jesterBoss.hp} left)`);
+        playWebAudioSound(sounds.hit);
+        // Orange flash on boss for feedback
+        highlightTiles.push({
+            x: jesterBoss.x,
+            y: jesterBoss.y,
+            highlightStart: performance.now(),
+            color: 'rgba(247, 147, 26, 0.8)'
         });
-        playWebAudioSound(sounds.quicksand);
     }
+}
         
         playerXP += xp;
         //if (xp > 0) logBattleEvent(`+${xp} XP`);
@@ -13826,7 +14134,16 @@ p.passiveTerminalActive = false;
 p.passiveTerminalCommand = '';
 p.passiveTerminalCursorPos = 0;
 
-let lastVariantTheme = null;
+lastVariantTheme = null;
+    jesterBoss = null;
+    if (window.jesterBossMinionInterval) {
+        clearInterval(window.jesterBossMinionInterval);
+        window.jesterBossMinionInterval = null;
+    }
+jesterKingNoRoomLoggedThisFloor = false;
+jesterBossLastSpawn = 0;
+jesterBossSpawnedThisFloor = false; // prevents re-spawn after death
+jesterKingSpawnIsBlocked = false;
 
     // === RUINS RAIN SYSTEM RESET ===
     ruinsRainActive = false;
@@ -14607,9 +14924,9 @@ if (map[y][x] === 25) { // Puzzle portal tile
             c.drawImage(assets.jester_shrine, x * S, y * S, S, S);
         }
         // New tile ID for passive sign
-        if (map[y][x] === 36) c.drawImage(assets.passive_sign, x * S, y * S, S, S);
-        
-        
+        if (map[y][x] === 36) {
+            c.drawImage(assets.passive_sign, x * S, y * S, S, S);
+        }
 
 if (map[y][x] === GEM_TILES.ruby) {
     c.drawImage(assets.ruby, x * S, y * S, S, S);
@@ -14939,6 +15256,20 @@ shrimpBloodDrips = shrimpBloodDrips.filter(drip => {
             c.restore();
         }
     });
+
+if (jesterBoss) {
+    // Shift down 8 pixels (from -24 to -16)
+    c.drawImage(assets.jesterBoss, jesterBoss.x * S - 24, jesterBoss.y * S - 16, 64, 64);
+
+    // Flash on hit
+    if (jesterBoss.flashStart && performance.now() - jesterBoss.flashStart < 300) {
+        c.save();
+        c.globalAlpha = 0.6;
+        c.fillStyle = 'rgba(255, 165, 0, 0.8)';
+        c.fillRect(jesterBoss.x * S - 24, jesterBoss.y * S - 16, 64, 64);
+        c.restore();
+    }
+}
         
 // Draw player
 // Add this to the existing draw function for player rendering
@@ -15293,11 +15624,10 @@ if ((e.type.name === 'Cursed Trader' || e.type.name === 'Jester') && fogMap[e.y]
 
             // Select frame — use themed assets when visible, dungeon black in fog
             // Default to dungeon black enemies
-            let frames = e.type.anim.frames;
+let frames = e.type.anim.frames;
 
-            if (isVisible) {
-                // Special case: Hell Shrimp always uses hellFrames in hell theme
-                if (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) {
+if (isVisible) {
+    if (e.type.name === 'Shrimp' && currentTheme === 'hell' && e.type.anim.hellFrames) { // Special case: Hell Shrimp always uses hellFrames in hell theme
                     frames = e.type.anim.hellFrames;
                 }
                 // Other enemies: use theme-specific frames if available
@@ -16145,7 +16475,9 @@ if (p.moving && now - p.anim.lastFrameTime >= 50) {
     if ((needsRedraw || p.hp <= 8 || showInvisibleHealthWarning) && !splashActive) {
         draw();
     }
-    
+
+    // === NEW: Check for Jester Boss spawn dynamically ===
+    checkJesterBossSpawn();    
 
     // GOLDEN : 4
     rafId = requestAnimationFrame(gameLoop);
