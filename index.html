@@ -905,17 +905,7 @@ button:hover {
             <div id="splash-screen">
     		<canvas id="splash-canvas" width="320" height="320"></canvas>
 
-<!-- Passive Terminal Overlay -->
-<div id="passive-terminal-overlay">
-    <div id="passive-terminal">
-        <div id="passive-terminal-header">Passive Tree</div>
-        <div id="passive-terminal-content"></div>
-        <div id="passive-terminal-input-container">
-        <span id="passive-terminal-prompt">tree@terminal:~$ </span>
-            <input type="text" id="passive-input" autocomplete="off" spellcheck="false" style="flex-grow:1; background:#00ff00; color:#000; border:none; font-family:'VT323', monospace; font-size:16px; font-weight:900; outline:none; padding:5px;">
-        </div>
-    </div>
-</div>
+
 
 <!-- Soul Terminal Overlay 
 <div id="soul-terminal-overlay">
@@ -985,6 +975,20 @@ button:hover {
         <div id="soul-terminal-input-container">
             <span id="soul-terminal-prompt">soul@terminal:~$ </span>
             <input type="text" id="soul-terminal-input" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+</div>
+
+<!-- Passive Terminal Overlay -->
+<div id="passive-terminal-overlay">
+    <div id="passive-terminal">
+        <div id="passive-terminal-header">Passive Tree</div>
+        <div id="passive-terminal-content"></div>
+        <div id="passive-terminal-input-container">
+        <span id="passive-terminal-prompt">tree@terminal:~$ </span>
+        
+        
+            <input type="text" id="passive-input" autocomplete="off" spellcheck="false" style="flex-grow:1; background:#00ff00; color:#000; border:none; font-family:'VT323', monospace; font-size:16px; font-weight:900; outline:none; padding:5px; z-index:10;">
         </div>
     </div>
 </div>
