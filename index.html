@@ -906,13 +906,11 @@ button:hover {
     		<canvas id="splash-canvas" width="320" height="320"></canvas>
 
 <!-- Passive Terminal Overlay -->
-<div id="passive-terminal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.80); z-index:1000; font-family:'VT323', monospace; color:#00ff00;">
-    <div id="passive-terminal" style="width:90%; max-width:800px; height:80%; background:rgba(17,17,17,0.1); border:4px solid #00ff00; padding:20px; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden;">
-        <div id="passive-terminal-header" style="color:#00ff00; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000; font-size:24px; margin-bottom:15px; text-align:center; padding-bottom:10px; border-bottom:2px solid #00ff00;">
-            Passive Tree
-        </div>
-        <div id="passive-terminal-content" style="flex-grow:1; overflow-y:auto; padding:10px; background:rgba(17,17,17,0.1); border:2px solid #00ff00; margin-bottom:15px; font-size:16px; line-height:1.4;"></div>
-        <div id="passive-terminal-input-container" style="display:flex; align-items:center; gap:10px;">
+<div id="passive-terminal-overlay">
+    <div id="passive-terminal">
+        <div id="passive-terminal-header">Passive Tree</div>
+        <div id="passive-terminal-content"></div>
+        <div id="passive-terminal-input-container">
             <span id="passive-terminal-prompt" style="color:#00ff00; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000; font-size:16px; white-space:nowrap;">
                 tree@terminal:~$
             </span>
@@ -2709,23 +2707,88 @@ function getAudioContext() {
 }
 audioContext = getAudioContext(); // Early creation (before sounds)
 
-// Sounds object – create Audio instances early
+// Sounds object – create Audio instances early and force pre‑loading
 const sounds = {
-    attack: new Audio('attack.wav'),
-    potion: new Audio('potion.wav'),
+    attack: (() => {
+        const a = new Audio('attack.wav');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    potion: (() => {
+        const a = new Audio('potion.wav');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
     hit: { buffer: null, url: 'hit.wav', isPlaying: false, duration: 720 },
     pickup: { buffer: null, url: 'pickup.wav', isPlaying: false, duration: 950 },
-    dungeon: new Audio('dungeon.mp3'),
-    desert: new Audio('desert.mp3'),
-    hell: new Audio('hell.mp3'),
-    paradise: new Audio('paradise.mp3'),
-    ruins: new Audio('ruins.mp3'),
-    hideout: new Audio('hideout.mp3'),
-    palace: new Audio('palace.mp3'),
-    gameover: new Audio('gameover.wav'),
-    stairs: new Audio('stairs.wav'),
-    secret: new Audio('secret.wav'),
-    shoot_sword: new Audio('shoot_sword.wav'),
+    dungeon: (() => {
+        const a = new Audio('dungeon.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    desert: (() => {
+        const a = new Audio('desert.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    hell: (() => {
+        const a = new Audio('hell.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    paradise: (() => {
+        const a = new Audio('paradise.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    ruins: (() => {
+        const a = new Audio('ruins.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    hideout: (() => {
+        const a = new Audio('hideout.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    palace: (() => {
+        const a = new Audio('palace.mp3');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    gameover: (() => {
+        const a = new Audio('gameover.wav');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    stairs: (() => {
+        const a = new Audio('stairs.wav');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    secret: (() => {
+        const a = new Audio('secret.wav');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
+    shoot_sword: (() => {
+        const a = new Audio('shoot_sword.wav');
+        a.preload = 'auto';
+        a.load();
+        return a;
+    })(),
     heads: { buffer: null, url: 'heads.wav', isPlaying: false, duration: 650 },
     tails: { buffer: null, url: 'tails.wav', isPlaying: false, duration: 950 },
     lava: { buffer: null, url: 'lava.wav', isPlaying: false, duration: 900 },
