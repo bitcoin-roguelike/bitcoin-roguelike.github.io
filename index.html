@@ -4481,6 +4481,17 @@ p.ensnared = false;
             });
             enemies = [];
             enemiesSpawnedThisFloor = 0;
+
+            jesterBoss = null;
+    if (window.jesterBossMinionInterval) {
+        clearInterval(window.jesterBossMinionInterval);
+        window.jesterBossMinionInterval = null;
+    }
+jesterKingNoRoomLoggedThisFloor = false;
+jesterBossLastSpawn = 0;
+jesterBossSpawnedThisFloor = false; // prevents re-spawn after death
+jesterKingSpawnIsBlocked = false;
+            
             window.hugeShrimpSpawnedThisFloor = false; // reset for new floor
             whalesSpawnedThisFloor = 0; // Reset Whale counter for new floor
             initialSpawnDoneThisFloor = false;
@@ -13578,6 +13589,17 @@ sandworm = null;
     stopFireplaceAmbience(); // Stop ambience in puzzle rooms
     // Kill ALL enemies instantly (including invisible Cursed Trader) — ensures death effects/drops if any carry over
     enemies.forEach(e => e.hp = 0);
+    
+            jesterBoss = null;
+    if (window.jesterBossMinionInterval) {
+        clearInterval(window.jesterBossMinionInterval);
+        window.jesterBossMinionInterval = null;
+    }
+jesterKingNoRoomLoggedThisFloor = false;
+jesterBossLastSpawn = 0;
+jesterBossSpawnedThisFloor = false; // prevents re-spawn after death
+jesterKingSpawnIsBlocked = false;
+    
     isFetchingTxs = true;
     exit = null;
 
