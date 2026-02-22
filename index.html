@@ -7102,7 +7102,7 @@ if (map[ny][nx] === 11) { // Scroll pickup → spawn portal nearby
         if (candidates.length > 0) {
             const portalPos = candidates[0]; // take the closest valid spot
 
-            if (Math.random() < 0) {
+            if (Math.random() < 0.50) {
                 // 50% → Puzzle Portal
                 map[portalPos.y][portalPos.x] = 25;
                 portals.push({
@@ -10045,7 +10045,7 @@ function handleSideQuestKill(enemyType, enemyX, enemyY) {
 
 // ——— SCROLL DROP — 5% chance on any enemy kill ———
 function tryDropScroll(deadX, deadY) {
-    if (!scrollDroppedThisFloor && Math.random() < 1) {
+    if (!scrollDroppedThisFloor && Math.random() < 0.05) {
         scrollDroppedThisFloor = true;
         let placed = false;
         const positions = [{ x: deadX, y: deadY }];
