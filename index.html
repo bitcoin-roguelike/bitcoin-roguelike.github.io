@@ -5895,7 +5895,11 @@ candidates.push({ x: px, y: py, dist: distance });
 candidates.sort((a, b) => a.dist - b.dist);
 if (candidates.length > 0) {
 const portalPos = candidates[0];
-if (currentTheme === 'palace' || Math.random() < 0.50) {
+const wouldBePuzzle = Math.random() < 0.50;
+if (currentTheme === 'palace') {
+if (wouldBePuzzle) {
+logBattleEvent(`The palace forbids sacred trials...`);
+}
 map[portalPos.y][portalPos.x] = 12;
 portals.push({
 x: portalPos.x,
@@ -5907,6 +5911,7 @@ frameDuration: 400
 logBattleEvent(`Floor ${floor} - The scroll unrolls... a Town Portal appears!`);
 playWebAudioSound(sounds.town_portal);
 } else {
+if (wouldBePuzzle) {
 map[portalPos.y][portalPos.x] = 25;
 portals.push({
 x: portalPos.x,
@@ -5918,6 +5923,18 @@ frameDuration: 200
 });
 logBattleEvent(`Floor ${floor} - The scroll ignites... a Puzzle Portal opens nearby!`);
 playWebAudioSound(sounds.secret);
+} else {
+map[portalPos.y][portalPos.x] = 12;
+portals.push({
+x: portalPos.x,
+y: portalPos.y,
+frameIndex: 0,
+lastFrameTime: performance.now(),
+frameDuration: 400
+});
+logBattleEvent(`Floor ${floor} - The scroll unrolls... a Town Portal appears!`);
+playWebAudioSound(sounds.town_portal);
+}
 }
 } else {
 logBattleEvent(`Floor ${floor} - The scroll crumbles... no space for a portal!`);
