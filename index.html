@@ -12099,8 +12099,8 @@ if (sx === sandworm?.x && sy === sandworm?.y) {
     });
 
     if (sandworm.hp <= 0) {
-        // Unified sandworm death rewards (consistent across all attack types)
-        const maxHP = 36 + (p.hasArmor ? 12 : 0) + (p.hasDiamondArmor ? 952 : 0);
+        // Unified sandworm death rewards
+        const maxHP = p.hp + 36;
         p.hp = maxHP;
         p.soulStormCharges = 256;
 
