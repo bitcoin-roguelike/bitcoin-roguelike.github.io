@@ -5474,12 +5474,13 @@ isFetchingTxs = false;
 function isSolid(x, y) {
 return map[y][x] === 1 || map[y][x] === 13;
 }
-function move(dir) {
+function move(dir, isKeyboard = false) {
 if (gameOver || splashActive || inputBlocked || skillTreeActive || passiveTreeActive) return;
 if (infoGracePeriod) {
 return;
 }
-if (inHideout && map[p.y][p.x] === 16) {
+if (isKeyboard && p.moving) {
+return;
 }
 if (!p.previousX) p.previousX = p.x;
 if (!p.previousY) p.previousY = p.y;
@@ -13559,34 +13560,27 @@ attack();
 else if (e.key === 'd') {
 usePotion();
 }
-if (!keyboardMovementTimer) {
-keyboardMovementTimer = setInterval(() => {
-if (!splashActive && !gameOver) {
-let newMoveDir = null;
-if (keyStates.ArrowUp) newMoveDir = 'up';
-else if (keyStates.ArrowDown) newMoveDir = 'down';
-else if (keyStates.ArrowLeft) newMoveDir = 'left';
-else if (keyStates.ArrowRight) newMoveDir = 'right';
-if (newMoveDir) {
-const now = Date.now();
-if (!currentMoveDir || newMoveDir !== currentMoveDir || now - lastMoveTime >= 200) {
-move(newMoveDir);
-lastMoveTime = now;
-currentMoveDir = newMoveDir;
-}
-} else if (currentMoveDir) {
-currentMoveDir = null;
-lastMoveTime = 0;
-}
-}
-}, 50);
-}
 });
 document.addEventListener('keyup', e => {
 if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
 keyStates[e.key] = false;
 }
 });
+let keyboardRAF = null;
+function keyboardMovementLoop() {
+if (!splashActive && !gameOver) {
+let newMoveDir = null;
+if (keyStates.ArrowUp) newMoveDir = 'up';
+else if (keyStates.ArrowDown) newMoveDir = 'down';
+else if (keyStates.ArrowLeft) newMoveDir = 'left';
+else if (keyStates.ArrowRight) newMoveDir = 'right';
+if (newMoveDir && !p.moving) {
+move(newMoveDir, true);
+}
+}
+keyboardRAF = requestAnimationFrame(keyboardMovementLoop);
+}
+keyboardMovementLoop();
 document.getElementById('soul-terminal-input')?.addEventListener('keydown', function(e) {
 if (p.inSoulTerminal && p.soulTerminalActive) {
 if (e.key === 'Enter') e.preventDefault();
