@@ -5883,7 +5883,8 @@ for (let dx = -2; dx <= 2; dx++) {
 if (dx === 0 && dy === 0) continue;
 const px = nx + dx;
 const py = ny + dy;
-if (px >= 0 && px < W && py >= 0 && py < H &&
+if (
+px >= 0 && px < W && py >= 0 && py < H &&
 map[py][px] === 0 &&
 !enemies.some(e => e.x === px && e.y === py) &&
 !(exit && exit.x === px && exit.y === py)
@@ -5898,19 +5899,7 @@ if (candidates.length > 0) {
 const portalPos = candidates[0];
 const wouldBePuzzle = Math.random() < 0.50;
 if (currentTheme === 'palace') {
-if (wouldBePuzzle) {
-logBattleEvent(`The palace forbids sacred trials...`);
-}
-map[portalPos.y][portalPos.x] = 12;
-portals.push({
-x: portalPos.x,
-y: portalPos.y,
-frameIndex: 0,
-lastFrameTime: performance.now(),
-frameDuration: 400
-});
-logBattleEvent(`Floor ${floor} - The scroll unrolls... a Town Portal appears!`);
-playWebAudioSound(sounds.town_portal);
+logBattleEvent(`The palace forbids portals...`);
 } else {
 if (wouldBePuzzle) {
 map[portalPos.y][portalPos.x] = 25;
@@ -14230,3 +14219,4 @@ console.log('Game resumed + canvas forced redraw');
 </script>
 </body>
 </html>
+
